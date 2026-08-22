@@ -1,0 +1,15 @@
+{
+  "scenarios": [
+    {"id": "new_lead", "messages": ["I have a restaurant and want a website"], "expect": {"lead_created": true}},
+    {"id": "existing_lead_continues", "messages": ["I have a restaurant and want a website", "I am the owner"], "expect": {"single_lead": true}},
+    {"id": "price_before_approval", "messages": ["what is the price?"], "expect": {"no_invented_price": true}},
+    {"id": "discount_request", "messages": ["can you give me a discount?"], "expect": {"objection": "want_discount"}},
+    {"id": "request_human", "messages": ["I want to talk to a human"], "expect": {"handoff": true}},
+    {"id": "optout", "messages": ["stop"], "expect": {"optout": true}},
+    {"id": "duplicate_webhook", "duplicate": true, "messages": ["I want a website"], "expect": {"no_duplicate": true}},
+    {"id": "malformed_webhook", "malformed": true, "messages": ["I want a website"], "expect": {"safe_reject": true}},
+    {"id": "arabic_customer", "messages": ["أريد موقع إلكتروني لمطعمي"], "expect": {"language": "ar"}},
+    {"id": "indonesian_customer", "messages": ["saya mau website untuk restoran"], "expect": {"language": "id"}},
+    {"id": "english_customer", "messages": ["I need a website"], "expect": {"language": "en"}}
+  ]
+}

@@ -1,0 +1,224 @@
+"""Message Coordinator — inbound channel events → AmanCore Core → outbox.
+
+Channels are transport only: no sales logic, no pricing logic here.
+"""
+
+from __future__ import annotations
+
+import re
+
+from ..ids import new_id, utcnow
+from ..log import get_logger
+from ..services.events import CanonicalEvent
+from .handover import HandoverService
+
+log = get_logger("channels.coordinator")
+
+_OPT_OUT = re.compile(
+    r"\b(stop|unsubscribe|don'?t message|not interested|quit|أوقف|لا ترسل|لا اريد|berhenti|jangan kirim|stop kirim)\b",
+    re.IGNORECASE,
+)
+_PRICE_INTENT = re.compile(
+    r"(price|cost|berapa|harga|سعر|كم |quote|proposal|offer|عرض|تسعير|estimate)",
+    re.IGNORECASE,
+)
+_HUMAN_INTENT = re.compile(
+    r"(human|real person|talk to owner|person please|إنسان|بشري|صاحب|orang|manusia)",
+    re.IGNORECASE,
+)
+
+
+class MessageCoordinator:
+    def __init__(
+        self,
+        whatsapp_adapter,
+        outbox,
+        worker,
+        sales_agent,
+        crm,
+        conversation_memory,
+        handover: HandoverService,
+        response_filter,
+        channel_policy,
+        idempotency,
+        language_detector,
+        localization_skill,
+        snapshot_store,
+        proposal_store,
+        owner_alert,
+        audit=None,
+        dispatcher=None,
+    ):
+        self.whatsapp = whatsapp_adapter
+        self.outbox = outbox
+        self.worker = worker
+        self.sales_agent = sales_agent
+        self.crm = crm
+        self.memory = conversation_memory
+        self.handover = handover
+        self.filter = response_filter
+        self.channel_policy = channel_policy
+        self.idem = idempotency
+        self.lang = language_detector
+        self.localize = localization_skill
+        self.snapshots = snapshot_store
+        self.proposals = proposal_store
+        self.owner_alert = owner_alert
+        self.audit = audit
+        self.dispatcher = dispatcher
+
+    def handle_whatsapp_webhook(self, body, headers=None) -> dict:
+        if self.whatsapp.config.get("signature_required"):
+            signature = (headers or {}).get("x-hub-signature-256")
+            if signature and not self.whatsapp.verify_signature(self._raw(body), signature):
+                self._emit("whatsapp.webhook.failed", payload={"reason": "invalid signature"})
+                return {"status": "rejected", "reason": "invalid signature"}
+
+        events = self.whatsapp.receive_webhook(body, headers)
+        summary = {"received": len(events), "processed": 0, "duplicates": 0, "replies": 0, "handoffs": 0, "optouts": 0}
+        for event in events:
+            if event.event_type != "whatsapp.message.received":
+                continue
+            if event.idempotency_key and self.idem.check(event.idempotency_key) is not None:
+                summary["duplicates"] += 1
+                continue
+            self.idem.store(event.idempotency_key, "inbound_whatsapp", "processed")
+            result = self._process_inbound(event.payload)
+            summary["processed"] += 1
+            summary["replies"] += 1 if result.get("reply_sent") else 0
+            summary["handoffs"] += 1 if result.get("handoff") else 0
+            summary["optouts"] += 1 if result.get("optout") else 0
+
+        self.worker.drain(limit=10)
+        return summary
+
+    def _process_inbound(self, payload: dict) -> dict:
+        wa_id = payload.get("wa_id")
+        text = payload.get("text", "")
+        name = payload.get("name", "")
+        corr = new_id()
+
+        lead = self.crm.find_lead_by_whatsapp(wa_id)
+        if lead is None:
+            lead_id = self.crm.create_lead(
+                name=name or None,
+                contact_whatsapp=wa_id,
+                source_channel="whatsapp",
+            )
+            lead = self.crm.get_lead(lead_id)
+
+        language = self.lang.detect(text)
+        mem = self.memory.get_or_create(lead["lead_id"], channel="whatsapp", language=language)
+
+        # human takeover — AI must not send
+        if not self.handover.can_send_ai(lead["lead_id"]):
+            self._audit("channel.human_hold", "lead", result="AI inactive")
+            return {"lead_id": lead["lead_id"], "reply_sent": False, "hold": True}
+
+        # opt-out
+        if _OPT_OUT.search(text):
+            self.crm.update_lead(lead["lead_id"], opt_out=1)
+            self._emit("optout.recorded", {"lead_id": lead["lead_id"]}, corr)
+            self._audit("channel.optout", "lead", result=lead["lead_id"])
+            return {"lead_id": lead["lead_id"], "optout": True, "reply_sent": False}
+
+        # human intent → handoff
+        if _HUMAN_INTENT.search(text):
+            mode = self.handover.request_human(lead["lead_id"])
+            self._alert_owner(lead, mem, "human_requested")
+            self._emit("sales.handoff_requested", {"lead_id": lead["lead_id"]}, corr)
+            reply = self._localize("I'll connect you with our team right away.", language)
+            self._queue_reply(lead, mem, reply, corr, f"handoff:{wa_id}:{text[:40]}")
+            return {"lead_id": lead["lead_id"], "handoff": True, "mode": mode, "reply_sent": True}
+
+        # price / proposal intent
+        if _PRICE_INTENT.search(text):
+            reply = self._price_or_proposal_reply(lead, corr)
+            self._queue_reply(lead, mem, reply, corr, f"price:{wa_id}:{text[:40]}")
+            return {"lead_id": lead["lead_id"], "reply_sent": True, "price_reply": True}
+
+        # sales flow
+        result = self.sales_agent.process_message(lead, text)
+        reply = result.get("reply") or "Thank you — our team will follow up with you."
+        if result.get("needs_human"):
+            self.handover.request_human(lead["lead_id"])
+            self._alert_owner(lead, mem, "sales_handoff")
+            self._emit("sales.handoff_requested", {"lead_id": lead["lead_id"]}, corr)
+            return {"lead_id": lead["lead_id"], "handoff": True, "reply_sent": True}
+
+        reply = self._localize(reply, language)
+        self._queue_reply(lead, mem, reply, corr, f"reply:{wa_id}:{text[:40]}")
+        return {"lead_id": lead["lead_id"], "reply_sent": True}
+
+    def _price_or_proposal_reply(self, lead: dict, corr: str) -> str:
+        opp = self.crm.get_opportunity_for_lead(lead["lead_id"])
+        if opp:
+            snap = self.snapshots.get_for_opportunity(opp["opportunity_id"])
+            if snap and snap.get("approved_price") is not None:
+                return f"The approved price for your project is {snap['approved_price']:g} {snap.get('currency', 'USD')}."
+            prop = self.proposals.get_approved_for_opportunity(opp["opportunity_id"])
+            if prop:
+                return "Your approved proposal is ready — our team will share the details."
+        self._emit("pricing.approval_requested", {"lead_id": lead["lead_id"]}, corr)
+        return "Our team is preparing an approved quote for you — no price will be quoted before approval."
+
+    def _queue_reply(self, lead: dict, mem: dict, text: str, corr: str, idem_salt: str) -> str:
+        if not text.strip():
+            return ""
+        check = self.filter.check(text)
+        if not check["allowed"]:
+            self._audit("channel.leak_blocked", "lead", result=str(check["found"]))
+            self.owner_alert("high", f"Internal data leak blocked for lead {lead['lead_id']}: {check['found']}", corr)
+            text = "Thank you — our team will follow up with you shortly."
+        decision = self.channel_policy.evaluate_send("whatsapp", "text", "low")
+        if decision != "allow":
+            self._audit("channel.policy_blocked", "lead", result=decision)
+            return ""
+        mid = self.outbox.enqueue(
+            channel="whatsapp",
+            recipient=lead.get("contact_whatsapp"),
+            message_type="text",
+            payload=text,
+            idempotency_key=f"wa-reply:{idem_salt}",
+            lead_id=lead["lead_id"],
+            conversation_id=mem.get("conversation_id"),
+            correlation_id=corr,
+        )
+        self._audit("channel.reply_queued", "lead", result=mid)
+        return mid
+
+    def _localize(self, text: str, language: str) -> str:
+        if language in ("ar", "id"):
+            return self.localize.localize(text, "indonesia" if language == "id" else "gcc", language)["text"]
+        return text
+
+    def _alert_owner(self, lead: dict, mem: dict, reason: str) -> None:
+        opp = self.crm.get_opportunity_for_lead(lead["lead_id"])
+        self.owner_alert(
+            "high",
+            f"Handoff {reason} — lead {lead.get('name', lead['lead_id'])} "
+            f"(score={lead.get('lead_score')}, stage={opp.get('stage', '') if opp else ''})",
+            None,
+        )
+
+    def _raw(self, body) -> bytes:
+        if isinstance(body, bytes):
+            return body
+        import json
+
+        return json.dumps(body, separators=(",", ":")).encode("utf-8")
+
+    def _emit(self, event_type: str, payload: dict, correlation_id: str | None = None) -> None:
+        if self.dispatcher is None:
+            return
+        self.dispatcher.publish(
+            CanonicalEvent(
+                event_id=new_id(), event_type=event_type, timestamp=utcnow(),
+                source="coordinator", actor_type="system",
+                correlation_id=correlation_id, payload=payload,
+            )
+        )
+
+    def _audit(self, action: str, resource: str, **fields) -> None:
+        if self.audit is not None:
+            self.audit.record(action=action, resource=resource, **fields)

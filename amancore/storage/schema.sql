@@ -276,6 +276,33 @@ CREATE TABLE IF NOT EXISTS proposals (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS message_outbox (
+    message_id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    recipient TEXT,
+    message_type TEXT NOT NULL DEFAULT 'text',
+    payload TEXT,
+    idempotency_key TEXT,
+    status TEXT NOT NULL DEFAULT 'queued',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TEXT,
+    lead_id TEXT,
+    conversation_id TEXT,
+    correlation_id TEXT,
+    provider_message_id TEXT,
+    failure_reason TEXT,
+    created_at TEXT NOT NULL,
+    sent_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS intake_events (
+    intake_id TEXT PRIMARY KEY,
+    ip TEXT,
+    email TEXT,
+    lead_id TEXT,
+    created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS idempotency_keys (
     idempotency_key TEXT PRIMARY KEY,
     operation TEXT,
@@ -309,3 +336,7 @@ CREATE INDEX IF NOT EXISTS idx_content_hash ON content_items(content_hash);
 CREATE INDEX IF NOT EXISTS idx_research_lead ON research_results(lead_id);
 CREATE INDEX IF NOT EXISTS idx_snapshots_opportunity ON pricing_snapshots(opportunity_id);
 CREATE INDEX IF NOT EXISTS idx_proposals_opportunity ON proposals(opportunity_id);
+CREATE INDEX IF NOT EXISTS idx_outbox_status ON message_outbox(status);
+CREATE INDEX IF NOT EXISTS idx_outbox_idem ON message_outbox(idempotency_key);
+CREATE INDEX IF NOT EXISTS idx_intake_ip ON intake_events(ip);
+CREATE INDEX IF NOT EXISTS idx_intake_email ON intake_events(email);

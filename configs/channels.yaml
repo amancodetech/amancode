@@ -1,0 +1,21 @@
+# Channel configuration (Phase 3E: WhatsApp + Website intake only)
+
+whatsapp:
+  mode: mock            # mock | sandbox | production (production gated)
+  api_version: v24.0    # current official API version at enablement time
+  base_url: https://graph.facebook.com
+  inbound_burst_limit: 50
+  outbound_per_minute: 10
+  auto_reply_low_risk: true
+  template_policy: approved_only
+  signature_required: true
+
+website:
+  intake_rate_per_ip_minute: 5
+  intake_rate_per_email_day: 3
+  max_payload_bytes: 8192
+  cors_origin: "*"
+
+outbox:
+  max_attempts: 3
+  retry_backoff_seconds: 10

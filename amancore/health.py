@@ -80,6 +80,17 @@ def run_health_checks(root: Path) -> dict[str, tuple[str, str]]:
     # security
     results["security"] = _check("security", lambda: _security(root))
 
+    # channels (Phase 3E — mock-mode configuration state, not production readiness)
+    cfg3 = cfg or load_config(root)
+    results["whatsapp_config"] = _check("whatsapp_config", lambda: _whatsapp_config(cfg3))
+    results["whatsapp_webhook"] = _check("whatsapp_webhook", lambda: _whatsapp_webhook(cfg3))
+    results["channel_policy"] = _check("channel_policy", lambda: _channel_policy(store))
+    results["message_outbox"] = _check("message_outbox", lambda: _message_outbox(db))
+    results["website_intake"] = _check("website_intake", lambda: _website_intake(db))
+    results["sales_integration"] = _check("sales_integration", lambda: _sales_integration(store))
+    results["pricing_snapshot"] = _check("pricing_snapshot", lambda: _pricing_snapshot(db))
+    results["owner_alert"] = _check("owner_alert", lambda: _owner_alert())
+
     if db is not None:
         db.close()
     return results
@@ -147,6 +158,65 @@ def _security(root: Path) -> str:
     if ".env" not in text:
         raise RuntimeError(".gitignore does not exclude .env")
     return ".env excluded"
+
+
+def _whatsapp_config(cfg: Config) -> str:
+    w = cfg.channels.get("whatsapp", {})
+    mode = w.get("mode", "mock")
+    if mode not in ("mock", "sandbox", "production"):
+        raise RuntimeError(f"invalid whatsapp mode: {mode}")
+    return f"mode={mode} api_version={w.get('api_version')}"
+
+
+def _whatsapp_webhook(cfg: Config) -> str:
+    from .channels.whatsapp import WhatsAppAdapter
+
+    w = cfg.channels.get("whatsapp", {})
+    adapter = WhatsAppAdapter(w)
+    result = adapter.verify_webhook("subscribe", w.get("verify_token", ""), "challenge")
+    if w.get("mode") == "mock":
+        return "mock webhook verifier available (production pending verification)"
+    if not result.get("verified"):
+        raise RuntimeError("verify token not configured")
+    return "webhook verified"
+
+
+def _channel_policy(store) -> str:
+    from .channels.policy import ChannelPolicyEngine
+
+    policy = ChannelPolicyEngine(store)
+    return f"send(text)={policy.evaluate_send('whatsapp', 'text')}"
+
+
+def _message_outbox(db) -> str:
+    from .channels.outbox import MessageOutbox
+
+    outbox = MessageOutbox(db)
+    return f"outbox counts={outbox.counts()}"
+
+
+def _website_intake(db) -> str:
+    n = db.execute("SELECT COUNT(*) AS c FROM intake_events").fetchone()["c"]
+    return f"intake_events table ok ({n} rows)"
+
+
+def _sales_integration(store) -> str:
+    from .sales.qualification import QualificationEngine
+
+    q = QualificationEngine().qualify({"facts": {"problem": "x"}}, {}, {"overall_fit": "medium"})
+    return f"sales ready={not q['decision_readiness']}"
+
+
+def _pricing_snapshot(db) -> str:
+    n = db.execute("SELECT COUNT(*) AS c FROM pricing_snapshots").fetchone()["c"]
+    return f"pricing_snapshots table ok ({n} rows)"
+
+
+def _owner_alert() -> str:
+    from .services.owner_alert import send_owner_alert
+
+    send_owner_alert("info", "health check")
+    return "alert sink ok"
 
 
 def print_health_report(results: dict[str, tuple[str, str]]) -> int:

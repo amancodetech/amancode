@@ -54,6 +54,7 @@ class Config:
     pricing: dict[str, Any] = field(default_factory=dict)
     lead_scoring: dict[str, Any] = field(default_factory=dict)
     retention: dict[str, Any] = field(default_factory=dict)
+    channels: dict[str, Any] = field(default_factory=dict)
 
     @property
     def database_path(self) -> Path:
@@ -76,5 +77,6 @@ def load_config(root: Path) -> Config:
         pricing=_load_yaml(root / "configs" / "pricing.yaml"),
         lead_scoring=_load_yaml(root / "configs" / "lead_scoring.yaml"),
         retention=_load_yaml(root / "configs" / "retention.yaml"),
+        channels=_load_yaml(root / "configs" / "channels.yaml"),
     )
     return cfg

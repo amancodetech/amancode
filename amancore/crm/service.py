@@ -83,6 +83,12 @@ class CRMService:
             params += [website, website]
         return [dict(r) for r in self.db.execute(sql, tuple(params)).fetchall()]
 
+    def find_lead_by_whatsapp(self, wa_id: str) -> dict | None:
+        row = self.db.execute(
+            "SELECT * FROM leads WHERE contact_whatsapp = ? ORDER BY created_at DESC LIMIT 1", (wa_id,)
+        ).fetchone()
+        return _row(row)
+
     # ---- Customers -----------------------------------------------------
     def create_customer(self, company: str, **fields: Any) -> str:
         customer_id = new_id()

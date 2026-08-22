@@ -49,6 +49,28 @@ class ProposalStore:
         d["body"] = json_loads(d.get("body"), {})
         return d
 
+    def get_for_opportunity(self, opportunity_id: str) -> dict | None:
+        row = self.db.execute(
+            "SELECT * FROM proposals WHERE opportunity_id = ? ORDER BY created_at DESC LIMIT 1",
+            (opportunity_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        d = dict(row)
+        d["body"] = json_loads(d.get("body"), {})
+        return d
+
+    def get_approved_for_opportunity(self, opportunity_id: str) -> dict | None:
+        row = self.db.execute(
+            "SELECT * FROM proposals WHERE opportunity_id = ? AND status = 'approved' ORDER BY created_at DESC LIMIT 1",
+            (opportunity_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        d = dict(row)
+        d["body"] = json_loads(d.get("body"), {})
+        return d
+
     def update(self, proposal_id: str, **fields) -> None:
         if not fields:
             return
