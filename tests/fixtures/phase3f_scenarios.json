@@ -1,0 +1,12 @@
+{
+  "scenarios": [
+    {"id": "support_project_status", "setup": "customer", "messages": ["how is my project going?"], "expect": {"domain": "support", "category": "project_status"}},
+    {"id": "billing_refund", "setup": "customer", "messages": ["I want a refund please"], "expect": {"domain": "support", "category": "billing", "escalated": true, "owner_alert": true}},
+    {"id": "legal_action", "setup": "customer", "messages": ["I will take legal action"], "expect": {"domain": "support", "category": "legal", "escalated": true}},
+    {"id": "complaint", "setup": "customer", "messages": ["this is a complaint, I am very angry"], "expect": {"category": "complaint", "escalated": true}},
+    {"id": "security_critical", "setup": "customer", "messages": ["there is a security incident, data breach!"], "expect": {"critical": true, "escalated": true, "owner_alert": true}},
+    {"id": "prospect_support", "messages": ["help me build a website"], "expect": {"domain": "sales"}},
+    {"id": "customer_new_sale", "setup": "customer", "messages": ["I want to buy another website"], "expect": {"domain": "sales"}},
+    {"id": "human_takeover", "setup": "customer", "messages": ["how is my project going?"], "expect": {"ai_blocked": true}}
+  ]
+}

@@ -1,0 +1,223 @@
+# Analytics KPI definitions (Phase 3F). Each KPI: definition, formula, source,
+# time_window, aggregation, caveats. Computation is read-only over CRM tables.
+
+baseline:
+  start: system_activation   # earliest record in the system; before it => NOT_AVAILABLE
+
+kpis:
+  new_leads:
+    name: New Leads
+    definition: Leads created in the window
+    formula: COUNT(leads.created_at)
+    source: leads
+    time_window: window
+    aggregation: count
+    caveats: includes all channels
+  leads_by_source:
+    name: Leads by Source
+    definition: Leads grouped by acquisition source channel
+    formula: COUNT(leads) GROUP BY source_channel
+    source: leads
+    time_window: window
+    aggregation: group_count
+    caveats: direct/website/whatsapp only when attributed
+  content_pieces:
+    name: Content Pieces
+    definition: Content items created (draft+approved)
+    formula: COUNT(content_items)
+    source: content_items
+    time_window: window
+    aggregation: count
+    caveats: not published yet
+  engaged_leads:
+    name: Engaged Leads
+    definition: Leads with at least one conversation
+    formula: COUNT(DISTINCT conversations.lead_id)
+    source: conversations
+    time_window: window
+    aggregation: count
+    caveats: conversation = engagement signal
+  qualified_leads:
+    name: Qualified Leads
+    definition: Leads scored qualified or hot
+    formula: COUNT(leads) WHERE lead_stage IN (qualified, hot)
+    source: leads
+    time_window: window
+    aggregation: count
+    caveats: deterministic scoring
+  hot_leads:
+    name: Hot Leads
+    definition: Leads scored hot (score >= 70)
+    formula: COUNT(leads) WHERE lead_stage = hot
+    source: leads
+    time_window: window
+    aggregation: count
+    caveats: deterministic scoring
+  opportunities:
+    name: Opportunities
+    definition: Open opportunities (not won/lost)
+    formula: COUNT(opportunities) WHERE stage NOT IN (won, lost)
+    source: opportunities
+    time_window: window
+    aggregation: count
+    caveats: stage-based
+  proposals_approved:
+    name: Approved Proposals
+    definition: Proposals with status approved
+    formula: COUNT(proposals) WHERE status = approved
+    source: proposals
+    time_window: window
+    aggregation: count
+    caveats: owner approval only
+  won:
+    name: Won Deals
+    definition: Opportunities won
+    formula: COUNT(opportunities) WHERE stage = won
+    source: opportunities
+    time_window: window
+    aggregation: count
+    caveats: stage-based
+  lost:
+    name: Lost Deals
+    definition: Opportunities lost
+    formula: COUNT(opportunities) WHERE stage = lost
+    source: opportunities
+    time_window: window
+    aggregation: count
+    caveats: stage-based
+  close_rate:
+    name: Close Rate
+    definition: Won / (Won + Lost)
+    formula: won / (won + lost)
+    source: opportunities
+    time_window: window
+    aggregation: ratio
+    caveats: undefined when won+lost = 0
+  avg_deal_value:
+    name: Average Deal Value
+    definition: Mean approved price of won deals
+    formula: AVG(pricing_snapshots.approved_price) JOIN won opportunities
+    source: pricing_snapshots + opportunities
+    time_window: window
+    aggregation: mean
+    caveats: approved price only; no invented prices
+  sales_cycle_days:
+    name: Sales Cycle
+    definition: Avg days from lead created to opportunity won
+    formula: AVG(julianday(won) - julianday(lead.created_at))
+    source: leads + opportunities
+    time_window: window
+    aggregation: mean_days
+    caveats: needs won deals
+  revenue:
+    name: Revenue
+    definition: Sum of approved prices on won deals
+    formula: SUM(pricing_snapshots.approved_price) WHERE opportunity stage = won
+    source: pricing_snapshots + opportunities
+    time_window: window
+    aggregation: sum
+    caveats: recognized on won, not cash-basis
+  true_cost:
+    name: True Cost
+    definition: Sum of true cost (from pricing snapshot calculation) on won deals
+    formula: SUM(JSON(calculated_result.true_cost)) WHERE stage = won
+    source: pricing_snapshots
+    time_window: window
+    aggregation: sum
+    caveats: shadow-rate internal estimate
+  gross_margin:
+    name: Gross Margin
+    definition: (Revenue - True Cost) / Revenue
+    formula: (revenue - true_cost) / revenue
+    source: pricing_snapshots
+    time_window: window
+    aggregation: ratio
+    caveats: internal estimate, not accounting
+  mrr:
+    name: MRR
+    definition: Monthly recurring revenue from active care plans
+    formula: SUM(price monthly-normalized) WHERE care_plans.status = active
+    source: care_plans
+    time_window: window
+    aggregation: sum_monthly
+    caveats: normalized from billing_cycle
+  projects:
+    name: Projects
+    definition: Active projects
+    formula: COUNT(projects)
+    source: projects
+    time_window: window
+    aggregation: count
+    caveats: none
+  hours_logged:
+    name: Hours Logged
+    definition: Total logged hours across projects
+    formula: SUM(projects.hours_logged)
+    source: projects
+    time_window: window
+    aggregation: sum
+    caveats: requires logging discipline
+  ai_cost:
+    name: AI Cost
+    definition: Estimated model usage cost
+    formula: SUM(usage_records.estimated_cost)
+    source: usage_records
+    time_window: window
+    aggregation: sum
+    caveats: per price table; no real billing yet
+  ai_tokens:
+    name: AI Tokens
+    definition: Total tokens (input+output)
+    formula: SUM(input_tokens + output_tokens)
+    source: usage_records
+    time_window: window
+    aggregation: sum
+    caveats: none
+  ai_failure_rate:
+    name: AI Failure Rate
+    definition: Failed requests / total requests
+    formula: COUNT(status=error) / COUNT(*)
+    source: usage_records
+    time_window: window
+    aggregation: ratio
+    caveats: provider errors only
+  support_cases:
+    name: Support Cases
+    definition: Cases created in window
+    formula: COUNT(support_cases)
+    source: support_cases
+    time_window: window
+    aggregation: count
+    caveats: all categories
+  support_open:
+    name: Open Support Cases
+    definition: Cases not resolved/closed/cancelled
+    formula: COUNT(support_cases) WHERE status NOT IN (resolved, closed, cancelled)
+    source: support_cases
+    time_window: window
+    aggregation: count
+    caveats: none
+  support_escalations:
+    name: Support Escalations
+    definition: Cases with escalated = 1
+    formula: COUNT(support_cases) WHERE escalated = 1
+    source: support_cases
+    time_window: window
+    aggregation: count
+    caveats: none
+  avg_resolution_hours:
+    name: Avg Resolution Time
+    definition: Avg hours from created_at to resolved_at on resolved cases
+    formula: AVG((julianday(resolved_at) - julianday(created_at)) * 24)
+    source: support_cases
+    time_window: window
+    aggregation: mean_hours
+    caveats: only resolved cases
+  reopen_rate:
+    name: Reopen Rate
+    definition: Resolved cases reopened / resolved cases
+    formula: COUNT(reopened_at IS NOT NULL) / COUNT(resolved)
+    source: support_cases
+    time_window: window
+    aggregation: ratio
+    caveats: none

@@ -1,0 +1,27 @@
+# Support policy (Phase 3F). Config-driven; values are NOT invented.
+# If this policy is missing/empty, SupportAgent must escalate to owner (UNKNOWN_POLICY).
+
+support_policy:
+  response_target:
+    CRITICAL: 15m
+    HIGH: 1h
+    MEDIUM: 4h
+    LOW: 24h
+  priority:
+    security_incident: CRITICAL
+    data_breach: CRITICAL
+    service_unavailable: CRITICAL
+    serious_legal: CRITICAL
+    complaint: HIGH
+    billing_dispute: HIGH
+    technical_support: MEDIUM
+    project_status: MEDIUM
+    feature_request: LOW
+    general: LOW
+  escalation_rules:
+    CRITICAL: immediate_owner
+    HIGH: owner_review
+    complaint: owner_review
+    billing: owner_review
+    legal: legal_review
+  owner_on_unknown_policy: true

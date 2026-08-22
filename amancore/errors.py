@@ -55,3 +55,8 @@ class RoutingError(AmanCoreError):
 
 class PermissionDenied(AmanCoreError):
     """Actor attempted an operation outside its permission boundary."""
+
+
+class ProductionNotEnabledError(AmanCoreError):
+    """External send attempted while production_enabled=false (safety rule)."""
+

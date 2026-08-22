@@ -10,6 +10,7 @@ import os
 import requests
 
 from ..ids import new_id, utcnow
+from ..production.gate import block_unless_production_enabled
 from ..services.events import CanonicalEvent
 from .contract import ChannelAdapter
 from .verification import WebhookVerifier
@@ -32,15 +33,21 @@ class MockWhatsAppProvider:
 
 
 class GraphWhatsAppProvider:
-    """Official WhatsApp Cloud API provider (Graph API). Config-driven version."""
+    """Official WhatsApp Cloud API provider (Graph API). Config-driven version.
+
+    SAFETY: refuses to send unless production_enabled is explicitly true AND
+    mode == 'production'. Credentials alone never unlock external sends.
+    """
 
     def __init__(self, config: dict):
+        self.config = config
         self.base_url = config.get("base_url", "https://graph.facebook.com").rstrip("/")
         self.version = config.get("api_version", "v24.0")
         self.phone_number_id = config.get("phone_number_id")
         self.access_token = os.environ.get(config.get("access_token_env", "WHATSAPP_ACCESS_TOKEN"), "")
 
     def send(self, recipient: str, message_type: str, payload) -> dict:
+        block_unless_production_enabled(self.config)
         if not (self.phone_number_id and self.access_token):
             raise RuntimeError("whatsapp provider not configured (phone_number_id/access_token)")
         url = f"{self.base_url}/{self.version}/{self.phone_number_id}/messages"

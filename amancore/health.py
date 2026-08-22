@@ -91,6 +91,11 @@ def run_health_checks(root: Path) -> dict[str, tuple[str, str]]:
     results["pricing_snapshot"] = _check("pricing_snapshot", lambda: _pricing_snapshot(db))
     results["owner_alert"] = _check("owner_alert", lambda: _owner_alert())
 
+    # Phase 3F — support, analytics, production gate (informational: mock-safe)
+    results["support_cases"] = _check("support_cases", lambda: _support_cases(db))
+    results["analytics"] = _check("analytics", lambda: _analytics(db))
+    results["production_gate"] = _check("production_gate", lambda: _production_gate(cfg3))
+
     if db is not None:
         db.close()
     return results
@@ -217,6 +222,30 @@ def _owner_alert() -> str:
 
     send_owner_alert("info", "health check")
     return "alert sink ok"
+
+
+def _support_cases(db) -> str:
+    from .support.cases import SupportCaseStore
+
+    store = SupportCaseStore(db)
+    return f"support_cases table ok ({store.counts()})"
+
+
+def _analytics(db) -> str:
+    from .analytics.service import AnalyticsService
+
+    svc = AnalyticsService(db)
+    return f"kpis read-only ok (leads={svc.leads_total()['value']}, margin={svc.gross_margin()['value']})"
+
+
+def _production_gate(cfg: Config) -> str:
+    from .production.gate import ProductionGateService
+
+    production = dict(cfg.production)
+    report = ProductionGateService(production).check()
+    if report["production_enabled"]:
+        raise RuntimeError("production_enabled must be false in this environment")
+    return f"verdict={report['verdict']} (safe: production disabled, mode={report['mode']})"
 
 
 def print_health_report(results: dict[str, tuple[str, str]]) -> int:

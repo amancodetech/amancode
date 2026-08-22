@@ -166,6 +166,61 @@ class CRMService:
             ).fetchone()
         )
 
+    def won_opportunity(self, opportunity_id: str, company: str, **project_fields: Any) -> dict:
+        """Finalize a won deal: create/link customer + project, set stage=won.
+
+        This is what turns a lead into a customer (enables support + analytics).
+        Price/scope are NOT changed here — the pricing snapshot is the source.
+        """
+        opp = self.get_opportunity(opportunity_id)
+        if opp is None:
+            raise NotFoundError(f"opportunity {opportunity_id} not found")
+        customer_id = opp.get("customer_id")
+        if not customer_id:
+            customer_id = self.create_customer(company=company or "Customer")
+            self.db.execute(
+                "UPDATE opportunities SET customer_id = ? WHERE opportunity_id = ?",
+                (customer_id, opportunity_id),
+            )
+            self.db.commit()
+        project_id = self.create_project(
+            customer_id,
+            opp.get("service", ""),
+            opportunity_id=opportunity_id,
+            status=project_fields.pop("status", "active"),
+            **project_fields,
+        )
+        self.update_opportunity(opportunity_id, stage="won", customer_id=customer_id)
+        return {"customer_id": customer_id, "project_id": project_id, "opportunity_id": opportunity_id}
+
+    def get_customer_for_lead(self, lead_id: str) -> dict | None:
+        """Resolve a customer for a lead via a linked (won) opportunity."""
+        row = self.db.execute(
+            "SELECT c.* FROM customers c "
+            "JOIN opportunities o ON o.customer_id = c.customer_id "
+            "WHERE o.lead_id = ? ORDER BY o.updated_at DESC LIMIT 1",
+            (lead_id,),
+        ).fetchone()
+        return _row(row)
+
+    def get_projects_for_customer(self, customer_id: str) -> list[dict]:
+        return [
+            dict(r)
+            for r in self.db.execute(
+                "SELECT * FROM projects WHERE customer_id = ? ORDER BY created_at DESC",
+                (customer_id,),
+            ).fetchall()
+        ]
+
+    def get_care_plans_for_customer(self, customer_id: str) -> list[dict]:
+        return [
+            dict(r)
+            for r in self.db.execute(
+                "SELECT * FROM care_plans WHERE customer_id = ? ORDER BY created_at DESC",
+                (customer_id,),
+            ).fetchall()
+        ]
+
     # ---- Projects ------------------------------------------------------
     def create_project(self, customer_id: str, service: str, **fields: Any) -> str:
         project_id = new_id()

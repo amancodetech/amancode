@@ -55,6 +55,10 @@ class Config:
     lead_scoring: dict[str, Any] = field(default_factory=dict)
     retention: dict[str, Any] = field(default_factory=dict)
     channels: dict[str, Any] = field(default_factory=dict)
+    support: dict[str, Any] = field(default_factory=dict)
+    analytics: dict[str, Any] = field(default_factory=dict)
+    alerts: dict[str, Any] = field(default_factory=dict)
+    production: dict[str, Any] = field(default_factory=dict)
 
     @property
     def database_path(self) -> Path:
@@ -78,5 +82,9 @@ def load_config(root: Path) -> Config:
         lead_scoring=_load_yaml(root / "configs" / "lead_scoring.yaml"),
         retention=_load_yaml(root / "configs" / "retention.yaml"),
         channels=_load_yaml(root / "configs" / "channels.yaml"),
+        support=_load_yaml(root / "configs" / "support.yaml"),
+        analytics=_load_yaml(root / "configs" / "analytics.yaml"),
+        alerts=_load_yaml(root / "configs" / "alerts.yaml"),
+        production=_load_yaml(root / "configs" / "production.yaml"),
     )
     return cfg

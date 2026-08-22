@@ -336,6 +336,30 @@ CREATE INDEX IF NOT EXISTS idx_content_hash ON content_items(content_hash);
 CREATE INDEX IF NOT EXISTS idx_research_lead ON research_results(lead_id);
 CREATE INDEX IF NOT EXISTS idx_snapshots_opportunity ON pricing_snapshots(opportunity_id);
 CREATE INDEX IF NOT EXISTS idx_proposals_opportunity ON proposals(opportunity_id);
+CREATE TABLE IF NOT EXISTS support_cases (
+    case_id TEXT PRIMARY KEY,
+    customer_id TEXT REFERENCES customers(customer_id) ON DELETE SET NULL,
+    lead_id TEXT REFERENCES leads(lead_id) ON DELETE SET NULL,
+    project_id TEXT REFERENCES projects(project_id) ON DELETE SET NULL,
+    conversation_id TEXT,
+    category TEXT NOT NULL,
+    priority TEXT NOT NULL DEFAULT 'LOW',
+    status TEXT NOT NULL DEFAULT 'open',
+    summary TEXT,
+    description TEXT,
+    requested_action TEXT,
+    owner TEXT,
+    escalated INTEGER NOT NULL DEFAULT 0,
+    sla_policy TEXT,
+    resolved_at TEXT,
+    reopened_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_support_status ON support_cases(status);
+CREATE INDEX IF NOT EXISTS idx_support_customer ON support_cases(customer_id);
+CREATE INDEX IF NOT EXISTS idx_support_priority ON support_cases(priority);
 CREATE INDEX IF NOT EXISTS idx_outbox_status ON message_outbox(status);
 CREATE INDEX IF NOT EXISTS idx_outbox_idem ON message_outbox(idempotency_key);
 CREATE INDEX IF NOT EXISTS idx_intake_ip ON intake_events(ip);

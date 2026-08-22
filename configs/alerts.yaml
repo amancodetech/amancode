@@ -1,0 +1,68 @@
+# Alert policies (Phase 3F). Deterministic checks; owner alert on trigger.
+
+alerts:
+  system:
+    repeated_errors:
+      name: Repeated Errors
+      check: count(events with risk high + error) > threshold
+      threshold: 5
+      window: 1d
+      severity: high
+    api_failures:
+      name: API Failures
+      check: usage_records status=error in window
+      threshold: 3
+      window: 1h
+      severity: high
+    dead_letter_growth:
+      name: Dead-Letter Growth
+      check: message_outbox status=dead
+      threshold: 3
+      severity: high
+  sales:
+    hot_lead_waiting:
+      name: Hot Lead Waiting
+      check: hot lead with no contact for 24h
+      threshold_hours: 24
+      severity: high
+    high_value_opportunity_pending:
+      name: High-Value Opportunity Pending
+      check: opportunity estimated_value >= threshold, stage != won/lost
+      threshold_value: 1000
+      severity: medium
+    proposal_pending:
+      name: Proposal Pending
+      check: proposal approved but not sent for 3d
+      threshold_days: 3
+      severity: medium
+  pricing:
+    approval_pending:
+      name: Pricing Approval Pending
+      check: pricing approval pending for 2d
+      threshold_days: 2
+      severity: medium
+    pricing_warning:
+      name: Pricing Warning
+      check: pricing.warning events in window
+      severity: medium
+  support:
+    critical_support:
+      name: Critical Support
+      check: open support case with priority CRITICAL
+      severity: critical
+    stale_case:
+      name: Stale Support Case
+      check: open case untouched for 2d
+      threshold_days: 2
+      severity: medium
+  ai:
+    token_budget_exceeded:
+      name: Token Budget Exceeded
+      check: daily tokens > threshold
+      threshold_tokens: 1000000
+      severity: high
+    cost_spike:
+      name: AI Cost Spike
+      check: daily cost > 2x previous day
+      multiplier: 2
+      severity: high

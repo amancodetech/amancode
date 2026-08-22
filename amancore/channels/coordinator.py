@@ -10,9 +10,13 @@ import re
 from ..ids import new_id, utcnow
 from ..log import get_logger
 from ..services.events import CanonicalEvent
+from ..support.filter import SupportResponseFilter
+from ..support.intent import IntentRouter
 from .handover import HandoverService
 
 log = get_logger("channels.coordinator")
+
+_SAFE_FALLBACK = "Thank you — our team will follow up with you shortly."
 
 _OPT_OUT = re.compile(
     r"\b(stop|unsubscribe|don'?t message|not interested|quit|أوقف|لا ترسل|لا اريد|berhenti|jangan kirim|stop kirim)\b",
@@ -48,6 +52,9 @@ class MessageCoordinator:
         owner_alert,
         audit=None,
         dispatcher=None,
+        support_agent=None,
+        intent_router=None,
+        support_filter=None,
     ):
         self.whatsapp = whatsapp_adapter
         self.outbox = outbox
@@ -66,6 +73,9 @@ class MessageCoordinator:
         self.owner_alert = owner_alert
         self.audit = audit
         self.dispatcher = dispatcher
+        self.support_agent = support_agent
+        self.intent_router = intent_router or IntentRouter()
+        self.support_filter = support_filter or SupportResponseFilter()
 
     def handle_whatsapp_webhook(self, body, headers=None) -> dict:
         if self.whatsapp.config.get("signature_required"):
@@ -75,7 +85,7 @@ class MessageCoordinator:
                 return {"status": "rejected", "reason": "invalid signature"}
 
         events = self.whatsapp.receive_webhook(body, headers)
-        summary = {"received": len(events), "processed": 0, "duplicates": 0, "replies": 0, "handoffs": 0, "optouts": 0}
+        summary = {"received": len(events), "processed": 0, "duplicates": 0, "replies": 0, "handoffs": 0, "optouts": 0, "support": 0}
         for event in events:
             if event.event_type != "whatsapp.message.received":
                 continue
@@ -88,6 +98,7 @@ class MessageCoordinator:
             summary["replies"] += 1 if result.get("reply_sent") else 0
             summary["handoffs"] += 1 if result.get("handoff") else 0
             summary["optouts"] += 1 if result.get("optout") else 0
+            summary["support"] += 1 if result.get("support") else 0
 
         self.worker.drain(limit=10)
         return summary
@@ -131,6 +142,16 @@ class MessageCoordinator:
             self._queue_reply(lead, mem, reply, corr, f"handoff:{wa_id}:{text[:40]}")
             return {"lead_id": lead["lead_id"], "handoff": True, "mode": mode, "reply_sent": True}
 
+        # intent routing (Phase 3F) — legal/billing/complaint always to owner;
+        # existing customers route to SupportAgent; prospects stay with sales.
+        customer = self.crm.get_customer_for_lead(lead["lead_id"])
+        intent = self.intent_router.classify_domain(text)
+        self._emit("intent.routed", {"lead_id": lead["lead_id"], "intent": intent}, corr)
+        if intent in ("legal", "billing", "complaint") or (
+            customer is not None and intent in ("support", "general")
+        ):
+            return self._support_flow(lead, mem, text, language, corr, customer, intent)
+
         # price / proposal intent
         if _PRICE_INTENT.search(text):
             reply = self._price_or_proposal_reply(lead, corr)
@@ -149,6 +170,28 @@ class MessageCoordinator:
         reply = self._localize(reply, language)
         self._queue_reply(lead, mem, reply, corr, f"reply:{wa_id}:{text[:40]}")
         return {"lead_id": lead["lead_id"], "reply_sent": True}
+
+    def _support_flow(self, lead: dict, mem: dict, text: str, language: str, corr: str, customer, intent: str) -> dict:
+        if self.support_agent is None:
+            # no support agent wired — fall back to safe acknowledgment
+            self._queue_reply(lead, mem, _SAFE_FALLBACK, corr, f"support-fallback:{lead['lead_id']}:{text[:40]}")
+            return {"lead_id": lead["lead_id"], "reply_sent": True, "support": True, "intent": intent}
+        result = self.support_agent.process_message(lead, text, customer)
+        reply = result.get("reply") or _SAFE_FALLBACK
+        escalated = bool(result.get("handoff") or result.get("escalated"))
+        if escalated:
+            self.handover.request_human(lead["lead_id"])
+            self._alert_owner(lead, mem, f"support_{intent}")
+        check = self.support_filter.check(reply)
+        if not check["allowed"]:
+            self._audit("support.leak_blocked", "lead", result=str(check["found"]))
+            reply = _SAFE_FALLBACK
+        reply = self._localize(reply, language)
+        self._queue_reply(lead, mem, reply, corr, f"support:{lead['lead_id']}:{text[:40]}")
+        return {
+            "lead_id": lead["lead_id"], "reply_sent": True, "support": True,
+            "intent": intent, "handoff": escalated, "case_id": result.get("case_id"),
+        }
 
     def _price_or_proposal_reply(self, lead: dict, corr: str) -> str:
         opp = self.crm.get_opportunity_for_lead(lead["lead_id"])

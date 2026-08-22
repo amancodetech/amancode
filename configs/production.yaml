@@ -1,0 +1,31 @@
+# Production configuration (Phase 3F).
+# production_enabled MUST default to false. No agent/service may send a real
+# message while production_enabled=false, even if credentials exist.
+
+environment:
+  mode: mock              # mock | sandbox | production
+  api_version: v24.0
+  base_url: https://graph.facebook.com
+  webhook_url: ""         # e.g. https://<tunnel-domain>/webhook/whatsapp
+  production_enabled: false
+
+official_verification:
+  status: OFFICIAL_VERIFICATION_PENDING
+  api_docs_verified: false
+  account_configuration_verified: false
+  business_verification_complete: false
+  phone_number_configured: false
+  webhook_reachable: false
+  webhook_verified: false
+  signature_tested: false
+  outbound_tested: false
+  template_requirements_satisfied: false
+  optout_tested: false
+  human_takeover_tested: false
+  idempotency_tested: false
+  outbox_tested: false
+  policy_tested: false
+  audit_tested: false
+  health_pass: false
+  owner_alert_configured: false
+  secrets_configured: false
