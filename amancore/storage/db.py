@@ -61,9 +61,55 @@ class _Transaction:
         return False
 
 
+# Idempotent additive migrations for databases created before a column was
+# added. CREATE TABLE IF NOT EXISTS does not alter existing tables, so new
+# columns are added here via PRAGMA check.
+_COLUMN_MIGRATIONS = [
+    ("leads", "website", "TEXT"),
+    ("leads", "fit_signals", "TEXT"),
+    ("leads", "provenance", "TEXT"),
+    ("content_items", "platform", "TEXT"),
+    ("content_items", "topic", "TEXT"),
+    ("content_items", "angle", "TEXT"),
+    ("content_items", "hook", "TEXT"),
+    ("content_items", "cta", "TEXT"),
+    ("content_items", "source_research_ids", "TEXT"),
+    ("content_items", "approval_status", "TEXT"),
+    ("content_items", "risk_level", "TEXT"),
+    ("content_items", "quality_json", "TEXT"),
+    ("content_items", "content_hash", "TEXT"),
+]
+
+
+def ensure_columns(db: Database) -> None:
+    """Add missing columns (idempotent) for additive schema evolution."""
+    for table, col, typ in _COLUMN_MIGRATIONS:
+        existing = {r["name"] for r in db.execute(f"PRAGMA table_info({table})").fetchall()}
+        if col not in existing:
+            db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
+    db.commit()
+
+
+def _split_schema(sql: str) -> tuple[str, str]:
+    """Split schema into (tables+pragma, indexes) so additive columns land
+    before indexes that reference them."""
+    tables: list[str] = []
+    indexes: list[str] = []
+    current = tables
+    for line in sql.splitlines():
+        if line.lstrip().upper().startswith("CREATE INDEX"):
+            current = indexes
+        current.append(line)
+    return "\n".join(tables), "\n".join(indexes)
+
+
 def open_database(path: Path, schema_file: Path | None = None) -> Database:
     """Open (and optionally initialize) the AmanCore database."""
     db = Database(path)
     if schema_file is not None and schema_file.exists():
-        db.apply_schema(schema_file.read_text(encoding="utf-8"))
+        tables_sql, index_sql = _split_schema(schema_file.read_text(encoding="utf-8"))
+        db.apply_schema(tables_sql)
+        ensure_columns(db)
+        if index_sql.strip():
+            db.apply_schema(index_sql)
     return db

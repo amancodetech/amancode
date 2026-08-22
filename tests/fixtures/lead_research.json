@@ -1,0 +1,8 @@
+{
+  "cases": [
+    {"title": "Acme Trading", "url": "https://acme.co.id", "source": "directory", "expect": "created"},
+    {"title": "Acme Trading", "url": "https://acme.co.id", "source": "directory", "expect": "duplicate"},
+    {"title": "", "url": "", "source": "", "expect": "rejected"},
+    {"title": "NewCo Export", "url": "https://newco.co.id", "source": "inference", "expect": "created_low_confidence"}
+  ]
+}

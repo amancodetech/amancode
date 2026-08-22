@@ -71,6 +71,18 @@ class CRMService:
         params.append(limit)
         return [dict(r) for r in self.db.execute(sql, tuple(params)).fetchall()]
 
+    def find_lead(self, company: str | None = None, website: str | None = None) -> list[dict]:
+        """Dedup lookup by exact company name and/or website domain."""
+        sql = "SELECT * FROM leads WHERE 1=1"
+        params: list[Any] = []
+        if company:
+            sql += " AND company = ?"
+            params.append(company)
+        if website:
+            sql += " AND (website = ? OR contact_website = ?)"
+            params += [website, website]
+        return [dict(r) for r in self.db.execute(sql, tuple(params)).fetchall()]
+
     # ---- Customers -----------------------------------------------------
     def create_customer(self, company: str, **fields: Any) -> str:
         customer_id = new_id()
@@ -204,3 +216,31 @@ class CRMService:
                 "SELECT * FROM conversations WHERE conversation_id = ?", (conversation_id,)
             ).fetchone()
         )
+
+    # ---- Research results ---------------------------------------------
+    def create_research_result(self, **fields: Any) -> str:
+        research_result_id = new_id()
+        now = utcnow()
+        cols = ["research_result_id", "created_at"]
+        vals: list[Any] = [research_result_id, now]
+        for k, v in fields.items():
+            if v is None:
+                continue
+            cols.append(k)
+            vals.append(v)
+        self.db.execute(
+            f"INSERT INTO research_results ({', '.join(cols)}) VALUES ({', '.join('?' for _ in vals)})",
+            tuple(vals),
+        )
+        self.db.commit()
+        return research_result_id
+
+    def list_research_results(self, type_: str | None = None, limit: int = 50) -> list[dict]:
+        sql = "SELECT * FROM research_results WHERE 1=1"
+        params: list[Any] = []
+        if type_:
+            sql += " AND type = ?"
+            params.append(type_)
+        sql += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        return [dict(r) for r in self.db.execute(sql, tuple(params)).fetchall()]

@@ -1,0 +1,9 @@
+{
+  "cases": [
+    {"body": "Here are 3 practical tips to improve your business", "expect": "approved"},
+    {"body": "We offer web application services for growing businesses", "expect": "review"},
+    {"body": "We guarantee revenue growth", "expect": "rejected"},
+    {"body": "Our pricing starts at $1000 for a full website", "expect": "review_owner"},
+    {"body": "Legal disclaimer about contracts", "expect": "review_owner"}
+  ]
+}

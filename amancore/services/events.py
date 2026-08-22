@@ -18,6 +18,7 @@ RISK_LEVELS = {"low", "medium", "high", "critical"}
 
 EVENT_TYPES = {
     "lead.created", "lead.updated", "lead.scored",
+    "lead.discovered", "lead.enriched", "lead.duplicate_detected", "lead.rejected",
     "conversation.received", "conversation.updated",
     "message.sent", "message.failed",
     "offer.generated", "price.calculated", "negotiation.started",
@@ -27,7 +28,8 @@ EVENT_TYPES = {
     "project.created", "project.updated",
     "care_plan.created",
     "followup.due", "followup.sent",
-    "content.drafted", "content.approved", "content.published",
+    "content.drafted", "content.review", "content.approved", "content.rejected", "content.published",
+    "research.started", "research.completed", "research.failed",
     "job.created", "job.completed", "job.failed",
 }
 

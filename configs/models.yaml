@@ -28,7 +28,8 @@ providers:
   gemini:
     type: gemini
     api_key_env: GEMINI_API_KEY
-    model: gemini-2.0-flash
+    model: gemini-3.7-flash
+    reasoning_effort: high
   claude:
     type: anthropic
     base_url_env: ANTHROPIC_BASE_URL

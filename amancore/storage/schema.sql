@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS leads (
     market TEXT,
     language TEXT,
     industry TEXT,
+    website TEXT,
     contact_whatsapp TEXT,
     contact_email TEXT,
     contact_linkedin TEXT,
@@ -39,6 +40,8 @@ CREATE TABLE IF NOT EXISTS leads (
     business_value TEXT,
     engagement TEXT,
     score_breakdown TEXT,
+    fit_signals TEXT,
+    provenance TEXT,
     owner TEXT,
     next_action TEXT,
     last_contact_at TEXT,
@@ -198,11 +201,47 @@ CREATE TABLE IF NOT EXISTS content_items (
     content_type TEXT,
     market TEXT,
     language TEXT,
+    platform TEXT,
     title TEXT,
+    topic TEXT,
+    angle TEXT,
+    hook TEXT,
     body TEXT,
+    cta TEXT,
+    source_research_ids TEXT,
     claim_status TEXT,
+    approval_status TEXT,
+    risk_level TEXT,
+    quality_json TEXT,
+    content_hash TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS research_results (
+    research_result_id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    company_name TEXT,
+    website TEXT,
+    industry TEXT,
+    country TEXT,
+    city TEXT,
+    market TEXT,
+    public_contact TEXT,
+    social_profiles TEXT,
+    digital_presence_signals TEXT,
+    likely_needs TEXT,
+    service_fit TEXT,
+    confidence TEXT,
+    source TEXT,
+    source_url TEXT,
+    research_method TEXT,
+    retrieved_at TEXT,
+    fit_json TEXT,
+    payload TEXT,
+    content_hash TEXT,
+    lead_id TEXT REFERENCES leads(lead_id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS idempotency_keys (
@@ -227,8 +266,12 @@ CREATE TABLE IF NOT EXISTS usage_records (
 
 CREATE INDEX IF NOT EXISTS idx_leads_stage ON leads(lead_stage);
 CREATE INDEX IF NOT EXISTS idx_leads_next_followup ON leads(next_followup_at);
+CREATE INDEX IF NOT EXISTS idx_leads_website ON leads(website);
 CREATE INDEX IF NOT EXISTS idx_conversations_lead ON conversations(lead_id);
 CREATE INDEX IF NOT EXISTS idx_opportunities_stage ON opportunities(stage);
 CREATE INDEX IF NOT EXISTS idx_events_correlation ON events(correlation_id);
 CREATE INDEX IF NOT EXISTS idx_audit_correlation ON audit_events(correlation_id);
 CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status);
+CREATE INDEX IF NOT EXISTS idx_content_status ON content_items(status);
+CREATE INDEX IF NOT EXISTS idx_content_hash ON content_items(content_hash);
+CREATE INDEX IF NOT EXISTS idx_research_lead ON research_results(lead_id);
