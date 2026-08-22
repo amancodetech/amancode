@@ -17,13 +17,27 @@ class Database:
     def __init__(self, path: Path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self.path))
+        self._conn = sqlite3.connect(str(self.path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.execute("PRAGMA journal_mode = WAL")
+        # NOTE: check_same_thread=False is required by the JobRunner (worker
+        # threads). Scheduler concurrency is 1 and SQLite serializes writes.
 
     def execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
         return self._conn.execute(sql, params)
+
+    def backup_to(self, dst_path) -> None:
+        """Consistent online backup via the sqlite backup API (same thread)."""
+        dst_conn = sqlite3.connect(str(dst_path))
+        try:
+            self._conn.backup(dst_conn)
+        finally:
+            dst_conn.close()
+
+    def integrity_ok(self) -> bool:
+        row = self._conn.execute("PRAGMA integrity_check").fetchone()
+        return row is not None and row[0] == "ok"
 
     def executescript(self, sql: str) -> None:
         self._conn.executescript(sql)
@@ -85,6 +99,7 @@ _COLUMN_MIGRATIONS = [
     ("conversations", "next_followup_at", "TEXT"),
     ("conversations", "mode", "TEXT NOT NULL DEFAULT 'AI_ACTIVE'"),
     ("opportunities", "reason", "TEXT"),
+    ("jobs", "started_at", "TEXT"),
 ]
 
 

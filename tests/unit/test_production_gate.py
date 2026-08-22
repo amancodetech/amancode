@@ -1,9 +1,12 @@
 import copy
 import unittest
+from pathlib import Path
 
 from amancore.channels.whatsapp import GraphWhatsAppProvider, WhatsAppAdapter
 from amancore.errors import ProductionNotEnabledError
 from amancore.production.gate import ProductionGateService
+
+ROOT = Path(__file__).resolve().parent.parent.parent
 
 MOCK_PRODUCTION_CONFIG = {
     "environment": {"mode": "mock", "api_version": "v24.0", "webhook_url": "", "production_enabled": False},
@@ -23,7 +26,10 @@ READY_CONFIG = {
         "optout_tested": True, "human_takeover_tested": True, "idempotency_tested": True,
         "outbox_tested": True, "policy_tested": True, "audit_tested": True,
         "health_pass": True, "owner_alert_configured": True, "secrets_configured": True,
+        "backup_verified": True, "recovery_test_passed": True, "runbooks_exist": True,
+        "alert_transport_works": True, "owner_destination_configured": True,
     },
+    "_root": ROOT,
 }
 
 SECRETS = {
@@ -40,9 +46,17 @@ class ProductionGateTest(unittest.TestCase):
         self.assertIn(report["verdict"], ("CONDITIONAL", "NOT_READY"))
 
     def test_not_ready_when_disabled_and_verified(self):
+        import os
+
         gate = ProductionGateService(copy.deepcopy(READY_CONFIG), env=SECRETS)
         gate.config["environment"]["production_enabled"] = False
-        report = gate.check()
+        os.environ["TELEGRAM_BOT_TOKEN"] = "t"
+        os.environ["TELEGRAM_CHAT_ID"] = "c"
+        try:
+            report = gate.check()
+        finally:
+            os.environ.pop("TELEGRAM_BOT_TOKEN", None)
+            os.environ.pop("TELEGRAM_CHAT_ID", None)
         # even fully verified: disabled => never READY
         self.assertEqual(report["verdict"], "CONDITIONAL")
         self.assertFalse(report["production_enabled"])
@@ -53,8 +67,16 @@ class ProductionGateTest(unittest.TestCase):
         self.assertEqual(gate.check()["verdict"], "NOT_READY")
 
     def test_ready_only_when_enabled_and_verified(self):
+        import os
+
         gate = ProductionGateService(copy.deepcopy(READY_CONFIG), env=SECRETS)
-        report = gate.check()
+        os.environ["TELEGRAM_BOT_TOKEN"] = "t"
+        os.environ["TELEGRAM_CHAT_ID"] = "c"
+        try:
+            report = gate.check()
+        finally:
+            os.environ.pop("TELEGRAM_BOT_TOKEN", None)
+            os.environ.pop("TELEGRAM_CHAT_ID", None)
         self.assertEqual(report["verdict"], "READY")
 
     def test_not_ready_when_enabled_but_verification_pending(self):

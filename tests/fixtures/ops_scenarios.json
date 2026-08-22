@@ -1,0 +1,16 @@
+{
+  "scenarios": [
+    {"id": "daily_insights_job", "expect": "completed"},
+    {"id": "failed_job_retry_dead", "expect": "dead"},
+    {"id": "backup", "expect": "checksum_verify"},
+    {"id": "restore_test", "expect": "integrity_pass"},
+    {"id": "owner_alert", "expect": "delivered"},
+    {"id": "duplicate_alert", "expect": "deduplicated"},
+    {"id": "production_disabled", "expect": "blocked"},
+    {"id": "whatsapp_verification_missing", "expect": "not_ready"},
+    {"id": "human_active", "expect": "ai_blocked"},
+    {"id": "security_incident", "expect": "critical_alert_incident"},
+    {"id": "retention", "expect": "protected_preserved"},
+    {"id": "startup", "expect": "checks_pass"}
+  ]
+}

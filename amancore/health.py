@@ -99,6 +99,13 @@ def run_health_checks(root: Path) -> dict[str, tuple[str, str]]:
     # Phase 3G — insights engine (read-only smoke)
     results["insights"] = _check("insights", lambda: _insights(cfg3, db))
 
+    # Phase 3H — operations
+    results["scheduler"] = _check("scheduler", lambda: _scheduler(cfg3, db))
+    results["alerts"] = _check("alerts", lambda: _alerts(db))
+    results["backups"] = _check("backups", lambda: _backups(db))
+    results["incidents"] = _check("incidents", lambda: _incidents(db))
+    results["alert_transport"] = _check("alert_transport", lambda: _alert_transport(cfg3))
+
     if db is not None:
         db.close()
     return results
@@ -259,6 +266,45 @@ def _insights(cfg: Config, db) -> str:
     engine = InsightsEngine(db, analytics=analytics, config=cfg.insights)
     summary = engine.run(period_days=7)
     return f"engine ok (created={summary['created']}, updated={summary['updated']}, recs={summary['recommendations']})"
+
+
+def _scheduler(cfg: Config, db) -> str:
+    from .ops.jobs import JobStore
+    from .ops.scheduler import cron_matches
+
+    store = JobStore(db, config=cfg.scheduler)
+    if not cron_matches("* * * * *"):
+        raise RuntimeError("cron matcher broken")
+    return f"jobs ok ({store.counts()})"
+
+
+def _alerts(db) -> str:
+    from .ops.alerts import AlertStore
+
+    store = AlertStore(db)
+    return f"alerts table ok ({store.counts()})"
+
+
+def _backups(db) -> str:
+    from .ops.backup import BackupService
+    from .ops.recovery import RecoveryService
+    from .ops.startup import StartupService
+
+    latest = BackupService(db, Path(".").resolve()).latest_verified_database()
+    return f"backups table ok (latest_verified={latest['backup_id'][:8] if latest else 'NONE'})"
+
+
+def _incidents(db) -> str:
+    from .ops.incidents import IncidentService
+
+    open_count = len(IncidentService(db).list(status="open"))
+    return f"incidents table ok (open={open_count})"
+
+
+def _alert_transport(cfg: Config) -> str:
+    from .ops.alerts import transport_status
+
+    return transport_status(cfg.scheduler.get("alert", {}))
 
 
 def print_health_report(results: dict[str, tuple[str, str]]) -> int:

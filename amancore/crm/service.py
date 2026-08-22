@@ -89,6 +89,15 @@ class CRMService:
         ).fetchone()
         return _row(row)
 
+    def delete_test_lead(self, wa_id: str) -> None:
+        """Remove a TEST lead + conversations (smoke tests only — never real leads)."""
+        lead = self.find_lead_by_whatsapp(wa_id)
+        if lead is None:
+            return
+        self.db.execute("DELETE FROM conversations WHERE lead_id = ?", (lead["lead_id"],))
+        self.db.execute("DELETE FROM leads WHERE lead_id = ?", (lead["lead_id"],))
+        self.db.commit()
+
     # ---- Customers -----------------------------------------------------
     def create_customer(self, company: str, **fields: Any) -> str:
         customer_id = new_id()

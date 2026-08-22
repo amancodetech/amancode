@@ -36,6 +36,11 @@ GATES = [
     ("health_check_pass", "health_pass"),
     ("owner_alert_configured", "owner_alert_configured"),
     ("secrets_configured", "secrets_configured"),
+    ("backup_verified", "backup_verified"),
+    ("recovery_test_passed", "recovery_test_passed"),
+    ("runbooks_exist", "runbooks_exist"),
+    ("alert_transport_works", "alert_transport_works"),
+    ("owner_destination_configured", "owner_destination_configured"),
 ]
 
 REQUIRED_SECRET_ENVS = [
@@ -109,6 +114,16 @@ class ProductionGateService:
             "gate": "webhook_url_https",
             "status": "PASS" if (webhook_url or "").startswith("https://") else "FAIL",
         })
+        # operational dynamic gates
+        if self.db is not None:
+            try:
+                row = self.db.execute("PRAGMA integrity_check").fetchone()
+                statuses.append({"gate": "database_integrity",
+                                 "status": "PASS" if row[0] == "ok" else "FAIL"})
+            except Exception:  # noqa: BLE001
+                statuses.append({"gate": "database_integrity", "status": "FAIL"})
+        statuses.append({"gate": "runbooks_present", "status": "PASS" if self._runbooks_ok() else "FAIL"})
+        statuses.append({"gate": "alert_transport_works", "status": "PASS" if self._transport_ok() else "FAIL"})
 
         failed = [s for s in statuses if s["status"] == "FAIL" and s["gate"] != "production_enabled"]
         if not prod_enabled:
@@ -127,6 +142,25 @@ class ProductionGateService:
                 "status", "OFFICIAL_VERIFICATION_PENDING"
             ),
         }
+
+    def _runbooks_ok(self) -> bool:
+        root = self.config.get("_root")
+        if not root:
+            return False
+        runbooks_dir = root / "docs" / "runbooks"
+        try:
+            return runbooks_dir.exists() and len(list(runbooks_dir.glob("*.md"))) >= 10
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _transport_ok(self) -> bool:
+        """A real owner transport must be AVAILABLE (telegram/email creds exist).
+        The owner's chosen destination is the separate owner_destination_configured gate."""
+        import os
+
+        telegram = bool(os.environ.get("TELEGRAM_BOT_TOKEN") and os.environ.get("TELEGRAM_CHAT_ID"))
+        email = bool(os.environ.get("SMTP_HOST") and os.environ.get("SMTP_TO"))
+        return telegram or email
 
     def assert_production_send_allowed(self, channel: str = "whatsapp") -> None:
         """Safety rule: no real send unless production_enabled AND mode=production."""

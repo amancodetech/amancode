@@ -28,6 +28,10 @@ node_modules/
 *.log
 logs/
 
+# backups (local state)
+backup/
+backups/
+
 # secrets & sessions
 credentials/
 secrets/

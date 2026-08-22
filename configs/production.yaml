@@ -29,3 +29,8 @@ official_verification:
   health_pass: false
   owner_alert_configured: false
   secrets_configured: false
+  backup_verified: false
+  recovery_test_passed: false
+  runbooks_exist: false
+  alert_transport_works: false
+  owner_destination_configured: false

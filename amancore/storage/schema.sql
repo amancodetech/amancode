@@ -163,11 +163,57 @@ CREATE TABLE IF NOT EXISTS jobs (
     attempts INTEGER NOT NULL DEFAULT 0,
     locked_by TEXT,
     locked_until TEXT,
+    started_at TEXT,
     next_attempt_at TEXT,
     idempotency_key TEXT,
     error TEXT,
     created_at TEXT NOT NULL,
     completed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS alerts (
+    alert_id TEXT PRIMARY KEY,
+    severity TEXT NOT NULL,
+    category TEXT,
+    title TEXT,
+    summary TEXT,
+    evidence TEXT,
+    action_required TEXT,
+    related_entity TEXT,
+    correlation_id TEXT,
+    fingerprint TEXT,
+    dedup_key TEXT,
+    status TEXT NOT NULL DEFAULT 'open',
+    transport TEXT,
+    delivered INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS incidents (
+    incident_id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    component TEXT,
+    status TEXT NOT NULL DEFAULT 'open',
+    description TEXT,
+    evidence TEXT,
+    action_taken TEXT,
+    owner TEXT,
+    detected_at TEXT NOT NULL,
+    resolved_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS backups (
+    backup_id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    path TEXT NOT NULL,
+    sha256 TEXT,
+    size_bytes INTEGER,
+    status TEXT NOT NULL DEFAULT 'created',
+    verified_at TEXT,
+    created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS events (
@@ -425,6 +471,12 @@ CREATE INDEX IF NOT EXISTS idx_insights_category ON insights(category);
 CREATE INDEX IF NOT EXISTS idx_recommendations_status ON recommendations(status);
 CREATE INDEX IF NOT EXISTS idx_recommendations_insight ON recommendations(insight_id);
 CREATE INDEX IF NOT EXISTS idx_decision_entity ON decision_log(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+CREATE INDEX IF NOT EXISTS idx_jobs_type ON jobs(type);
+CREATE INDEX IF NOT EXISTS idx_alerts_fingerprint ON alerts(fingerprint);
+CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status);
+CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status);
+CREATE INDEX IF NOT EXISTS idx_backups_status ON backups(status);
 CREATE INDEX IF NOT EXISTS idx_outbox_status ON message_outbox(status);
 CREATE INDEX IF NOT EXISTS idx_outbox_idem ON message_outbox(idempotency_key);
 CREATE INDEX IF NOT EXISTS idx_intake_ip ON intake_events(ip);

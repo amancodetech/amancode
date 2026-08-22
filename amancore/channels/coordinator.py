@@ -121,17 +121,17 @@ class MessageCoordinator:
         language = self.lang.detect(text)
         mem = self.memory.get_or_create(lead["lead_id"], channel="whatsapp", language=language)
 
-        # human takeover — AI must not send
-        if not self.handover.can_send_ai(lead["lead_id"]):
-            self._audit("channel.human_hold", "lead", result="AI inactive")
-            return {"lead_id": lead["lead_id"], "reply_sent": False, "hold": True}
-
-        # opt-out
+        # opt-out is a compliance action — always honored, even during human takeover
         if _OPT_OUT.search(text):
             self.crm.update_lead(lead["lead_id"], opt_out=1)
             self._emit("optout.recorded", {"lead_id": lead["lead_id"]}, corr)
             self._audit("channel.optout", "lead", result=lead["lead_id"])
             return {"lead_id": lead["lead_id"], "optout": True, "reply_sent": False}
+
+        # human takeover — AI must not send
+        if not self.handover.can_send_ai(lead["lead_id"]):
+            self._audit("channel.human_hold", "lead", result="AI inactive")
+            return {"lead_id": lead["lead_id"], "reply_sent": False, "hold": True}
 
         # human intent → handoff
         if _HUMAN_INTENT.search(text):

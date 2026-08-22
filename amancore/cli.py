@@ -234,6 +234,137 @@ def _insights(args) -> int:
         db.close()
 
 
+def _status(args) -> int:
+    import json
+
+    from .config import load_config
+    from .ops.monitoring import MonitoringService
+    from .storage.db import open_database
+
+    cfg = load_config(ROOT)
+    db = open_database(cfg.database_path, ROOT / "amancore" / "storage" / "schema.sql")
+    try:
+        print(json.dumps(MonitoringService(db, ROOT).status(), ensure_ascii=False, indent=2))
+        return 0
+    finally:
+        db.close()
+
+
+def _jobs(args) -> int:
+    import json
+
+    from .config import load_config
+    from .ops.jobs import JobRunner, JobStore
+    from .ops.registry import JobRegistry
+    from .ops.scheduler import SchedulerRuntime
+    from .storage.db import open_database
+
+    cfg = load_config(ROOT)
+    db = open_database(cfg.database_path, ROOT / "amancore" / "storage" / "schema.sql")
+    try:
+        store = JobStore(db, config=cfg.scheduler)
+        if args.sub == "status":
+            print(json.dumps(store.counts(), indent=2))
+            for j in store.list(status=args.status, limit=args.n):
+                print(f"{j['job_id'][:8]}  {j['type']:<20} {j['status']:<10} "
+                      f"attempts={j['attempts']}  {(j.get('error') or '')[:60]}")
+        elif args.sub == "run":
+            handlers = JobRegistry(db, cfg, ROOT).handlers()
+            runner = JobRunner(store, handlers, worker_id="cli")
+            job_id = store.enqueue(args.job, idempotency_key=f"cli:{args.job}")
+            result = runner.run_job(store.get(job_id))
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        elif args.sub == "tick":
+            runtime = SchedulerRuntime(store, JobRunner(store, JobRegistry(db, cfg, ROOT).handlers()), cfg.scheduler)
+            print(json.dumps(runtime.run_once(), ensure_ascii=False, indent=2))
+        else:
+            return 1
+        return 0
+    finally:
+        db.close()
+
+
+def _backup(args) -> int:
+    import json
+
+    from .config import load_config
+    from .ops.backup import BackupService
+    from .storage.db import open_database
+
+    cfg = load_config(ROOT)
+    db = open_database(cfg.database_path, ROOT / "amancore" / "storage" / "schema.sql")
+    try:
+        svc = BackupService(db, ROOT)
+        if args.sub == "create":
+            print(json.dumps(svc.create_backup(), ensure_ascii=False, indent=2))
+        elif args.sub == "verify":
+            result = svc.verify_latest("database")
+            print(json.dumps(result, ensure_ascii=False, indent=2) if result else "NO BACKUP TO VERIFY")
+        elif args.sub == "list":
+            print(json.dumps(svc.list_backups(kind=args.kind), ensure_ascii=False, indent=2))
+        else:
+            return 1
+        return 0
+    finally:
+        db.close()
+
+
+def _incidents(args) -> int:
+    import json
+
+    from .config import load_config
+    from .ops.incidents import IncidentService
+    from .storage.db import open_database
+
+    cfg = load_config(ROOT)
+    db = open_database(cfg.database_path, ROOT / "amancore" / "storage" / "schema.sql")
+    try:
+        svc = IncidentService(db)
+        if args.sub == "list":
+            for inc in svc.list(status=args.status, limit=args.n):
+                print(f"{inc['incident_id'][:8]}  {inc['severity']:<8} {inc['status']:<12} "
+                      f"{inc['type']:<20} {inc['description'][:50]}")
+        elif args.sub == "show":
+            print(json.dumps(svc.get(args.id) or {"error": "not found"}, ensure_ascii=False, indent=2))
+        else:
+            return 1
+        return 0
+    finally:
+        db.close()
+
+
+def _owner_alert_test(args) -> int:
+    from .config import load_config
+    from .ops.alerts import AlertDispatcher
+    from .storage.db import open_database
+
+    cfg = load_config(ROOT)
+    status = transport_status_cli(cfg)
+    if status in ("NOT_CONFIGURED", "log (fallback)"):
+        print(f"NOT_CONFIGURED — alert channel '{cfg.scheduler.get('alert', {}).get('channel')}' "
+              f"has no credentials in .env. Configure TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID "
+              f"or SMTP_* to test a real delivery.")
+        return 0
+    db = open_database(cfg.database_path, ROOT / "amancore" / "storage" / "schema.sql")
+    try:
+        dispatcher = AlertDispatcher(db, config=cfg.scheduler.get("alert", {}))
+        result = dispatcher.dispatch(
+            severity="HIGH", category="owner_test", title="AmanCore owner alert test",
+            summary="This is a test alert from aman-core owner-alert test.",
+            action_required="confirm receipt",
+        )
+        print(f"DELIVERED via {result.get('transport')} (alert {result['alert_id'][:8]})")
+        return 0
+    finally:
+        db.close()
+
+
+def transport_status_cli(cfg) -> str:
+    from .ops.alerts import transport_status
+
+    return transport_status(cfg.scheduler.get("alert", {}))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aman-core")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -272,6 +403,26 @@ def main(argv: list[str] | None = None) -> int:
     p_insights.add_argument("--reason", default="")
     p_insights.add_argument("--by", default="owner")
 
+    sub.add_parser("status")
+
+    p_jobs = sub.add_parser("jobs")
+    p_jobs.add_argument("sub", choices=["status", "run", "tick"])
+    p_jobs.add_argument("job", nargs="?", default=None)
+    p_jobs.add_argument("--status", default=None)
+    p_jobs.add_argument("-n", type=int, default=20)
+
+    p_backup = sub.add_parser("backup")
+    p_backup.add_argument("sub", choices=["create", "verify", "list"])
+    p_backup.add_argument("--kind", default=None)
+
+    p_incidents = sub.add_parser("incidents")
+    p_incidents.add_argument("sub", choices=["list", "show"])
+    p_incidents.add_argument("id", nargs="?", default=None)
+    p_incidents.add_argument("--status", default=None)
+    p_incidents.add_argument("-n", type=int, default=20)
+
+    sub.add_parser("owner-alert-test")
+
     args = parser.parse_args(argv)
     if args.cmd == "health":
         return _health(args)
@@ -291,6 +442,16 @@ def main(argv: list[str] | None = None) -> int:
         return _support(args)
     if args.cmd == "insights":
         return _insights(args)
+    if args.cmd == "status":
+        return _status(args)
+    if args.cmd == "jobs":
+        return _jobs(args)
+    if args.cmd == "backup":
+        return _backup(args)
+    if args.cmd == "incidents":
+        return _incidents(args)
+    if args.cmd == "owner-alert-test":
+        return _owner_alert_test(args)
     return 1
 
 

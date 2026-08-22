@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 from typing import Any
+
+
+def get_project_root() -> Path:
+    """Return the aman-core project root (parent of the amancore package)."""
+    return Path(__file__).resolve().parent.parent
 
 
 def extract_json(text: str) -> Any:
