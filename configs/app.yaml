@@ -1,0 +1,4 @@
+env: development
+database_path: storage/aman_core.db
+log_level: INFO
+shadow_rate: 40

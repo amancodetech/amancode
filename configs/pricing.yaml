@@ -1,0 +1,22 @@
+shadow_rate: 40
+
+markup_by_service:
+  website_standard: 2.5
+  web_app: 3.5
+  business_system: 4.0
+  mobile: 3.0
+
+minimum_approved_multiplier:
+  website_standard: 1.30
+  web_app: 1.50
+  business_system: 1.70
+  mobile: 1.50
+
+market_multiplier:
+  indonesia: 1.0
+  malaysia: 1.2
+  gcc: 1.5
+  singapore: 2.0
+
+revision_reserve: 0.15
+risk_reserve: 0.15

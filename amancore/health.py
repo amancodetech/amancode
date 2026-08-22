@@ -1,0 +1,162 @@
+"""AmanCore Foundation health/readiness check (local)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from .business_brain.store import BrainStore
+from .business_brain.validator import validate_brain
+from .config import Config, load_config
+from .crm.service import CRMService
+from .routing.providers import build_providers
+from .routing.router import ModelRouter
+from .services.audit import AuditService
+from .services.events import CanonicalEvent, EventDispatcher
+from .services.policy import PolicyEngine
+from .services.risk import RiskEngine
+from .storage.db import open_database
+
+
+def _check(name: str, fn) -> tuple[str, str]:
+    try:
+        detail = fn()
+        return "PASS", str(detail) if detail else ""
+    except Exception as exc:  # noqa: BLE001
+        return "FAIL", f"{type(exc).__name__}: {exc}"
+
+
+def run_health_checks(root: Path) -> dict[str, tuple[str, str]]:
+    results: dict[str, tuple[str, str]] = {}
+
+    # configuration
+    cfg: Config | None = None
+
+    def _load_cfg() -> Config:
+        nonlocal cfg
+        cfg = load_config(root)
+        return cfg
+
+    results["configuration"] = _check("configuration", lambda: (_load_cfg(), f"env={cfg.app.get('env')}")[1])
+
+    # database
+    db = None
+
+    def _open_db():
+        nonlocal db
+        cfg2 = cfg or load_config(root)
+        schema = root / "amancore" / "storage" / "schema.sql"
+        db = open_database(cfg2.database_path, schema)
+        db.execute("SELECT COUNT(*) AS c FROM leads").fetchone()
+        return cfg2.database_path
+
+    results["database"] = _check("database", _open_db)
+
+    # business brain
+    store = BrainStore(root / "amancore" / "business_brain")
+    results["business_brain"] = _check("business_brain", lambda: _bb(store))
+
+    # crm
+    results["crm"] = _check("crm", lambda: _crm(db))
+
+    # events
+    results["events"] = _check("events", _events)
+
+    # policy
+    results["policy_engine"] = _check("policy_engine", lambda: _policy(store))
+
+    # risk
+    results["risk_engine"] = _check("risk_engine", _risk)
+
+    # approvals
+    results["approval_service"] = _check("approval_service", lambda: _approvals(db))
+
+    # audit
+    results["audit"] = _check("audit", lambda: _audit(db))
+
+    # model router
+    results["model_router"] = _check("model_router", lambda: _router(cfg or load_config(root)))
+
+    # security
+    results["security"] = _check("security", lambda: _security(root))
+
+    if db is not None:
+        db.close()
+    return results
+
+
+def _bb(store: BrainStore) -> str:
+    version, data = store.current()
+    errors = validate_brain(data)
+    if errors:
+        raise RuntimeError("; ".join(errors))
+    return f"v{version} valid"
+
+
+def _crm(db) -> str:
+    crm = CRMService(db)
+    n = db.execute("SELECT COUNT(*) AS c FROM leads").fetchone()["c"]
+    return f"leads table ok ({n} rows)"
+
+
+def _events() -> str:
+    d = EventDispatcher()
+    seen: list[str] = []
+    d.subscribe("lead.created", lambda e: seen.append(e.event_id))
+    ev = CanonicalEvent(
+        event_id="health-event", event_type="lead.created", timestamp="2026-01-01T00:00:00+00:00"
+    )
+    d.publish(ev)
+    return f"dispatched={len(seen)}"
+
+
+def _policy(store: BrainStore) -> str:
+    _, brain = store.current()
+    d = PolicyEngine().evaluate(brain, "lead.created", "low")
+    return f"decision={d.action}"
+
+
+def _risk() -> str:
+    r = RiskEngine()
+    return f"price.calculated={r.classify('price.calculated')}, contract={r.classify('deal.won', action='contract')}"
+
+
+def _approvals(db) -> str:
+    n = db.execute("SELECT COUNT(*) AS c FROM approvals").fetchone()["c"]
+    return f"approvals table ok ({n} rows)"
+
+
+def _audit(db) -> str:
+    a = AuditService(db)
+    a.record(action="health.check", resource="health", result="ok")
+    return f"audit append ok ({a.count()} total)"
+
+
+def _router(cfg: Config) -> str:
+    providers = build_providers(cfg.models)
+    router = ModelRouter(cfg.models, providers)
+    order = router._order("strategy")
+    return f"strategy order={order}"
+
+
+def _security(root: Path) -> str:
+    gi = root / ".gitignore"
+    if not gi.exists():
+        raise RuntimeError(".gitignore missing")
+    text = gi.read_text(encoding="utf-8")
+    if ".env" not in text:
+        raise RuntimeError(".gitignore does not exclude .env")
+    return ".env excluded"
+
+
+def print_health_report(results: dict[str, tuple[str, str]]) -> int:
+    print("AMANCORE FOUNDATION HEALTH")
+    print("-" * 40)
+    failed = 0
+    for name, (status, detail) in results.items():
+        print(f"{name:<22} {status:<6} {detail}")
+        if status != "PASS":
+            failed += 1
+    print("-" * 40)
+    print(f"RESULT: {'PASS' if failed == 0 else 'FAIL'}")
+    return 0 if failed == 0 else 1

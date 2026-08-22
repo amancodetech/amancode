@@ -1,0 +1,134 @@
+# AmanCore Business Brain v1 — seed (immutable).
+# Derived from AMANCORE_BUSINESS_STRATEGY_v1.2.md (source of truth).
+# This is Versioned Business Configuration, NOT CRM/operational state.
+
+company:
+  name: AmanCore
+  type: Digital Solutions Company for Businesses
+  positioning: Digital business systems for growing companies
+  brand_voice: {tone: professional, style: clear-outcome-focused}
+  languages: [id, ar, en]
+
+services:
+  - id: business_website_system
+    name: Business Website System
+    type: core
+    delivery_model: standardized
+  - id: custom_web_application
+    name: Custom Web Application
+    type: core
+    delivery_model: custom_quote
+  - id: business_system_mini_erp
+    name: Business System / Mini-ERP
+    type: premium
+    delivery_model: custom_quote
+  - id: mobile_app
+    name: Mobile App
+    type: premium
+    delivery_model: custom_quote
+
+offers:
+  - id: presence_starter
+    name: Business Presence Starter
+    tier: entry
+  - id: website_system
+    name: Business Website System
+    tier: core
+  - id: web_app
+    name: Custom Web Application
+    tier: core
+  - id: mini_erp
+    name: Business System / Mini-ERP
+    tier: premium
+  - id: mobile_app
+    name: Mobile App
+    tier: premium
+  - id: care_plan
+    name: Care Plan
+    tier: recurring
+
+pricing_policy:
+  shadow_rate: 40
+  markup_by_service:
+    website_standard: 2.5
+    web_app: 3.5
+    business_system: 4.0
+    mobile: 3.0
+  minimum_approved_multiplier:
+    website_standard: 1.30
+    web_app: 1.50
+    business_system: 1.70
+    mobile: 1.50
+  market_multiplier:
+    indonesia: 1.0
+    malaysia: 1.2
+    gcc: 1.5
+    singapore: 2.0
+  revision_reserve: 0.15
+  risk_reserve: 0.15
+
+market_profiles:
+  indonesia: {language: id, currency: IDR}
+  gcc: {language: ar, currency: USD}
+  malaysia: {language: en, currency: MYR}
+  singapore: {language: en, currency: SGD}
+
+icp:
+  primary: Indonesian SME service/trading companies (10-100 employees)
+  secondary: Cross-border trading/export companies (Indonesia-GCC-Malaysia)
+  opportunistic: clinics, real estate, restaurants, startups, etc.
+
+sales_policy:
+  methodology: consultative_selling
+  qualification: BANT
+  discount_rule: reduce_scope_before_reduce_price
+  payment_schedule: ["50% upfront", "50% on delivery"]
+
+negotiation_rules:
+  golden_rule: reduce_scope_before_reduce_price
+  escalation_below_minimum: true
+
+faqs: []
+
+objections:
+  - {id: price_high, objection: "The price is high", intent: price_sensitivity}
+  - {id: need_think, objection: "I need to think", intent: hesitation}
+  - {id: have_developer, objection: "I already have a developer", intent: comparison}
+  - {id: want_simpler, objection: "I want something simpler", intent: scope}
+  - {id: want_discount, objection: "I want a discount", intent: price}
+  - {id: need_faster, objection: "I need it faster", intent: timeline}
+
+brand_voice:
+  tone: professional
+  style: clear
+  languages: [id, ar, en]
+
+approved_claims:
+  - "AmanCore builds multilingual business websites and custom web applications"
+  - "AmanCore delivers integrated website, WhatsApp and AI automation solutions"
+
+forbidden_claims:
+  - "We guarantee revenue growth"
+  - "We have served 100+ clients"
+  - "Certified by any external organization"
+
+claims_requiring_verification: []
+
+portfolio: []
+case_studies: []
+
+policies:
+  consent_before_marketing: true
+  data_minimization: true
+
+agent_policies:
+  final_price: owner_only
+  business_brain_write: owner_orchestrator_only
+  publish_content: claim_gate_required
+  outbound: policy_required
+
+decision_policies:
+  price_approval: owner_only
+  discount: owner_only
+  refund: owner_only
+  legal: escalate_to_owner

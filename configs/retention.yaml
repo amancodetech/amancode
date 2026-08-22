@@ -1,0 +1,5 @@
+lead_inactive_days: 365
+conversation_active_days: 90
+audit_retention: permanent
+business_brain_versions: permanent
+content_days: 180

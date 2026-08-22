@@ -1,0 +1,43 @@
+defaults:
+  timeout_seconds: 60
+  max_retries: 2
+  monthly_cost_alert_usd: 20
+
+task_routing:
+  strategy:    {primary: deepseek-v4-pro,   secondary: gemini,            fallback: deepseek-v4-flash}
+  reasoning:   {primary: deepseek-v4-pro,   secondary: gemini,            fallback: deepseek-v4-flash}
+  pricing:     {primary: deepseek-v4-pro,   secondary: gemini,            fallback: deepseek-v4-flash}
+  coding:      {primary: deepseek-v4-flash, secondary: deepseek-v4-pro,   fallback: gemini}
+  routine:     {primary: deepseek-v4-flash, secondary: deepseek-v4-pro,   fallback: gemini}
+  classification: {primary: deepseek-v4-flash, secondary: gemini,         fallback: deepseek-v4-pro}
+  extraction:  {primary: deepseek-v4-flash, secondary: gemini,            fallback: deepseek-v4-pro}
+  summarization: {primary: deepseek-v4-flash, secondary: gemini,          fallback: deepseek-v4-pro}
+  multimodal:  {primary: gemini,            secondary: deepseek-v4-pro,   fallback: null}
+
+providers:
+  deepseek-v4-pro:
+    type: openai_compatible
+    base_url_env: DEEPSEEK_BASE_URL
+    api_key_env: DEEPSEEK_API_KEY
+    model: deepseek-v4-pro
+  deepseek-v4-flash:
+    type: openai_compatible
+    base_url_env: DEEPSEEK_BASE_URL
+    api_key_env: DEEPSEEK_API_KEY
+    model: deepseek-v4-flash
+  gemini:
+    type: gemini
+    api_key_env: GEMINI_API_KEY
+    model: gemini-2.0-flash
+  claude:
+    type: anthropic
+    base_url_env: ANTHROPIC_BASE_URL
+    api_key_env: ANTHROPIC_API_KEY
+    model: claude-sonnet-4-5
+
+# USD per 1M tokens (estimates, configurable)
+pricing_per_million:
+  deepseek-v4-pro:   {input: 2.0, output: 6.0}
+  deepseek-v4-flash: {input: 0.2, output: 0.6}
+  gemini:            {input: 1.0, output: 4.0}
+  claude:            {input: 3.0, output: 15.0}

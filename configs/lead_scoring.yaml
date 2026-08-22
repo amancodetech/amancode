@@ -1,0 +1,12 @@
+weights:
+  budget: 20
+  need_urgency: 20
+  authority: 15
+  fit: 15
+  business_value: 15
+  project_clarity: 10
+  engagement: 5
+
+thresholds:
+  hot: 70
+  qualified: 40

@@ -1,0 +1,42 @@
+# AmanCore — secrets & local state
+.env
+.env.*
+!.env.example
+
+# databases & local state
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+
+# node (legacy hub unrelated to runtime)
+node_modules/
+
+# logs
+*.log
+logs/
+
+# secrets & sessions
+credentials/
+secrets/
+sessions/
+cookies/
+*.pem
+*.key
+
+# tooling
+.idea/
+.vscode/
+.DS_Store
