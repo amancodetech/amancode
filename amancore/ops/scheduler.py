@@ -6,6 +6,7 @@ lists and step (/n). All schedules from configs/scheduler.yaml.
 
 from __future__ import annotations
 
+import signal
 import time
 from datetime import datetime, timezone
 
@@ -99,12 +100,43 @@ class SchedulerRuntime:
         }
 
     def run_loop(self, interval_seconds: int | None = None, max_iterations: int | None = None) -> None:
-        interval = interval_seconds or int(self.config.get("scheduler", {}).get("poll_interval_seconds", 30))
-        iterations = 0
-        while max_iterations is None or iterations < max_iterations:
+        interval = (
+            int(self.config.get("scheduler", {}).get("poll_interval_seconds", 30))
+            if interval_seconds is None else interval_seconds
+        )
+        stop = {"requested": False}
+
+        def _handle(signum, frame):  # noqa: ARG001 — signal handler signature
+            log.info("scheduler received signal %s — graceful shutdown", signum)
+            stop["requested"] = True
+
+        previous_handlers = {}
+        for sig in (signal.SIGTERM, signal.SIGINT):
             try:
-                self.run_once()
-            except Exception as exc:  # noqa: BLE001 — loop must survive
-                log.error("scheduler iteration failed: %s", exc)
-            iterations += 1
-            time.sleep(interval)
+                previous_handlers[sig] = signal.signal(sig, _handle)
+            except ValueError:  # not in main thread (e.g. tests)
+                pass
+        iterations = 0
+        try:
+            while max_iterations is None or iterations < max_iterations:
+                if stop["requested"]:
+                    log.info("scheduler stopped gracefully after %s iterations", iterations)
+                    break
+                try:
+                    self.run_once()
+                except Exception as exc:  # noqa: BLE001 — loop must survive
+                    log.error("scheduler iteration failed: %s", exc)
+                iterations += 1
+                if max_iterations is not None and iterations >= max_iterations:
+                    break
+                # sleep in small slices so signals interrupt promptly
+                slept = 0.0
+                while slept < interval and not stop["requested"]:
+                    time.sleep(min(1.0, interval - slept))
+                    slept += 1.0
+        finally:
+            for sig, handler in previous_handlers.items():
+                try:
+                    signal.signal(sig, handler)
+                except ValueError:
+                    pass

@@ -100,6 +100,53 @@ def _production_check(args) -> int:
     return 0 if report["verdict"] != "NOT_READY" else 2
 
 
+def _production_enable(args) -> int:
+    import json
+
+    from .config import load_config
+    from .errors import ProductionNotEnabledError
+    from .production.enablement import (
+        ProductionEnablementError,
+        ProductionEnablementService,
+    )
+    from .production.gate import ProductionGateService
+    from .storage.db import open_database
+
+    cfg = load_config(ROOT)
+    production = dict(cfg.production)
+    production["_root"] = ROOT
+    gate_report = ProductionGateService(production).check(run_health=True)
+    db = open_database(cfg.database_path, ROOT / "amancore" / "storage" / "schema.sql")
+    try:
+        svc = ProductionEnablementService(ROOT / "configs" / "production.yaml", db=db)
+        result = svc.enable(gate_report, args.confirm, actor=args.actor, dry_run=args.dry_run)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+    except (ProductionEnablementError, ProductionNotEnabledError) as exc:
+        print(f"PRODUCTION ENABLE REFUSED: {exc}")
+        return 2
+    finally:
+        db.close()
+
+
+def _production_disable(args) -> int:
+    import json
+
+    from .config import load_config
+    from .production.enablement import ProductionEnablementService
+    from .storage.db import open_database
+
+    cfg = load_config(ROOT)
+    db = open_database(cfg.database_path, ROOT / "amancore" / "storage" / "schema.sql")
+    try:
+        svc = ProductionEnablementService(ROOT / "configs" / "production.yaml", db=db)
+        result = svc.disable(actor=args.actor, reason=args.reason)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+    finally:
+        db.close()
+
+
 def _analytics(args) -> int:
     import json
 
@@ -277,6 +324,11 @@ def _jobs(args) -> int:
         elif args.sub == "tick":
             runtime = SchedulerRuntime(store, JobRunner(store, JobRegistry(db, cfg, ROOT).handlers()), cfg.scheduler)
             print(json.dumps(runtime.run_once(), ensure_ascii=False, indent=2))
+        elif args.sub == "loop":
+            runtime = SchedulerRuntime(store, JobRunner(store, JobRegistry(db, cfg, ROOT).handlers(), worker_id="scheduler"), cfg.scheduler)
+            print("amancore scheduler loop started (ctrl-c / SIGTERM for graceful stop)", flush=True)
+            runtime.run_loop()
+            return 0
         else:
             return 1
         return 0
@@ -379,6 +431,16 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("production-check")
 
+    p_enable = sub.add_parser("production-enable")
+    p_enable.add_argument("--confirm", required=True,
+                          help='must be exactly: CONFIRM PRODUCTION ENABLE')
+    p_enable.add_argument("--actor", default="owner")
+    p_enable.add_argument("--dry-run", action="store_true")
+
+    p_disable = sub.add_parser("production-disable")
+    p_disable.add_argument("--actor", default="owner")
+    p_disable.add_argument("--reason", default=None)
+
     p_analytics = sub.add_parser("analytics")
     p_analytics.add_argument("sub", choices=["kpis", "funnel", "attribution", "report", "alerts"])
     p_analytics.add_argument("--period", choices=["daily", "weekly", "monthly"], default="daily")
@@ -406,7 +468,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("status")
 
     p_jobs = sub.add_parser("jobs")
-    p_jobs.add_argument("sub", choices=["status", "run", "tick"])
+    p_jobs.add_argument("sub", choices=["status", "run", "tick", "loop"])
     p_jobs.add_argument("job", nargs="?", default=None)
     p_jobs.add_argument("--status", default=None)
     p_jobs.add_argument("-n", type=int, default=20)
@@ -436,6 +498,10 @@ def main(argv: list[str] | None = None) -> int:
         return _config_check(args)
     if args.cmd == "production-check":
         return _production_check(args)
+    if args.cmd == "production-enable":
+        return _production_enable(args)
+    if args.cmd == "production-disable":
+        return _production_disable(args)
     if args.cmd == "analytics":
         return _analytics(args)
     if args.cmd == "support":
