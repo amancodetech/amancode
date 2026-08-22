@@ -153,6 +153,13 @@ class CRMService:
         ).fetchone()
         return _row(row)
 
+    def get_opportunity(self, opportunity_id: str) -> dict | None:
+        return _row(
+            self.db.execute(
+                "SELECT * FROM opportunities WHERE opportunity_id = ?", (opportunity_id,)
+            ).fetchone()
+        )
+
     # ---- Projects ------------------------------------------------------
     def create_project(self, customer_id: str, service: str, **fields: Any) -> str:
         project_id = new_id()

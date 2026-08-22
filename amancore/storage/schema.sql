@@ -249,6 +249,33 @@ CREATE TABLE IF NOT EXISTS research_results (
     created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS pricing_snapshots (
+    snapshot_id TEXT PRIMARY KEY,
+    opportunity_id TEXT REFERENCES opportunities(opportunity_id) ON DELETE SET NULL,
+    pricing_version TEXT,
+    business_brain_version INTEGER,
+    inputs TEXT,
+    calculated_result TEXT,
+    approved_price REAL,
+    currency TEXT,
+    approved_by TEXT,
+    approved_at TEXT,
+    expiration_at TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS proposals (
+    proposal_id TEXT PRIMARY KEY,
+    opportunity_id TEXT REFERENCES opportunities(opportunity_id) ON DELETE SET NULL,
+    version INTEGER NOT NULL DEFAULT 1,
+    pricing_snapshot_id TEXT,
+    business_brain_version INTEGER,
+    status TEXT NOT NULL DEFAULT 'draft',
+    body TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS idempotency_keys (
     idempotency_key TEXT PRIMARY KEY,
     operation TEXT,
@@ -280,3 +307,5 @@ CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status);
 CREATE INDEX IF NOT EXISTS idx_content_status ON content_items(status);
 CREATE INDEX IF NOT EXISTS idx_content_hash ON content_items(content_hash);
 CREATE INDEX IF NOT EXISTS idx_research_lead ON research_results(lead_id);
+CREATE INDEX IF NOT EXISTS idx_snapshots_opportunity ON pricing_snapshots(opportunity_id);
+CREATE INDEX IF NOT EXISTS idx_proposals_opportunity ON proposals(opportunity_id);

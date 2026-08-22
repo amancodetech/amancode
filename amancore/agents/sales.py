@@ -6,17 +6,11 @@ import json
 
 from ..functions.lead_scoring import score as score_lead
 from ..ids import new_id, utcnow
+from ..pricing.offer import recommendation_message, select_offer
 from ..sales.conversation_memory import extract_facts
 from ..sales.fit import compute_fit
 from ..sales.state_machine import InvalidTransition, transition
 from .base import Agent
-
-_SERVICE_FOR_OFFER = {
-    "business_website_system": "website_system",
-    "custom_web_application": "web_app",
-    "business_system_mini_erp": "mini_erp",
-    "mobile_app": "mobile_app",
-}
 
 
 class SalesAgent(Agent):
@@ -153,35 +147,10 @@ class SalesAgent(Agent):
         }
 
     def _recommend(self, qual: dict, fit: dict) -> dict:
-        need = " ".join(str(x) for x in [qual.get("need"), qual.get("scope"), qual.get("outcome")]).lower()
-        if any(k in need for k in ["app", "mobile", "تطبيق", "aplikasi"]):
-            service_id = "mobile_app"
-        elif any(k in need for k in ["erp", "inventory", "manage", "محاسبة", "مخزون", "نظام", "sistem", "accounting"]):
-            service_id = "business_system_mini_erp"
-        elif any(k in need for k in ["portal", "custom", "منصة", "web app", "aplikasi web"]):
-            service_id = "custom_web_application"
-        else:
-            service_id = "business_website_system"
-
-        services = {s["id"]: s for s in self.brain.get("services", [])}
-        offers = {o["id"]: o for o in self.brain.get("offers", [])}
-        service = services.get(service_id, {"name": service_id})
-        offer_id = _SERVICE_FOR_OFFER.get(service_id, "website_system")
-        offer = offers.get(offer_id, {"name": offer_id})
-        return {
-            "service": service_id,
-            "service_name": service.get("name"),
-            "offer": offer_id,
-            "offer_name": offer.get("name"),
-            "reason": f"matches stated need and {fit.get('overall_fit', 'unknown')} ICP fit",
-            "fit": fit.get("overall_fit"),
-            "missing_information": qual.get("missing_information"),
-            "confidence": "medium",
-            "message": (
-                f"Based on what you've shared, I recommend our {service.get('name', 'solution')}. "
-                f"It fits your needs well — shall I prepare the next step?"
-            ),
-        }
+        rec = select_offer(self.brain, qual)
+        rec["fit"] = fit.get("overall_fit")
+        rec["message"] = recommendation_message(rec, fit.get("overall_fit", "good"))
+        return rec
 
     def _upsert_opportunity(self, lead: dict, rec: dict, qual: dict) -> str:
         common = {

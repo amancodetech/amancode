@@ -20,3 +20,14 @@ market_multiplier:
 
 revision_reserve: 0.15
 risk_reserve: 0.15
+
+# Payment fee profiles (configurable assumptions; no invented provider fees)
+payment_fee_profile:
+  default: {percentage_fee: 0.03, fixed_fee: 0}
+  indonesia: {percentage_fee: 0.03, fixed_fee: 0.5}
+  malaysia: {percentage_fee: 0.03, fixed_fee: 0.5}
+  gcc: {percentage_fee: 0.03, fixed_fee: 0}
+  singapore: {percentage_fee: 0.03, fixed_fee: 0.5}
+
+# Price validity (config-driven)
+price_validity_days: 14

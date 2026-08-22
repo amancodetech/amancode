@@ -1,0 +1,8 @@
+{
+  "scenarios": [
+    {"id": "standard_website", "service": "business_website_system", "market": "indonesia", "industry": "restaurant", "scope_summary": "restaurant website with WhatsApp", "expect": {"currency": "IDR"}},
+    {"id": "high_value_web_app", "service": "custom_web_application", "market": "gcc", "industry": "retail", "scope_summary": "custom ordering portal for a retail chain with integrations", "expect": {"currency": "USD"}},
+    {"id": "erp_custom_quote", "service": "business_system_mini_erp", "market": "indonesia", "industry": "manufacturing", "scope_summary": "inventory and accounting system", "expect": {"currency": "IDR"}},
+    {"id": "unknown_service", "service": "nope", "market": "indonesia", "industry": "service", "scope_summary": "x", "expect": {"warning": true}}
+  ]
+}
