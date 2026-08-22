@@ -77,10 +77,13 @@ class MessageCoordinator:
         self.intent_router = intent_router or IntentRouter()
         self.support_filter = support_filter or SupportResponseFilter()
 
-    def handle_whatsapp_webhook(self, body, headers=None) -> dict:
+    def handle_whatsapp_webhook(self, body, headers=None, raw_body: bytes | None = None) -> dict:
         if self.whatsapp.config.get("signature_required"):
             signature = (headers or {}).get("x-hub-signature-256")
-            if signature and not self.whatsapp.verify_signature(self._raw(body), signature):
+            # hardened: a missing signature is treated as invalid, not skipped
+            if not signature or not self.whatsapp.verify_signature(
+                raw_body if raw_body is not None else self._raw(body), signature
+            ):
                 self._emit("whatsapp.webhook.failed", payload={"reason": "invalid signature"})
                 return {"status": "rejected", "reason": "invalid signature"}
 

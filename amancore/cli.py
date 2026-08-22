@@ -441,6 +441,11 @@ def main(argv: list[str] | None = None) -> int:
     p_disable.add_argument("--actor", default="owner")
     p_disable.add_argument("--reason", default=None)
 
+    p_webhook = sub.add_parser("webhook")
+    p_webhook.add_argument("sub", choices=["serve"])
+    p_webhook.add_argument("--host", default="127.0.0.1")
+    p_webhook.add_argument("--port", type=int, default=8010)
+
     p_analytics = sub.add_parser("analytics")
     p_analytics.add_argument("sub", choices=["kpis", "funnel", "attribution", "report", "alerts"])
     p_analytics.add_argument("--period", choices=["daily", "weekly", "monthly"], default="daily")
@@ -502,6 +507,12 @@ def main(argv: list[str] | None = None) -> int:
         return _production_enable(args)
     if args.cmd == "production-disable":
         return _production_disable(args)
+    if args.cmd == "webhook":
+        if args.sub == "serve":
+            from .channels.webhook_server import serve
+
+            return serve(ROOT, host=args.host, port=args.port)
+        return 1
     if args.cmd == "analytics":
         return _analytics(args)
     if args.cmd == "support":
