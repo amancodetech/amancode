@@ -98,6 +98,7 @@ CREATE TABLE IF NOT EXISTS opportunities (
     stage TEXT,
     probability REAL,
     expected_close_date TEXT,
+    reason TEXT,
     owner TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -360,6 +361,70 @@ CREATE TABLE IF NOT EXISTS support_cases (
 CREATE INDEX IF NOT EXISTS idx_support_status ON support_cases(status);
 CREATE INDEX IF NOT EXISTS idx_support_customer ON support_cases(customer_id);
 CREATE INDEX IF NOT EXISTS idx_support_priority ON support_cases(priority);
+CREATE TABLE IF NOT EXISTS insights (
+    insight_id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    category TEXT NOT NULL,
+    title TEXT,
+    summary TEXT,
+    evidence TEXT,
+    metrics TEXT,
+    period TEXT,
+    segment TEXT,
+    confidence TEXT NOT NULL,
+    severity TEXT NOT NULL DEFAULT 'LOW',
+    business_impact TEXT,
+    status TEXT NOT NULL DEFAULT 'new',
+    recommendation_id TEXT,
+    related_entities TEXT,
+    fingerprint TEXT,
+    expires_at TEXT,
+    superseded_by TEXT,
+    detected_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS recommendations (
+    recommendation_id TEXT PRIMARY KEY,
+    insight_id TEXT,
+    type TEXT NOT NULL,
+    title TEXT,
+    problem TEXT,
+    evidence TEXT,
+    proposed_action TEXT,
+    alternatives TEXT,
+    expected_benefit TEXT,
+    expected_risk TEXT,
+    dependencies TEXT,
+    confidence TEXT,
+    requires_owner_approval INTEGER NOT NULL DEFAULT 1,
+    status TEXT NOT NULL DEFAULT 'new',
+    decision TEXT,
+    decided_by TEXT,
+    decided_at TEXT,
+    approval_id TEXT,
+    brain_change_proposal_id TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS decision_log (
+    decision_id TEXT PRIMARY KEY,
+    entity_type TEXT,
+    entity_id TEXT,
+    decision TEXT,
+    decided_by TEXT,
+    reason TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_insights_status ON insights(status);
+CREATE INDEX IF NOT EXISTS idx_insights_fingerprint ON insights(fingerprint);
+CREATE INDEX IF NOT EXISTS idx_insights_category ON insights(category);
+CREATE INDEX IF NOT EXISTS idx_recommendations_status ON recommendations(status);
+CREATE INDEX IF NOT EXISTS idx_recommendations_insight ON recommendations(insight_id);
+CREATE INDEX IF NOT EXISTS idx_decision_entity ON decision_log(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_outbox_status ON message_outbox(status);
 CREATE INDEX IF NOT EXISTS idx_outbox_idem ON message_outbox(idempotency_key);
 CREATE INDEX IF NOT EXISTS idx_intake_ip ON intake_events(ip);

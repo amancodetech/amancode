@@ -96,6 +96,9 @@ def run_health_checks(root: Path) -> dict[str, tuple[str, str]]:
     results["analytics"] = _check("analytics", lambda: _analytics(db))
     results["production_gate"] = _check("production_gate", lambda: _production_gate(cfg3))
 
+    # Phase 3G — insights engine (read-only smoke)
+    results["insights"] = _check("insights", lambda: _insights(cfg3, db))
+
     if db is not None:
         db.close()
     return results
@@ -246,6 +249,16 @@ def _production_gate(cfg: Config) -> str:
     if report["production_enabled"]:
         raise RuntimeError("production_enabled must be false in this environment")
     return f"verdict={report['verdict']} (safe: production disabled, mode={report['mode']})"
+
+
+def _insights(cfg: Config, db) -> str:
+    from .analytics.service import AnalyticsService
+    from .insights.engine import InsightsEngine
+
+    analytics = AnalyticsService(db, config=cfg.analytics)
+    engine = InsightsEngine(db, analytics=analytics, config=cfg.insights)
+    summary = engine.run(period_days=7)
+    return f"engine ok (created={summary['created']}, updated={summary['updated']}, recs={summary['recommendations']})"
 
 
 def print_health_report(results: dict[str, tuple[str, str]]) -> int:

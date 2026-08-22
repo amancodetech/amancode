@@ -1,0 +1,32 @@
+# Insights configuration (Phase 3G). Deterministic thresholds only —
+# no arbitrary values in code. If data is insufficient, no trend/anomaly/insight.
+
+trend:
+  minimum_sample_size: 5       # observations required to call a trend
+  minimum_periods: 2           # at least 2 periods to compare
+  change_threshold: 0.15       # |pct change| >= this => rising/falling
+  confidence_threshold: 0.7
+
+anomaly:
+  zscore_threshold: 2.0
+  min_periods: 3               # history length required for a meaningful z-score
+
+insight_policy:
+  minimum_samples: 3           # below this => INSUFFICIENT_DATA
+  confidence_threshold: 0.7
+  materiality_threshold: 200   # monetary materiality (USD) for severity
+  sample_high: 10              # samples >= this with strong effect => HIGH confidence
+  sample_medium: 5
+
+capacity:
+  founder_hours_per_month: 160
+  utilization_warning: 0.8
+  ai_cost_spike_multiplier: 2.0
+  support_recurrence_threshold: 3   # same issue N times => recurrence insight
+  saas_candidate_min_customers: 2   # min customers sharing the same problem
+
+markets:
+  - indonesia
+  - gcc
+  - malaysia
+  - singapore

@@ -62,7 +62,7 @@ class BrainWriter:
             "content": content,
         }
         pid = self._write_proposal(proposal)
-        self._audit("business_brain.proposed", "business_brain", proposal_id=pid, reason=reason)
+        self._audit("business_brain.proposed", "business_brain", approval_id=pid, reason=reason)
         return pid
 
     def approve(self, proposal_id: str, approved_by: str) -> int:

@@ -167,6 +167,73 @@ def _support(args) -> int:
         db.close()
 
 
+def _insights(args) -> int:
+    import json
+
+    from .analytics.service import AnalyticsService
+    from .config import load_config
+    from .insights.decisions import DecisionSupportService
+    from .insights.engine import InsightsEngine
+    from .insights.memory import InsightMemory
+    from .insights.reports import InsightReports
+    from .services.approvals import ApprovalService
+    from .storage.db import open_database
+
+    cfg = load_config(ROOT)
+    db = open_database(cfg.database_path, ROOT / "amancore" / "storage" / "schema.sql")
+    try:
+        analytics = AnalyticsService(db, config=cfg.analytics)
+        memory = InsightMemory(db)
+        if args.sub == "list":
+            rows = memory.list_insights(status=args.status, category=args.category, limit=args.n)
+            if not rows:
+                print("NO INSIGHTS")
+            for i in rows:
+                print(f"{i['insight_id'][:8]}  {i['severity']:<8} {i['confidence']:<16} "
+                      f"{i['type']:<20} {i['title']}")
+        elif args.sub == "review":
+            engine = InsightsEngine(db, analytics=analytics, config=cfg.insights)
+            summary = engine.run(period_days=args.period_days)
+            print(json.dumps(summary, indent=2))
+        elif args.sub == "recommendations":
+            rows = memory.list_recommendations(status=args.status, limit=args.n)
+            if not rows:
+                print("NO RECOMMENDATIONS")
+            for r in rows:
+                print(f"{r['recommendation_id'][:8]}  {r['type']:<18} {r['status']:<12} "
+                      f"approval={'Y' if r['requires_owner_approval'] else 'N'}  {r['title']}")
+        elif args.sub == "report":
+            reports = InsightReports(db, analytics, memory)
+            if args.period == "daily":
+                report = reports.daily_brief(args.date)
+            elif args.period == "weekly":
+                report = reports.weekly_review()
+            else:
+                report = reports.monthly_review()
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        elif args.sub == "data-quality":
+            from .insights.data_quality import DataQualityService
+
+            issues = DataQualityService(db).run_checks()
+            print(json.dumps(issues, indent=2) if issues else "NO DATA QUALITY ISSUES")
+        elif args.sub == "decide":
+            dss = DecisionSupportService(
+                db, memory=memory, approval_service=ApprovalService(db)
+            )
+            if args.decision == "accept":
+                result = dss.accept(args.id, decided_by=args.by, reason=args.reason)
+            elif args.decision == "reject":
+                result = dss.reject(args.id, decided_by=args.by, reason=args.reason)
+            else:
+                result = dss.defer(args.id, decided_by=args.by, reason=args.reason)
+            print(json.dumps(result, indent=2))
+        else:
+            return 1
+        return 0
+    finally:
+        db.close()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aman-core")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -192,6 +259,19 @@ def main(argv: list[str] | None = None) -> int:
     p_support.add_argument("--status", default=None)
     p_support.add_argument("-n", type=int, default=50)
 
+    p_insights = sub.add_parser("insights")
+    p_insights.add_argument("sub", choices=["list", "review", "recommendations", "report", "data-quality", "decide"])
+    p_insights.add_argument("--status", default=None)
+    p_insights.add_argument("--category", default=None)
+    p_insights.add_argument("--period", choices=["daily", "weekly", "monthly"], default="daily")
+    p_insights.add_argument("--date", default=None)
+    p_insights.add_argument("--period-days", type=int, default=7)
+    p_insights.add_argument("-n", type=int, default=50)
+    p_insights.add_argument("id", nargs="?", default=None)
+    p_insights.add_argument("decision", nargs="?", choices=["accept", "reject", "defer"], default=None)
+    p_insights.add_argument("--reason", default="")
+    p_insights.add_argument("--by", default="owner")
+
     args = parser.parse_args(argv)
     if args.cmd == "health":
         return _health(args)
@@ -209,6 +289,8 @@ def main(argv: list[str] | None = None) -> int:
         return _analytics(args)
     if args.cmd == "support":
         return _support(args)
+    if args.cmd == "insights":
+        return _insights(args)
     return 1
 
 

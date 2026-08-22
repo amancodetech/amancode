@@ -59,6 +59,7 @@ class Config:
     analytics: dict[str, Any] = field(default_factory=dict)
     alerts: dict[str, Any] = field(default_factory=dict)
     production: dict[str, Any] = field(default_factory=dict)
+    insights: dict[str, Any] = field(default_factory=dict)
 
     @property
     def database_path(self) -> Path:
@@ -86,5 +87,6 @@ def load_config(root: Path) -> Config:
         analytics=_load_yaml(root / "configs" / "analytics.yaml"),
         alerts=_load_yaml(root / "configs" / "alerts.yaml"),
         production=_load_yaml(root / "configs" / "production.yaml"),
+        insights=_load_yaml(root / "configs" / "insights.yaml"),
     )
     return cfg

@@ -1,0 +1,16 @@
+{
+  "scenarios": [
+    {"id": "lead_source_improvement", "expect": "insight_recommendation"},
+    {"id": "margin_issue", "expect": "review_not_repricing"},
+    {"id": "pricing_objections", "expect": "pricing_insight"},
+    {"id": "content_success", "expect": "content_recommendation"},
+    {"id": "support_recurrence", "expect": "product_insight"},
+    {"id": "ai_cost_spike", "expect": "ai_cost_insight"},
+    {"id": "capacity_bottleneck", "expect": "capacity_warning"},
+    {"id": "saas_candidate", "expect": "product_opportunity"},
+    {"id": "insufficient_data", "expect": "insufficient"},
+    {"id": "data_quality", "expect": "data_quality"},
+    {"id": "owner_rejection", "expect": "no_change"},
+    {"id": "owner_acceptance", "expect": "decision_log_proposal"}
+  ]
+}

@@ -84,6 +84,7 @@ _COLUMN_MIGRATIONS = [
     ("conversations", "next_action", "TEXT"),
     ("conversations", "next_followup_at", "TEXT"),
     ("conversations", "mode", "TEXT NOT NULL DEFAULT 'AI_ACTIVE'"),
+    ("opportunities", "reason", "TEXT"),
 ]
 
 
