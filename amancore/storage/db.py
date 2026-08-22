@@ -78,6 +78,11 @@ _COLUMN_MIGRATIONS = [
     ("content_items", "risk_level", "TEXT"),
     ("content_items", "quality_json", "TEXT"),
     ("content_items", "content_hash", "TEXT"),
+    ("conversations", "language", "TEXT"),
+    ("conversations", "objections", "TEXT"),
+    ("conversations", "last_message_at", "TEXT"),
+    ("conversations", "next_action", "TEXT"),
+    ("conversations", "next_followup_at", "TEXT"),
 ]
 
 

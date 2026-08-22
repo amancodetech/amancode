@@ -146,6 +146,13 @@ class CRMService:
         )
         self.db.commit()
 
+    def get_opportunity_for_lead(self, lead_id: str) -> dict | None:
+        row = self.db.execute(
+            "SELECT * FROM opportunities WHERE lead_id = ? ORDER BY created_at DESC LIMIT 1",
+            (lead_id,),
+        ).fetchone()
+        return _row(row)
+
     # ---- Projects ------------------------------------------------------
     def create_project(self, customer_id: str, service: str, **fields: Any) -> str:
         project_id = new_id()
@@ -216,6 +223,25 @@ class CRMService:
                 "SELECT * FROM conversations WHERE conversation_id = ?", (conversation_id,)
             ).fetchone()
         )
+
+    def update_conversation(self, conversation_id: str, **fields: Any) -> None:
+        if not fields:
+            return
+        if self.get_conversation(conversation_id) is None:
+            raise NotFoundError(f"conversation {conversation_id} not found")
+        sets = [f"{k} = ?" for k in fields]
+        self.db.execute(
+            f"UPDATE conversations SET {', '.join(sets)}, updated_at = ? WHERE conversation_id = ?",
+            (*fields.values(), utcnow(), conversation_id),
+        )
+        self.db.commit()
+
+    def get_conversation_for_lead(self, lead_id: str) -> dict | None:
+        row = self.db.execute(
+            "SELECT * FROM conversations WHERE lead_id = ? ORDER BY created_at DESC LIMIT 1",
+            (lead_id,),
+        ).fetchone()
+        return _row(row)
 
     # ---- Research results ---------------------------------------------
     def create_research_result(self, **fields: Any) -> str:

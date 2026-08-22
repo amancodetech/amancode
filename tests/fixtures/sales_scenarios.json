@@ -1,0 +1,38 @@
+{
+  "scenarios": [
+    {
+      "id": "clear_qualified_lead",
+      "lead": {"company": "Resto", "market": "indonesia", "industry": "restaurant", "language": "id"},
+      "messages": [
+        "I have a restaurant in Jakarta and want an online ordering system",
+        "I am the owner and my budget is $5000",
+        "I want to increase online orders within 2 weeks"
+      ],
+      "expect": {"final_state": "offer_recommended", "opportunity_created": true}
+    },
+    {
+      "id": "price_objection",
+      "lead": {"company": "Shop", "market": "indonesia", "industry": "retail", "language": "id"},
+      "messages": ["I have a shop and want a website", "this is too expensive"],
+      "expect": {"objection": "price_high"}
+    },
+    {
+      "id": "asks_for_human",
+      "lead": {"company": "Co", "market": "indonesia", "industry": "service", "language": "en"},
+      "messages": ["I want to talk to a human please"],
+      "expect": {"needs_human": true}
+    },
+    {
+      "id": "missing_budget",
+      "lead": {"company": "Co2", "market": "indonesia", "industry": "service", "language": "id"},
+      "messages": ["I have a business and want a website"],
+      "expect": {"state": "discovery"}
+    },
+    {
+      "id": "wants_discount",
+      "lead": {"company": "Co3", "market": "gcc", "industry": "trading", "language": "ar"},
+      "messages": ["I want a website", "can you give me a discount?"],
+      "expect": {"objection": "want_discount"}
+    }
+  ]
+}

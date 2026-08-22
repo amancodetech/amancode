@@ -9,52 +9,8 @@ from __future__ import annotations
 import json
 
 from ..ids import new_id
+from ..sales.fit import compute_fit
 from .base import Agent
-
-# industry keywords aligned with the ICP text in Business Brain
-_PRIMARY_INDUSTRY_KEYWORDS = ["service", "trading", "trade", "manufacturing", "retail", "logistics"]
-_SECONDARY_INDUSTRY_KEYWORDS = ["export", "import", "distribution", "wholesale"]
-
-
-def compute_fit(brain: dict, result) -> dict:
-    """Deterministic ICP fit signals (not final lead score)."""
-    reasons: list[str] = []
-    market = (result.market or "").lower()
-    industry = (result.industry or "").lower()
-
-    market_fit = "high" if market in {m.lower() for m in brain.get("market_profiles", {})} else "low"
-    if market_fit == "high":
-        reasons.append("supported market")
-
-    if any(k in industry for k in _PRIMARY_INDUSTRY_KEYWORDS):
-        industry_fit = "high"
-        reasons.append("primary ICP industry signal")
-    elif any(k in industry for k in _SECONDARY_INDUSTRY_KEYWORDS):
-        industry_fit = "high"
-        reasons.append("secondary ICP industry signal")
-    elif industry:
-        industry_fit = "medium"
-    else:
-        industry_fit = "low"
-
-    service_fit = "high" if (result.service_fit or result.likely_needs) else "low"
-    if service_fit == "high":
-        reasons.append("service/need signal")
-
-    if market_fit == "high" and (industry_fit != "low" or service_fit == "high"):
-        overall = "high" if industry_fit == "high" or service_fit == "high" else "medium"
-    elif market_fit == "low":
-        overall = "low"
-    else:
-        overall = "medium"
-
-    return {
-        "market_fit": market_fit,
-        "industry_fit": industry_fit,
-        "service_fit": service_fit,
-        "overall_fit": overall,
-        "reasons": reasons,
-    }
 
 
 class ResearchAgent(Agent):
@@ -75,7 +31,7 @@ class ResearchAgent(Agent):
                     summary["rejected"] += 1
                     self._emit("lead.rejected", {"reason": "no company/website"}, correlation_id)
                     continue
-                fit = compute_fit(self.brain, r)
+                fit = compute_fit(self.brain, r.to_dict())
                 provenance = json.dumps({
                     "source": r.source,
                     "source_url": r.source_url,
