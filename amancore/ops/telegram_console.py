@@ -14,6 +14,7 @@ import json
 import os
 import re
 import threading
+from pathlib import Path
 import time
 import urllib.parse
 import urllib.request
@@ -58,6 +59,34 @@ HELP_TEXT = (
     "\"سجل الرقم 62812345 باسم أحمد كعميل\"\n"
     "\"تحدث مع 905342422565 واعرض عليه خدماتنا\""
 )
+
+
+_BIZ_CACHE_TEXT: list = []
+
+
+def business_context() -> str:
+    """Compact factual brief of AmanCode services/offers (cached)."""
+    if _BIZ_CACHE_TEXT:
+        return _BIZ_CACHE_TEXT[0]
+    try:
+        import yaml
+
+        root = Path(__file__).resolve().parents[2]
+        brain = yaml.safe_load(open(root / "amancore" / "business_brain" / "data" / "v1.yaml"))
+        lines = [f"Company: {brain['company']['name']} — {brain['company']['positioning']}"]
+        lines.append("Packages we offer:")
+        for o in brain.get("offers", []):
+            lines.append(f"- {o['name']} ({o['tier']})")
+        lines.append("Services:")
+        for sv in brain.get("services", [])[:6]:
+            lines.append(f"- {sv['name']} [{sv.get('delivery_model','')}]")
+        icp = brain.get("icp", {})
+        lines.append(f"Ideal customers: {icp.get('primary','')}")
+        out = "\n".join(lines)
+    except Exception as exc:  # noqa: BLE001
+        out = "AmanCode: digital solutions — websites, web apps, mini-ERP systems, mobile apps."
+    _BIZ_CACHE_TEXT.append(out)
+    return out
 
 
 class TelegramOwnerConsole:
@@ -286,32 +315,33 @@ class TelegramOwnerConsole:
                        f"{(' · ' + r['last_at'][:16]) if r['last_at'] else ''}")
         return "\n".join(out)
 
-    _BIZ_CACHE: list = []
-
     @classmethod
     def _business_context(cls) -> str:
-        """Compact factual brief of AmanCode services/offers from the brain."""
-        if cls._BIZ_CACHE:
-            return cls._BIZ_CACHE[0]
-        try:
-            import yaml
+        return business_context()
 
-            root = __import__("pathlib").Path(__file__).resolve().parents[2]
-            brain = yaml.safe_load(open(root / "amancore" / "business_brain" / "data" / "v1.yaml"))
-            lines = [f"Company: {brain['company']['name']} — {brain['company']['positioning']}"]
-            lines.append("Packages we offer:")
-            for o in brain.get("offers", []):
-                lines.append(f"- {o['name']} ({o['tier']})")
-            lines.append("Services:")
-            for sv in brain.get("services", [])[:6]:
-                lines.append(f"- {sv['name']} [{sv.get('delivery_model','')}]")
-            icp = brain.get("icp", {})
-            lines.append(f"Ideal customers: {icp.get('primary','')}")
-            out = NL.join(lines)
-        except Exception as exc:  # noqa: BLE001
-            out = "AmanCode: digital solutions — websites, web apps, mini-ERP systems, mobile apps."
-        cls._BIZ_CACHE.append(out)
-        return out
+    def _customer_language(self, wa_id: str) -> str:
+        """Language for prompts — from the customer's OWN recent messages,
+        falling back to country prefix."""
+        try:
+            rows = self.runtime["db"].execute(
+                "SELECT body FROM channel_messages WHERE wa_id=? AND direction='in'"
+                " AND body != '' ORDER BY id DESC LIMIT 5", (wa_id,)).fetchall()
+            from ..channels.language import LanguageDetector
+            det = LanguageDetector()
+            votes = {}
+            for r in rows:
+                lang = det.detect(r["body"])
+                votes[lang] = votes.get(lang, 0) + 2
+        except Exception:  # noqa: BLE001
+            votes = {}
+        if not votes:
+            if wa_id.startswith("62"):
+                return "Indonesian"
+            if wa_id.startswith("90"):
+                return "Turkish"
+            return "Arabic"
+        return {"ar": "Arabic", "id": "Indonesian", "en": "English"}.get(
+            max(votes, key=votes.get), "Arabic")
 
     def _resolve_who(self, value: str):
         """Accepts full number, partial digits, or a saved customer name.
@@ -438,9 +468,7 @@ class TelegramOwnerConsole:
             return err
         wa_id = resolved
         self._remember(wa_id)
-        lang_hint = ("Indonesian" if wa_id.startswith("62")
-                     else "Turkish" if wa_id.startswith("90")
-                     else "Arabic")
+        lang_hint = self._customer_language(wa_id)
         lead = self._find_or_create(wa_id, None)
         cname = (lead or {}).get("name") or ""
         try:
@@ -494,9 +522,7 @@ class TelegramOwnerConsole:
         wa_id = resolved
 
         # compose opener in the customer's likely language
-        lang_hint = ("Indonesian" if wa_id.startswith("62")
-                     else "Turkish" if wa_id.startswith("90")
-                     else "Arabic")
+        lang_hint = self._customer_language(wa_id)
         try:
             flash = self._build_flash()
             r = flash.complete([

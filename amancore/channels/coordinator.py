@@ -268,6 +268,11 @@ class MessageCoordinator:
         """AI composes the final customer-facing reply; deterministic layer
         supplies facts via `base`/`intent_note`. Falls back to `base`."""
         try:
+            try:
+                from ..ops.telegram_console import business_context
+                facts = "\nCOMPANY FACTS:\n" + business_context()
+            except Exception:  # noqa: BLE001
+                facts = ""
             r = self._quote_drafter().complete([
                 {"role": "system", "content":
                  "You are AmanCode's WhatsApp assistant (websites, systems, digital solutions). "
@@ -276,7 +281,11 @@ class MessageCoordinator:
                  "Convey exactly the facts in DRAFT CONTENT (translate if needed); "
                  "NEVER invent prices, discounts, deadlines, or approvals beyond it. "
                  f"Purpose: {intent_note or 'move the conversation forward'}. "
-                 "Output only the message text."},
+                 "If the customer talks about something unrelated to our business, "
+                 "respond warmly and briefly acknowledge it, then gently steer back "
+                 "to how AmanCode can serve their business. Always stay in our "
+                 "business context. Output only the message text."
+                 + facts},
                 {"role": "user", "content":
                  f"CUSTOMER MESSAGE: {text}\n\nDRAFT CONTENT: {base}"},
             ])
@@ -302,6 +311,11 @@ class MessageCoordinator:
     def _draft_quote_reply(self, lead: dict) -> str:
         """AI-drafted price-safe reply in the customer's own language."""
         try:
+            try:
+                from ..ops.telegram_console import business_context
+                facts = "\nCOMPANY FACTS:\n" + business_context()
+            except Exception:  # noqa: BLE001
+                facts = ""
             r = self._quote_drafter().complete([
                 {"role": "system", "content":
                  "You are AmanCode's WhatsApp sales assistant. Draft ONE short warm reply "
