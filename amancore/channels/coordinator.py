@@ -164,7 +164,25 @@ class MessageCoordinator:
                 contact_whatsapp=wa_id,
                 source_channel="whatsapp",
             )
+            # Plan-B compliance: customer messaging FIRST = recorded opt-in
+            # for replies (business-initiated still requires the kit gates).
+            self.crm.db.execute(
+                "UPDATE leads SET consent_at=?, consent_source='inbound_first_message' "
+                "WHERE lead_id=? AND consent_at IS NULL",
+                (__import__("datetime").datetime.now(
+                    __import__("datetime").timezone.utc).isoformat(), lead_id))
+            self.crm.db.commit()
             lead = self.crm.get_lead(lead_id)
+        elif not (lead.get("consent_at") or "").strip():
+            self.crm.db.execute(
+                "UPDATE leads SET consent_at=?, "
+                "consent_source=COALESCE(consent_source,'inbound_first_message') "
+                "WHERE lead_id=? AND consent_at IS NULL",
+                (__import__("datetime").datetime.now(
+                    __import__("datetime").timezone.utc).isoformat(),
+                 lead["lead_id"]))
+            self.crm.db.commit()
+            lead = self.crm.get_lead(lead["lead_id"])
 
         if self.message_recorder is not None:
             try:
