@@ -8,56 +8,73 @@ architecture test).
 from __future__ import annotations
 
 import sqlite3
+import threading
 from pathlib import Path
 
 from ..errors import IntegrityError
 
 
 class Database:
+    """SQLite wrapper. WAL + one connection PER THREAD (threading.local):
+    the HTTP server, worker and console threads each get an isolated
+    connection, eliminating cross-thread transaction/commit races while
+    SQLite itself serializes writers at the file level."""
+
     def __init__(self, path: Path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self.path), check_same_thread=False)
-        self._conn.row_factory = sqlite3.Row
-        self._conn.execute("PRAGMA foreign_keys = ON")
-        self._conn.execute("PRAGMA journal_mode = WAL")
+        self.path = path
+        self._local = threading.local()
+        conn = self._thread_conn()
+        conn.execute("PRAGMA journal_mode = WAL")
         # NOTE: check_same_thread=False is required by the JobRunner (worker
         # threads). Scheduler concurrency is 1 and SQLite serializes writes.
 
+    def _thread_conn(self) -> sqlite3.Connection:
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            conn = sqlite3.connect(str(self.path), check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA foreign_keys = ON")
+            self._local.conn = conn
+        return conn
+
     def execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
-        return self._conn.execute(sql, params)
+        return self._thread_conn().execute(sql, params)
 
     def backup_to(self, dst_path) -> None:
         """Consistent online backup via the sqlite backup API (same thread)."""
         dst_conn = sqlite3.connect(str(dst_path))
         try:
-            self._conn.backup(dst_conn)
+            self._thread_conn().backup(dst_conn)
         finally:
             dst_conn.close()
 
     def integrity_ok(self) -> bool:
-        row = self._conn.execute("PRAGMA integrity_check").fetchone()
+        row = self._thread_conn().execute("PRAGMA integrity_check").fetchone()
         return row is not None and row[0] == "ok"
 
     def executescript(self, sql: str) -> None:
-        self._conn.executescript(sql)
+        self._thread_conn().executescript(sql)
 
     def commit(self) -> None:
-        self._conn.commit()
+        self._thread_conn().commit()
 
     def rollback(self) -> None:
-        self._conn.rollback()
+        self._thread_conn().rollback()
 
     def transaction(self):
         """Context manager committing on success, rolling back on error."""
-        return _Transaction(self._conn)
+        return _Transaction(self._thread_conn())
 
     def close(self) -> None:
-        self._conn.close()
+        conn = getattr(self._local, "conn", None)
+        if conn is not None:
+            conn.close()
+            self._local.conn = None
 
     def apply_schema(self, schema_sql: str) -> None:
-        self._conn.executescript(schema_sql)
-        self._conn.commit()
+        self._thread_conn().executescript(schema_sql)
 
 
 class _Transaction:
