@@ -56,6 +56,7 @@ class MessageCoordinator:
         intent_router=None,
         support_filter=None,
         message_recorder=None,
+        status_recorder=None,
     ):
         self.whatsapp = whatsapp_adapter
         self.outbox = outbox
@@ -78,6 +79,7 @@ class MessageCoordinator:
         self.intent_router = intent_router or IntentRouter()
         self.support_filter = support_filter or SupportResponseFilter()
         self.message_recorder = message_recorder
+        self.status_recorder = status_recorder
 
     def handle_whatsapp_webhook(self, body, headers=None, raw_body: bytes | None = None) -> dict:
         if self.whatsapp.config.get("signature_required"):
@@ -93,6 +95,18 @@ class MessageCoordinator:
         summary = {"received": len(events), "processed": 0, "duplicates": 0, "replies": 0, "handoffs": 0, "optouts": 0, "support": 0}
         for event in events:
             if event.event_type != "whatsapp.message.received":
+                if (
+                    event.event_type in ("whatsapp.message.delivered", "whatsapp.message.read", "whatsapp.message.sent", "whatsapp.message.failed")
+                    and self.status_recorder is not None
+                ):
+                    try:
+                        self.status_recorder(
+                            event.payload.get("message_id"),
+                            event.payload.get("status", event.event_type.rsplit(".", 1)[-1]),
+                            event.payload.get("recipient_id") or event.actor_id,
+                        )
+                    except Exception:  # noqa: BLE001 — status sync must never break intake
+                        pass
                 continue
             if event.idempotency_key and self.idem.check(event.idempotency_key) is not None:
                 summary["duplicates"] += 1

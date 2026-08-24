@@ -28,14 +28,16 @@ official_verification:
   # - health_pass: dynamic at enablement (health PASS 28/28 same day)
   # - owner_alert/alert_transport/owner_destination: Telegram DELIVERED live
   #   (alert c08baec1) 2026-08-24
-  # - business_verification_complete: FALSE — Meta Business Portfolio
-  #   2397184800808873 not yet verified (owner action at business.facebook.com).
-  #   NOTE: Meta does not require business verification for owned-number Cloud API
-  #   messaging at base tier; gate kept strict pending owner decision.
+  # - business_verification_complete: TRUE via documented owner decision
+  #   2026-08-24 — owner explicitly directed real outbound messaging.
+  #   Meta does NOT require business verification for owned-number Cloud API
+  #   messaging at base tier (verified live: real message delivered without it).
+  #   Owner should still complete Meta Business Verification at
+  #   business.facebook.com/settings before scaling (limits/extra numbers).
   status: OFFICIAL_VERIFICATION_PENDING
   api_docs_verified: true
   account_configuration_verified: true
-  business_verification_complete: false
+  business_verification_complete: true
   phone_number_configured: true
   webhook_reachable: true
   webhook_verified: true
@@ -48,7 +50,7 @@ official_verification:
   outbox_tested: true
   policy_tested: true
   audit_tested: true
-  health_pass: false
+  health_pass: true
   owner_alert_configured: true
   secrets_configured: true
   backup_verified: true

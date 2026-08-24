@@ -46,6 +46,41 @@ class GraphWhatsAppProvider:
         self.phone_number_id = config.get("phone_number_id")
         self.access_token = os.environ.get(config.get("access_token_env", "WHATSAPP_ACCESS_TOKEN"), "")
 
+    MEDIA_TYPES = ("image", "audio", "video", "document", "sticker")
+
+    def upload_media(self, data: bytes, mime: str, filename: str = "file") -> str:
+        """Upload media to Cloud API; returns media_id. Gated like sends."""
+        block_unless_production_enabled(self.config)
+        if not (self.phone_number_id and self.access_token):
+            raise RuntimeError("whatsapp provider not configured (phone_number_id/access_token)")
+        url = f"{self.base_url}/{self.version}/{self.phone_number_id}/media"
+        resp = requests.post(
+            url,
+            headers={"Authorization": f"Bearer {self.access_token}"},
+            files={"file": (filename, data, mime)},
+            data={"messaging_product": "whatsapp", "type": mime},
+            timeout=120,
+        )
+        if resp.status_code != 200:
+            raise RuntimeError(f"whatsapp media upload failed: {resp.status_code} {resp.text[:200]}")
+        return resp.json()["id"]
+
+    def download_media(self, media_id: str) -> tuple[bytes, str]:
+        """Download media bytes by id; returns (data, mime). Read-only, ungated."""
+        if not self.access_token:
+            raise RuntimeError("whatsapp provider not configured (access_token)")
+        url = f"{self.base_url}/{self.version}/{media_id}"
+        resp = requests.get(url, headers={"Authorization": f"Bearer {self.access_token}"}, timeout=60)
+        if resp.status_code != 200:
+            raise RuntimeError(f"whatsapp media lookup failed: {resp.status_code}")
+        dl_url = resp.json().get("url")
+        if not dl_url:
+            raise RuntimeError("whatsapp media url missing")
+        dl = requests.get(dl_url, headers={"Authorization": f"Bearer {self.access_token}"}, timeout=120)
+        if dl.status_code != 200:
+            raise RuntimeError(f"whatsapp media download failed: {dl.status_code}")
+        return dl.content, dl.headers.get("Content-Type", "application/octet-stream")
+
     def send(self, recipient: str, message_type: str, payload) -> dict:
         block_unless_production_enabled(self.config)
         if not (self.phone_number_id and self.access_token):
@@ -56,6 +91,20 @@ class GraphWhatsAppProvider:
         if message_type == "template":
             body["type"] = "template"
             body["template"] = payload  # {name, language:{code}, components:[]}
+        elif message_type in self.MEDIA_TYPES and isinstance(payload, dict):
+            # {id|link, caption?, filename?} — official media message shape
+            body["type"] = message_type
+            section = {}
+            if payload.get("id"):
+                section["id"] = payload["id"]
+            elif payload.get("link"):
+                section["link"] = payload["link"]
+            else:
+                raise RuntimeError("media payload requires id or link")
+            for k in ("caption", "filename"):
+                if payload.get(k):
+                    section[k] = payload[k]
+            body[message_type] = section
         else:
             body["type"] = "text"
             body["text"] = {"body": payload if isinstance(payload, str) else payload.get("body", "")}

@@ -99,7 +99,11 @@ _COLUMN_MIGRATIONS = [
     ("conversations", "next_followup_at", "TEXT"),
     ("conversations", "mode", "TEXT NOT NULL DEFAULT 'AI_ACTIVE'"),
     ("opportunities", "reason", "TEXT"),
-    ("jobs", "started_at", "TEXT"),
+    ("channel_messages", "media_kind", "TEXT"),
+    ("channel_messages", "media_ref", "TEXT"),
+    ("channel_messages", "outbox_message_id", "TEXT"),
+    ("channel_messages", "wa_message_id", "TEXT"),
+    ("channel_messages", "lead_id", "TEXT"),
 ]
 
 

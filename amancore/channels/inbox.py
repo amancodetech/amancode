@@ -225,12 +225,22 @@ header form button:hover{{background:#2a3942}}
 .out{{background:#005c4b;color:#e9edef;align-self:flex-end;border-top-left-radius:0}}
 .meta{{display:flex;justify-content:flex-end;align-items:center;gap:.25rem;font-size:.65rem;color:#8696a0;margin-top:.15rem}}
 .msg.out .meta{{color:#8fd0bd}}
-.tick{{color:#53bdeb;font-weight:bold}}
+.tick{{color:#8696a0;font-weight:bold}}
+.tick.blue{{color:#53bdeb}}
 .day{{align-self:center;background:#182229;color:#8696a0;font-size:.72rem;padding:.25rem .8rem;border-radius:8px;margin-bottom:.5rem}}
 .empty{{color:#8696a0;text-align:center;margin-top:3rem;font-size:.9rem}}
 #composer{{display:flex;gap:.5rem;padding:.6rem .8rem;background:#202c33;align-items:center}}
 #text{{flex:1;padding:.7rem 1rem;border:0;border-radius:10px;background:#2a3942;color:#e9edef;font-size:1rem;outline:none}}
 #send{{width:44px;height:44px;border-radius:50%;border:0;background:#00a884;color:#fff;font-size:1.2rem;cursor:pointer;flex-shrink:0}}
+#attach,#mic{{width:40px;height:40px;border-radius:50%;border:0;background:#2a3942;font-size:1rem;cursor:pointer;flex-shrink:0}}
+#mic.recording{{background:#dc3545;animation:pulse 1s infinite}}
+@keyframes pulse{{50%{{opacity:.6}}}}
+.media-img{{max-width:260px;border-radius:8px;display:block}}
+.media-vid{{max-width:280px;border-radius:8px;display:block}}
+audio{{max-width:250px;height:38px}}
+.doc{{display:flex;align-items:center;gap:.4rem;background:rgba(255,255,255,.08);padding:.4rem .6rem;border-radius:6px;font-size:.88rem}}
+#preview{{padding:.5rem .8rem;background:#202c33;display:flex;justify-content:space-between;align-items:center;color:#e9edef;font-size:.85rem}}
+#preview button{{background:none;border:0;color:#f15c6d;font-size:1rem;cursor:pointer}}
 #send:hover{{background:#06cf9c}}
 @media(max-width:700px){{aside{{width:100%;display:none}} aside.open{{display:flex}}
  body.chatting aside{{display:none}} main{{display:none}} body.chatting main{{display:flex}}}}
@@ -240,13 +250,22 @@ header form button:hover{{background:#2a3942}}
 <main id="chatArea">
 <header><span id="who">AmanCore Inbox</span><form method="post" action="{logout}"><button>خروج ⏻</button></form></header>
 <div id="log"><div class="empty">اختر محادثة من القائمة لعرض الرسائل</div></div>
-<form id="composer"><input id="text" placeholder="اكتب رسالة…" autocomplete="off"><button id="send">➤</button></form>
+<form id="composer">
+<input type="file" id="file" hidden>
+<button type="button" id="attach" title="مرفق">📎</button>
+<button type="button" id="mic" title="تسجيل صوتي">🎤</button>
+<input id="text" placeholder="اكتب رسالة…" autocomplete="off">
+<button id="send">➤</button>
+</form>
+<div id="preview" hidden><span id="preview-info"></span><button id="preview-cancel">✕</button></div>
 </main>
 <script>
 const LEADS=document.getElementById('leads'),LOG=document.getElementById('log'),
-WHO=document.getElementById('who'),TEXT=document.getElementById('text');
-let current=null,timer=null;
+WHO=document.getElementById('who'),TEXT=document.getElementById('text'),
+FILE=document.getElementById('file'),PREVIEW=document.getElementById('preview');
+let current=null,timer=null,pendingMedia=null,recorder=null,chunks=[];
 function esc(s){{const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML}}
+function fmtSize(n){{return n>1048576?(n/1048576).toFixed(1)+' MB':Math.ceil(n/1024)+' KB'}}
 async function loadLeads(){{
  const r=await fetch('{base}/api/leads');if(r.status===403)location.reload();
  const d=await r.json();
@@ -266,6 +285,21 @@ async function loadLeads(){{
    document.body.classList.add('chatting');loadMsgs();TEXT.focus()}};
   LEADS.appendChild(el);
  }});}}
+function ticks(m){{
+ if(m.direction!=='out')return '';
+ const s=m.status||'queued';
+ if(s==='read')return '<span class="tick blue">✓✓</span>';
+ if(s==='delivered')return '<span class="tick">✓✓</span>';
+ if(s==='sent'||s==='processing')return '<span class="tick">✓</span>';
+ if(s==='failed'||s==='dead')return '<span style="color:#f15c6d">✗ '+esc(s)+'</span>';
+ return '<span>🕐</span>';}}
+function mediaHtml(m){{
+ const md=m.media||{{}};const kind=md.kind;const ref=md.ref||'';
+ if(kind==='image'&&ref)return '<img class="media-img" src="{base}/api/media?ref='+encodeURIComponent(ref)+'" loading="lazy">';
+ if(kind==='audio'&&ref)return '<audio controls preload="none" src="{base}/api/media?ref='+encodeURIComponent(ref)+'"></audio>';
+ if(kind==='video'&&ref)return '<video controls preload="none" src="{base}/api/media?ref='+encodeURIComponent(ref)+'" class="media-vid"></video>';
+ if(kind==='document')return '<div class="doc">📄 '+(md.filename?esc(md.filename):'ملف')+'</div>';
+ return '';}}
 async function loadMsgs(){{
  if(!current)return;
  const r=await fetch('{base}/api/messages?wa_id='+encodeURIComponent(current));
@@ -278,21 +312,68 @@ async function loadMsgs(){{
   if(day&&day!==lastDay){{lastDay=day;
    const dd=document.createElement('div');dd.className='day';dd.textContent=day;LOG.appendChild(dd)}}
   const w=document.createElement('div');w.className='msg '+m.direction;
-  w.appendChild(document.createTextNode(m.body));
+  const mh=mediaHtml(m);
+  if(mh){{const mw=document.createElement('div');mw.innerHTML=mh;w.appendChild(mw.firstChild||mw)}}
+  const cap=(m.caption||(m.media?'':''))+(m.caption&&m.media?' ':'');
+  if(cap){{const t=document.createElement('span');t.textContent=m.caption;w.appendChild(t);
+    w.insertBefore(document.createTextNode(' '),null);}}
+  else if(!mh){{w.appendChild(document.createTextNode(m.caption??m.body??''))}}
   const meta=document.createElement('div');meta.className='meta';
-  meta.innerHTML='<span>'+esc((m.created_at||'').slice(11,16))+'</span>'+
-   (m.direction==='out'
-     ?(m.status==='sent'?'<span class="tick">✓✓</span>'
-       :m.status==='failed'?'<span style="color:#f15c6d">✗ '+esc(m.status)+'</span>'
-       :'<span>🕐</span>'):'');
+  meta.innerHTML='<span>'+esc((m.created_at||'').slice(11,16))+'</span>'+ticks(m);
   w.appendChild(meta);LOG.appendChild(w);
  }});
  LOG.scrollTop=LOG.scrollHeight;}}
-document.getElementById('composer').addEventListener('submit',async e=>{{
- e.preventDefault();if(!current||!TEXT.value.trim())return;
+async function sendPayload(payload){{
  await fetch('{base}/api/send',{{method:'POST',headers:{{'Content-Type':'application/json'}},
-  body:JSON.stringify({{wa_id:current,text:TEXT.value.trim()}})}});
- TEXT.value='';loadMsgs();}});
+  body:JSON.stringify(payload)}});
+ loadMsgs();loadLeads();}}
+document.getElementById('composer').addEventListener('submit',async e=>{{
+ e.preventDefault();
+ if(pendingMedia){{
+  const p={{wa_id:current,text:TEXT.value.trim(),
+   media:{{kind:pendingMedia.kind,filename:pendingMedia.filename,mime:pendingMedia.mime,
+          data_base64:pendingMedia.data_base64}}}};
+  TEXT.value='';clearPending();sendPayload(p);return}}
+ if(!current||!TEXT.value.trim())return;
+ const t=TEXT.value.trim();TEXT.value='';sendPayload({{wa_id:current,text:t}});}});
+/* attachments */
+document.getElementById('attach').onclick=()=>FILE.click();
+FILE.addEventListener('change',()=>{{
+ const f=FILE.files[0];if(!f)return;
+ if(f.size>30*1024*1024){{alert('الحد الأقصى 30MB');FILE.value='';return}}
+ const kind=f.type.startsWith('image/')?'image':f.type.startsWith('audio/')?'audio':
+            f.type.startsWith('video/')?'video':'document';
+ const rd=new FileReader();
+ rd.onload=()=>{{pendingMedia={{kind,filename:f.name,mime:f.type||'application/octet-stream',
+   data_base64:rd.result.split(',')[1]}};
+  document.getElementById('preview-info').textContent='📎 '+f.name+' ('+fmtSize(f.size)+')';
+  PREVIEW.hidden=false;}};
+ rd.readAsDataURL(f);FILE.value='';}});
+function clearPending(){{pendingMedia=null;PREVIEW.hidden=true}}
+document.getElementById('preview-cancel').onclick=clearPending;
+/* voice recording */
+const MIC=document.getElementById('mic');
+MIC.onclick=async()=>{{
+ if(recorder&&recorder.state==='recording'){{recorder.stop();return}}
+ try{{
+  const stream=await navigator.mediaDevices.getUserMedia({{audio:true}});
+  recorder=new MediaRecorder(stream);
+  chunks=[];
+  recorder.ondataavailable=e=>chunks.push(e.data);
+  recorder.onstop=()=>{{
+   stream.getTracks().forEach(t=>t.stop());
+   MIC.classList.remove('recording');MIC.textContent='🎤';clearInterval(MIC._timer);
+   const blob=new Blob(chunks,{{type:recorder.mimeType||'audio/webm'}});
+   const rd=new FileReader();
+   rd.onload=()=>{{
+    pendingMedia={{kind:'audio',filename:'voice-note.'+(blob.type.includes('mp4')?'mp4':'webm'),
+     mime:blob.type,data_base64:rd.result.split(',')[1]}};
+    document.getElementById('preview-info').textContent='🎙️ تسجيل صوتي ('+fmtSize(blob.size)+')';
+    PREVIEW.hidden=false;}};
+   rd.readAsDataURL(blob);}};
+  recorder.start();MIC.classList.add('recording');MIC.textContent='⏹';
+  let secs=0;MIC._timer=setInterval(()=>{{secs++;MIC.textContent='⏹ '+secs+'s'}},1000);
+ }}catch(err){{alert('تعذر الوصول للميكروفون: '+err.message)}}}};
 timer=setInterval(()=>{{loadLeads();if(current)loadMsgs();}},6000);
 loadLeads();
 </script></body></html>"""

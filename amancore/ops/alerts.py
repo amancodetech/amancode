@@ -83,8 +83,12 @@ class EmailAlertTransport(AlertTransport):
 
     name = "email"
 
-    def __init__(self, host: str, user: str, password: str, to: str):
+    def __init__(self, host: str, user: str, password: str, to: str, port: int = 587):
         self.host, self.user, self.password, self.to = host, user, password, to
+        try:
+            self.port = int(port) if port else 587
+        except (TypeError, ValueError):
+            self.port = 587
 
     def send(self, alert: dict) -> dict:
         import smtplib
@@ -98,8 +102,10 @@ class EmailAlertTransport(AlertTransport):
         msg["Subject"] = f"AmanCore [{alert['severity']}] {alert['title']}"
         msg["To"] = self.to
         msg["From"] = self.user
-        with smtplib.SMTP(self.host, timeout=15) as server:
+        with smtplib.SMTP(self.host, self.port, timeout=30) as server:
+            server.ehlo()
             server.starttls()
+            server.ehlo()
             server.login(self.user, self.password)
             server.sendmail(self.user, [self.to], msg.as_string())
         return {"transport": "email", "delivered": True}
@@ -126,8 +132,9 @@ def resolve_transport(config: dict | None = None, env: dict | None = None) -> Al
         user = env.get(cfg.get("smtp_user_env", "SMTP_USER"), "")
         password = env.get(cfg.get("smtp_password_env", "SMTP_PASSWORD"), "")
         to = env.get(cfg.get("smtp_to_env", "SMTP_TO"), "")
+        port = env.get(cfg.get("smtp_port_env", "SMTP_PORT"), "587")
         if host and user and password and to:
-            return EmailAlertTransport(host, user, password, to)
+            return EmailAlertTransport(host, user, password, to, port=port)
 
     if channel in ("telegram", "email") and channel != "log":
         log.warning("alert channel %s configured but credentials missing — falling back to log", channel)

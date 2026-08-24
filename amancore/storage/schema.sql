@@ -370,6 +370,22 @@ CREATE TABLE IF NOT EXISTS usage_records (
     created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS channel_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel TEXT NOT NULL DEFAULT 'whatsapp',
+    direction TEXT NOT NULL CHECK (direction IN ('in','out')),
+    wa_id TEXT NOT NULL,
+    lead_id TEXT,
+    wa_message_id TEXT,
+    body TEXT NOT NULL,
+    status TEXT,
+    created_at TEXT NOT NULL,
+    media_kind TEXT,
+    media_ref TEXT,
+    outbox_message_id TEXT
+);;
+
+
 CREATE INDEX IF NOT EXISTS idx_leads_stage ON leads(lead_stage);
 CREATE INDEX IF NOT EXISTS idx_leads_next_followup ON leads(next_followup_at);
 CREATE INDEX IF NOT EXISTS idx_leads_website ON leads(website);
@@ -481,15 +497,3 @@ CREATE INDEX IF NOT EXISTS idx_outbox_status ON message_outbox(status);
 CREATE INDEX IF NOT EXISTS idx_outbox_idem ON message_outbox(idempotency_key);
 CREATE INDEX IF NOT EXISTS idx_intake_ip ON intake_events(ip);
 CREATE INDEX IF NOT EXISTS idx_intake_email ON intake_events(email);
-CREATE TABLE IF NOT EXISTS channel_messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    channel TEXT NOT NULL DEFAULT 'whatsapp',
-    direction TEXT NOT NULL CHECK (direction IN ('in','out')),
-    wa_id TEXT NOT NULL,
-    lead_id TEXT,
-    wa_message_id TEXT,
-    body TEXT NOT NULL,
-    status TEXT,
-    created_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_channel_messages_wa ON channel_messages(wa_id, created_at);

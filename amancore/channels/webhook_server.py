@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import signal
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -86,17 +87,95 @@ def build_runtime(root: Path):
 
     if inbox is not None:
         def _record_inbound(direction, wa_id, lead_id, wa_message_id=None, body="", **_):
+            from ..ids import utcnow
+
             db.execute(
                 "INSERT INTO channel_messages"
                 " (direction, wa_id, lead_id, wa_message_id, body, status, created_at)"
-                " VALUES (?, ?, ?, ?, ?, '', datetime('now'))",
-                (direction, wa_id, lead_id, wa_message_id, body),
+                " VALUES (?, ?, ?, ?, ?, '', ?)",
+                (direction, wa_id, lead_id, wa_message_id, body, utcnow()),
             )
             db.commit()
 
         coordinator.message_recorder = _record_inbound
 
-    return {"db": db, "adapter": adapter, "coordinator": coordinator, "inbox": inbox}
+        def _record_status(provider_message_id, status, recipient_id=None):
+            """Meta delivery receipts -> keep outbox + inbox rows truthful."""
+            if not provider_message_id:
+                return
+            cur = db.execute(
+                "SELECT id FROM channel_messages WHERE wa_message_id = ? AND direction='out'",
+                (provider_message_id,),
+            ).fetchone()
+            db.execute(
+                "UPDATE message_outbox SET status = ? WHERE provider_message_id = ?",
+                (status, provider_message_id),
+            )
+            if cur is None:
+                row = db.execute(
+                    "SELECT recipient, lead_id, payload FROM message_outbox WHERE provider_message_id = ?",
+                    (provider_message_id,),
+                ).fetchone()
+                if row is not None:
+                    db.execute(
+                        "INSERT INTO channel_messages"
+                        " (direction, wa_id, lead_id, wa_message_id, body, status, created_at)"
+                        " VALUES ('out', ?, ?, ?, ?, ?, ?)",
+                        (row["recipient"], row["lead_id"], provider_message_id,
+                         row["payload"] or "", status, utcnow()),
+                    )
+                    db.commit()
+                    return
+                # unknown id (e.g. AI auto-reply recorded via sync) — nothing to do
+                return
+            db.execute(
+                "UPDATE channel_messages SET status = ? WHERE id = ?", (status, cur["id"])
+            )
+            db.commit()
+
+        coordinator.status_recorder = _record_status
+        runtime_inbox_sync = lambda: sync_channel_messages(db)  # noqa: E731
+    else:
+        runtime_inbox_sync = lambda: None  # noqa: E731
+
+    runtime = {"db": db, "adapter": adapter, "coordinator": coordinator,
+               "inbox": inbox, "sync": runtime_inbox_sync}
+    return runtime
+
+
+def sync_channel_messages(db) -> None:
+    """Reconcile outbound rows with the outbox so ticks/statuses stay truthful.
+
+    - manual sends (channel_messages.outbox_message_id set): copy status +
+      provider_message_id from their outbox row
+    - AI/auto replies (outbox-only): adopt into channel_messages once
+    """
+    db.execute(
+        """
+        UPDATE channel_messages SET
+          status = COALESCE((SELECT o.status FROM message_outbox o
+                             WHERE o.message_id = channel_messages.outbox_message_id), status),
+          wa_message_id = COALESCE(
+              (SELECT o.provider_message_id FROM message_outbox o
+               WHERE o.message_id = channel_messages.outbox_message_id), wa_message_id)
+        WHERE direction='out' AND outbox_message_id IS NOT NULL
+        """
+    )
+    db.execute(
+        """
+        INSERT INTO channel_messages
+          (direction, wa_id, lead_id, wa_message_id, body, status, created_at, outbox_message_id)
+        SELECT 'out', o.recipient, o.lead_id, o.provider_message_id,
+               COALESCE(o.payload, ''), o.status, o.created_at, o.message_id
+          FROM message_outbox o
+         WHERE o.channel='whatsapp' AND o.message_type='text'
+           AND o.provider_message_id IS NOT NULL
+           AND o.created_at >= datetime('now', '-7 days')
+           AND NOT EXISTS (
+               SELECT 1 FROM channel_messages c WHERE c.outbox_message_id = o.message_id)
+        """
+    )
+    db.commit()
 
 
 def build_inbox_runtime(db, coordinator):
@@ -235,6 +314,9 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
             log.error("webhook processing failed: %s", exc)
             self._send(500, b"internal error")
             return
+        sync = self.runtime.get("sync")
+        if sync:
+            sync()
         if summary.get("status") == "rejected":
             self._send(403, json.dumps(summary).encode("utf-8"), "application/json")
             return
@@ -290,7 +372,7 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             length = 0
-        if not 0 < length <= 100_000:
+        if not 0 < length <= 45_000_000:  # media uploads (base64) up to ~30MB binary
             return {}
         try:
             return json.loads(self.rfile.read(length).decode("utf-8"))
@@ -345,9 +427,17 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
             data = self._read_json()
             wa_id = str(data.get("wa_id") or "").strip()
             text = str(data.get("text") or "").strip()
-            if not wa_id or not text or len(text) > 4096:
+            media = data.get("media") or None
+            if media is not None and (
+                not isinstance(media, dict)
+                or media.get("kind") not in ("image", "audio", "video", "document")
+                or not isinstance(media.get("data_base64"), str)
+                or len(media["data_base64"]) > 40_000_000  # ~30MB binary
+            ):
+                return self._send(400, json.dumps({"ok": False, "error": "bad media"}).encode(), "application/json")
+            if (not wa_id) or (not text and not media):
                 return self._send(400, b"bad request")
-            result = inbox_send_message(inbox, wa_id, text)
+            result = inbox_send_message(inbox, wa_id, text, media=media)
             status = 200 if result.get("ok") else 502
             return self._send(status, json.dumps(result).encode("utf-8"), "application/json")
 
@@ -372,32 +462,63 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
             payload = [dict(r) for r in rows]
             return self._send(200, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json")
         if resource == "messages":
+            sync_channel_messages(inbox["db"])
             wa_id = (qs.get("wa_id") or [""])[0]
-            out_rows = inbox["db"].execute(
+            rows = inbox["db"].execute(
                 """
-                SELECT direction, body, status, created_at FROM (
-                    SELECT 'in' AS direction, body, '' AS status, created_at
-                      FROM channel_messages WHERE wa_id = ?
-                    UNION ALL
-                    SELECT 'out' AS direction, COALESCE(payload, ''), status, created_at
-                      FROM message_outbox
-                     WHERE channel='whatsapp' AND recipient = ? AND message_type='text'
-                ) ORDER BY created_at ASC LIMIT 500
+                SELECT direction, body, status, created_at, media_kind, media_ref, wa_message_id
+                  FROM channel_messages WHERE wa_id = ?
+                 ORDER BY created_at ASC, id ASC LIMIT 500
                 """,
-                (wa_id, wa_id),
+                (wa_id,),
             ).fetchall()
-            return self._send(
-                200, json.dumps([dict(r) for r in out_rows], ensure_ascii=False).encode("utf-8"),
-                "application/json",
-            )
+            payload = []
+            for r in rows:
+                d = dict(r)
+                body = d.pop("body") or ""
+                if d.get("media_kind"):
+                    d["media"] = {"kind": d.pop("media_kind"), "ref": d.pop("media_ref")}
+                    d["caption"] = body
+                else:
+                    d.pop("media_kind", None); d.pop("media_ref", None)
+                    try:
+                        parsed = json.loads(body)
+                        if isinstance(parsed, dict) and parsed.get("kind"):
+                            d["media"] = {"kind": parsed["kind"], "ref": parsed.get("ref"),
+                                          "filename": parsed.get("filename")}
+                            d["caption"] = parsed.get("caption", "")
+                        else:
+                            d["caption"] = body
+                    except (ValueError, TypeError):
+                        d["caption"] = body
+                payload.append(d)
+            return self._send(200, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json")
+        if resource == "media":
+            ref = (qs.get("ref") or [""])[0]
+            if not ref or not ref.isalnum():
+                return self._send(400, b"bad ref")
+            adapter = self.runtime["adapter"]
+            provider = getattr(adapter, "provider", None)
+            dl = getattr(provider, "download_media", None)
+            if dl is None:
+                return self._send(501, b"media download unavailable in mock mode")
+            try:
+                data, mime = dl(ref)
+            except Exception as exc:  # noqa: BLE001
+                log.error("media download failed: %s", exc)
+                return self._send(502, b"download failed")
+            return self._send(200, data, mime)
         self._send(404, b"not found")
 
 
-def inbox_send_message(inbox, wa_id: str, text: str) -> dict:
+def inbox_send_message(inbox, wa_id: str, text: str, media: dict | None = None) -> dict:
     """Owner manual reply: switch to HUMAN_ACTIVE, enqueue via policy-gated outbox."""
+    import base64
+    import tempfile
     import uuid
 
     from .handover import HandoverService
+    from ..ids import utcnow
     from ..services.audit import AuditService
 
     crm = inbox["crm"]
@@ -407,29 +528,97 @@ def inbox_send_message(inbox, wa_id: str, text: str) -> dict:
         lead = crm.get_lead(lead_id)
     handover = HandoverService(crm)
     handover.set_mode(lead["lead_id"], "HUMAN_ACTIVE")
+
+    message_type = "text"
+    payload = text
+    stored_body = text
+    media_kind = media_ref = None
+
+    if media:
+        kind = media["kind"]
+        mime = str(media.get("mime") or "application/octet-stream")
+        filename = str(media.get("filename") or ("file." + mime.split("/")[-1]))
+        raw = base64.b64decode(media["data_base64"])
+        if len(raw) > 30 * 1024 * 1024:
+            return {"ok": False, "error": "file too large (max 30MB)"}
+
+        # voice notes: browser webm/opus -> WhatsApp requires ogg/amr/mp4/mpeg
+        tmp_path = None
+        if kind == "audio" and mime in ("audio/webm", "audio/webm;codecs=opus"):
+            with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tf:
+                tf.write(raw)
+                tmp_path = tf.name
+            ogg_path = tmp_path.replace(".webm", ".ogg")
+            import subprocess
+
+            proc = subprocess.run(
+                ["ffmpeg", "-y", "-i", tmp_path, "-c:a", "libopus", "-b:a", "48k", ogg_path],
+                capture_output=True,
+            )
+            if proc.returncode == 0 and os.path.exists(ogg_path):
+                raw = open(ogg_path, "rb").read()
+                mime = "audio/ogg"
+                filename = filename.rsplit(".", 1)[0] + ".ogg"
+            else:
+                mime = "audio/mp4"  # fallback container hint for Meta
+            try:
+                os.unlink(tmp_path)
+                if os.path.exists(ogg_path):
+                    os.unlink(ogg_path)
+            except OSError:
+                pass
+
+        adapter = inbox.get("adapter")
+        provider = getattr(adapter, "provider", None)
+        upload_media = getattr(provider, "upload_media", None)
+        if upload_media is None:
+            # mock mode: no real upload possible — record intent only
+            message_type = kind
+            payload = {"caption": text, "filename": filename, "mock": True}
+            media_kind, media_ref = kind, None
+        else:
+            media_id = upload_media(raw, mime, filename)
+            message_type = kind
+            payload = {"id": media_id}
+            if text:
+                payload["caption"] = text
+            if kind == "document":
+                payload["filename"] = filename
+            media_kind, media_ref = kind, media_id
+        stored_body = text
+
     mid = inbox["outbox"].enqueue(
         channel="whatsapp",
         recipient=wa_id,
-        message_type="text",
-        payload=text,
+        message_type=message_type,
+        payload=payload,
         idempotency_key=f"wa-inbox:{uuid.uuid4()}",
         lead_id=lead["lead_id"],
     )
     results = inbox["worker"].drain(limit=5)
     sent = any(r.get("message_id") == mid and r.get("status") == "sent" for r in results)
-    audit = AuditService(inbox["db"])
-    audit.record("channel.inbox_send", "lead", actor="owner", result="sent" if sent else "queued")
+
     db = inbox["db"]
     db.execute(
-        "INSERT INTO channel_messages (direction, wa_id, lead_id, body, status, created_at)"
-        " VALUES ('out', ?, ?, ?, ?, datetime('now'))",
-        (wa_id, lead["lead_id"], text, "sent" if sent else "queued"),
+        "INSERT INTO channel_messages"
+        " (direction, wa_id, lead_id, body, status, created_at, media_kind, media_ref, outbox_message_id)"
+        " VALUES ('out', ?, ?, ?, ?, ?, ?, ?, ?)",
+        (wa_id, lead["lead_id"], stored_body, "queued" if not sent else "sent",
+         utcnow(), media_kind, media_ref, mid),
     )
     db.commit()
+    audit = AuditService(db)
+    audit.record("channel.inbox_send", "lead", actor="owner", result="sent" if sent else "queued")
+    sync_channel_messages(db)
+    row = db.execute(
+        "SELECT status FROM channel_messages WHERE outbox_message_id = ?", (mid,)
+    ).fetchone()
+    final_status = row["status"] if row else ("sent" if sent else "queued")
     return {
         "ok": True,
-        "delivered": sent,
-        "note": None if sent else "queued — production mode required for real delivery",
+        "delivered": final_status == "sent" and message_type != "text" or sent,
+        "status": final_status,
+        "note": None,
     }
 
 
