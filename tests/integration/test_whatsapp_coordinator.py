@@ -43,7 +43,7 @@ def build_coordinator(db, brain, crm, router=None):
         HandoverService(crm, dispatcher), ExternalResponseFilter(), policy,
         IdempotencyStore(db), LanguageDetector(), LocalizationSkill(router=router),
         PricingSnapshotStore(db), ProposalStore(db),
-        owner_alert=lambda level, msg, corr: None,
+        owner_alert=lambda level, msg, corr, **kw: None,
         audit=audit, dispatcher=dispatcher,
     )
     return coord, adapter, outbox, crm, audit

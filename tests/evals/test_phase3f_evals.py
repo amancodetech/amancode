@@ -65,7 +65,7 @@ class Phase3FEvals(TempDirTestCase, unittest.TestCase):
         support_policy = yaml.safe_load((ROOT / "configs" / "support.yaml").read_text(encoding="utf-8"))
         self.support = SupportAgent(
             self.brain, self.crm, SupportCaseStore(self.db), HandoverService(self.crm, self.dispatcher),
-            owner_alert=lambda lvl, msg, corr: self.alerts.append((lvl, msg)),
+            owner_alert=lambda lvl, msg, corr, **kw: self.alerts.append((lvl, msg)),
             support_policy=support_policy, dispatcher=self.dispatcher,
         )
         self.coord = MessageCoordinator(
@@ -73,7 +73,7 @@ class Phase3FEvals(TempDirTestCase, unittest.TestCase):
             HandoverService(self.crm, self.dispatcher), ExternalResponseFilter(), policy,
             IdempotencyStore(self.db), LanguageDetector(), LocalizationSkill(router=None),
             PricingSnapshotStore(self.db), ProposalStore(self.db),
-            owner_alert=lambda lvl, msg, corr: self.alerts.append((lvl, msg)),
+            owner_alert=lambda lvl, msg, corr, **kw: self.alerts.append((lvl, msg)),
             dispatcher=self.dispatcher, support_agent=self.support,
         )
         self.cases = SupportCaseStore(self.db)

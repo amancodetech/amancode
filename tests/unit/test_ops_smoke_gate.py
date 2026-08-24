@@ -50,14 +50,14 @@ class SmokeTestServiceTest(TempDirTestCase, unittest.TestCase):
         support_policy = yaml.safe_load((ROOT / "configs" / "support.yaml").read_text(encoding="utf-8"))
         support = SupportAgent(
             self.brain, self.crm, SupportCaseStore(self.db), HandoverService(self.crm, self.dispatcher),
-            owner_alert=lambda *a: None, support_policy=support_policy,
+            owner_alert=lambda *a, **kw: None, support_policy=support_policy,
         )
         self.coord = MessageCoordinator(
             self.adapter, self.outbox, self.worker, sales, self.crm, memory,
             HandoverService(self.crm, self.dispatcher), ExternalResponseFilter(), policy,
             IdempotencyStore(self.db), LanguageDetector(), LocalizationSkill(router=None),
             PricingSnapshotStore(self.db), ProposalStore(self.db),
-            owner_alert=lambda *a: None, dispatcher=self.dispatcher, support_agent=support,
+            owner_alert=lambda *a, **kw: None, dispatcher=self.dispatcher, support_agent=support,
         )
         self.smoke = SmokeTestService(self.coord, self.crm, self.adapter)
 

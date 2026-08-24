@@ -35,7 +35,7 @@ class SupportAgentTest(TempDirTestCase, unittest.TestCase):
         self.policy = yaml.safe_load(SUPPORT_YAML.read_text(encoding="utf-8"))
         self.agent, self.cases = build_agent(
             self.db, self.brain, self.crm, self.dispatcher,
-            owner_alert=lambda lvl, msg, corr: self.alerts.append((lvl, msg)),
+            owner_alert=lambda lvl, msg, corr, **kw: self.alerts.append((lvl, msg)),
             support_policy=self.policy,
         )
 
@@ -119,7 +119,7 @@ class SupportAgentTest(TempDirTestCase, unittest.TestCase):
         lead, customer = self._customer_lead()
         agent2, _ = build_agent(
             self.db, self.brain, self.crm, self.dispatcher,
-            owner_alert=lambda lvl, msg, corr: self.alerts.append((lvl, msg)),
+            owner_alert=lambda lvl, msg, corr, **kw: self.alerts.append((lvl, msg)),
             support_policy={},  # empty policy -> UNKNOWN_POLICY
         )
         result = agent2.process_message(lead, "can you add a new feature?", customer)

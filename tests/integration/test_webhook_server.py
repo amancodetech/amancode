@@ -82,7 +82,7 @@ def build_signed_coordinator(tmp: Path):
         HandoverService(crm, dispatcher), ExternalResponseFilter(), policy,
         IdempotencyStore(db), LanguageDetector(), LocalizationSkill(),
         PricingSnapshotStore(db), ProposalStore(db),
-        owner_alert=lambda level, msg, corr: None,
+        owner_alert=lambda level, msg, corr, **kw: None,
         audit=audit, dispatcher=dispatcher,
     )
     return {"db": db, "adapter": adapter, "coordinator": coord}

@@ -20,7 +20,7 @@ class AlertServiceTest(TempDirTestCase, unittest.TestCase):
         self.svc = AlertService(
             self.db,
             config=config,
-            owner_alert=lambda lvl, msg, corr: self.alerts.append((lvl, msg)),
+            owner_alert=lambda lvl, msg, corr, **kw: self.alerts.append((lvl, msg)),
         )
 
     def tearDown(self):

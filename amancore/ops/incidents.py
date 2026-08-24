@@ -98,7 +98,7 @@ class IncidentService:
                 action_required="immediate owner response", related_entity=type_,
             )
         elif self.owner_alert is not None:
-            self.owner_alert("critical", f"CRITICAL INCIDENT {type_}: {description}", None)
+            self.owner_alert("critical", f"CRITICAL INCIDENT {type_}: {description}", None, event_type="incident", resource=str(type_))
         incident_id = self.create(type_, "CRITICAL", component=component,
                                   description=description, evidence=evidence, owner="owner")
         log.warning("critical incident %s (%s): %s", incident_id, type_, description)

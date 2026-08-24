@@ -58,7 +58,7 @@ class Phase3FSecurityTest(TempDirTestCase, unittest.TestCase):
 
         agent = SupportAgent(
             make_brain(self.tmp), CRMService(self.db), SupportCaseStore(self.db),
-            handover=None, owner_alert=lambda *a: None, support_policy={},
+            handover=None, owner_alert=lambda *a, **kw: None, support_policy={},
         )
         for banned in ("refund", "apply_discount", "change_price", "change_scope",
                        "change_contract", "extend_deadline", "approve_price",

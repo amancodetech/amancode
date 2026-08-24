@@ -36,7 +36,7 @@ class AlertService:
     def _add(self, alerts: list[dict], name: str, severity: str, detail: str, policy: dict) -> None:
         alerts.append({"alert": name, "severity": severity, "detail": detail, "policy": policy.get("name")})
         if severity in ("high", "critical") and self.owner_alert is not None:
-            self.owner_alert(severity, f"[ALERT] {name}: {detail}", None)
+            self.owner_alert(severity, f"[ALERT] {name}: {detail}", None, event_type="threshold", resource=str(name))
 
     def _policy(self, group: str, key: str) -> dict:
         return self.config.get(group, {}).get(key, {})

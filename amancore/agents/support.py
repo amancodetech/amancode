@@ -75,7 +75,7 @@ class SupportAgent(Agent):
         if self._wants_human(message):
             case_id = self._ensure_case(lead, customer, category, priority, message, corr)
             self.handover.request_human(lead_id)
-            self._owner_alert("high", f"Support human handoff — lead {lead.get('name', lead_id)} ({category})", corr)
+            self._owner_alert("high", f"Support human handoff — lead {lead.get('name', lead_id)} ({category})", corr, event_type="support_handoff", resource=str(lead_id))
             self._emit("support.handoff_requested", {"lead_id": lead_id, "category": category}, corr)
             return {
                 "reply": "I'll connect you with our team right away.",
@@ -88,7 +88,7 @@ class SupportAgent(Agent):
             case_id = self._ensure_case(lead, customer, category, "CRITICAL", message, corr)
             self.cases.escalate(case_id, owner="owner")
             self._emit("support.case.escalated", {"case_id": case_id, "priority": "CRITICAL"}, corr)
-            self._owner_alert("critical", f"CRITICAL support case {case_id} — {category}", corr)
+            self._owner_alert("critical", f"CRITICAL support case {case_id} — {category}", corr, event_type="support_critical", resource=str(case_id))
             self.handover.request_human(lead_id)
             return {
                 "reply": "This has been escalated to our security/owner team immediately.",
@@ -104,7 +104,7 @@ class SupportAgent(Agent):
             case_id = self._ensure_case(lead, customer, category, priority, message, corr)
             self.cases.escalate(case_id, owner="owner")
             self._emit("support.case.escalated", {"case_id": case_id, "category": category}, corr)
-            self._owner_alert("high", f"Support escalation ({category}) — case {case_id}", corr)
+            self._owner_alert("high", f"Support escalation ({category}) — case {case_id}", corr, event_type="support_escalation", resource=str(case_id))
             self.handover.request_human(lead_id)
             reply = {
                 "legal": "This matter has been forwarded for legal review by our owner.",
@@ -141,7 +141,7 @@ class SupportAgent(Agent):
         if not policy or not policy.get("response_target"):
             self._emit("support.sla_unknown", {"policy": "missing"})
             self._audit("support.sla_unknown", "policy", result="UNKNOWN_POLICY")
-            self._owner_alert("medium", "UNKNOWN_POLICY for support — owner escalation required", None)
+            self._owner_alert("medium", "UNKNOWN_POLICY for support — owner escalation required", None, event_type="unknown_policy")
             return None
         return policy
 
@@ -208,9 +208,9 @@ class SupportAgent(Agent):
         m = message or ""
         return bool(re.search(r"(human|real person|talk to owner|إنسان|بشري|orang|manusia|owner)", m, re.I))
 
-    def _owner_alert(self, level: str, msg: str, corr) -> None:
+    def _owner_alert(self, level: str, msg: str, corr, **meta) -> None:
         if self.owner_alert is not None:
-            self.owner_alert(level, msg, corr)
+            self.owner_alert(level, msg, corr, **meta)
 
     def safe_reply(self, text: str) -> dict:
         """Filter a reply before it may leave the system (defense in depth)."""

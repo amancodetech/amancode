@@ -12,7 +12,7 @@ class IncidentServiceTest(TempDirTestCase, unittest.TestCase):
         self.db = make_db(self.tmp / "t.db")
         self.alerts = []
         self.svc = IncidentService(
-            self.db, owner_alert=lambda lvl, msg, corr: self.alerts.append((lvl, msg)),
+            self.db, owner_alert=lambda lvl, msg, corr, **kw: self.alerts.append((lvl, msg)),
         )
 
     def tearDown(self):

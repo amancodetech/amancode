@@ -65,6 +65,11 @@ jobs:
 alert:
   channel: auto               # auto picks telegram/email when creds exist, else log fallback
   dedup_cooldown_minutes: 60
+  dedup_cooldown_by_severity: # OBS-102: distinct alerts never share a slot (audit R1)
+    CRITICAL: 15
+    HIGH: 60
+    MEDIUM: 240
+    LOW: 240
   dedup_window_hours: 24
   telegram_bot_token_env: TELEGRAM_BOT_TOKEN
   telegram_chat_id_env: TELEGRAM_CHAT_ID

@@ -26,18 +26,33 @@ def _dispatcher():
     return dispatcher, db
 
 
-def send_owner_alert(level: str, message: str, correlation_id: str | None = None) -> None:
-    """Dispatch an owner alert via the configured transport (log fallback)."""
+def send_owner_alert(level: str, message: str, correlation_id: str | None = None,
+                     *, event_type: str = "", resource: str = "") -> None:
+    """Dispatch an owner alert via the configured transport (log fallback).
+
+    Fingerprint = owner:{event_type|generic}:{resource|message-hash} so distinct
+    alerts never collapse into one dedup slot (audit R1), while true repeats
+    within the severity window still dedup.
+    """
     try:
+        if not event_type and not resource:
+            import hashlib
+
+            digest = hashlib.sha1(message.encode("utf-8")).hexdigest()[:12]
+            fingerprint = f"owner:generic:{digest}"
+        else:
+            fallback_res = resource or hashlib.sha1(message.encode("utf-8")).hexdigest()[:12]
+            fingerprint = f"owner:{event_type or 'event'}:{fallback_res}"
         dispatcher, db = _dispatcher()
         try:
             dispatcher.dispatch(
                 severity=level.upper() if level.upper() in ("LOW", "MEDIUM", "HIGH", "CRITICAL") else "HIGH",
                 category="owner",
-                title="Owner alert",
+                title=f"Owner alert: {event_type or 'general'}",
                 summary=message,
                 action_required="review",
                 correlation_id=correlation_id,
+                fingerprint=fingerprint,
             )
         finally:
             db.close()

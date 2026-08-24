@@ -514,7 +514,8 @@ class InsightsEngine:
             f"Decision required: {rec['required_decision'] if rec else 'collect more data'}"
         )
         self.owner_alert("critical" if insight["severity"] == "CRITICAL" else "high",
-                         msg, insight["insight_id"])
+                         msg, insight["insight_id"],
+                         event_type="insight_decision", resource=str(insight["insight_id"]))
 
     def _emit(self, event_type: str, data: dict) -> None:
         if self.dispatcher is None:

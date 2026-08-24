@@ -32,7 +32,7 @@ class InsightsEngineTest(TempDirTestCase, unittest.TestCase):
         self.alerts = []
         self.engine = InsightsEngine(
             self.db, analytics=self.analytics, config=INSIGHTS_CFG,
-            owner_alert=lambda lvl, msg, corr: self.alerts.append((lvl, msg)),
+            owner_alert=lambda lvl, msg, corr, **kw: self.alerts.append((lvl, msg)),
         )
         self.mem = InsightMemory(self.db)
 

@@ -59,7 +59,7 @@ class ChannelEval(TempDirTestCase, unittest.TestCase):
             HandoverService(self.crm, self.dispatcher), ExternalResponseFilter(), policy,
             IdempotencyStore(self.db), LanguageDetector(), LocalizationSkill(router=None),
             PricingSnapshotStore(self.db), ProposalStore(self.db),
-            owner_alert=lambda level, msg, corr: None,
+            owner_alert=lambda level, msg, corr, **kw: None,
             dispatcher=self.dispatcher,
         )
 

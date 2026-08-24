@@ -217,7 +217,14 @@ class AlertDispatcher:
         self.store = AlertStore(db)
         self.transport = transport or resolve_transport(self.config)
         self.cooldown = int(self.config.get("dedup_cooldown_minutes", 60))
+        self.cooldown_by_severity = {
+            str(k).upper(): int(v)
+            for k, v in (self.config.get("dedup_cooldown_by_severity") or {}).items()
+        }
         self.owner_alert = owner_alert  # legacy sink bridge (optional)
+
+    def _cooldown_for(self, severity: str) -> int:
+        return self.cooldown_by_severity.get(severity.upper(), self.cooldown)
 
     def dispatch(self, *, severity: str, category: str = "", title: str, summary: str = "",
                  evidence: dict | None = None, action_required: str = "",
@@ -231,7 +238,8 @@ class AlertDispatcher:
             dedup_key = fingerprint
         elif category or related_entity:
             dedup_key = f"{category}:{related_entity or ''}"
-        existing = self.store.recent_by_dedup_key(dedup_key, self.cooldown)
+        cooldown = self._cooldown_for(severity)
+        existing = self.store.recent_by_dedup_key(dedup_key, cooldown)
         if existing is not None:
             return {"alert_id": existing["alert_id"], "deduplicated": True, "delivered": False,
                     "reason": "within cooldown window"}
@@ -245,13 +253,26 @@ class AlertDispatcher:
         delivered = False
         transport_name = self.transport.name
         if severity in ("HIGH", "CRITICAL"):
-            try:
-                result = self.transport.send(alert)
-                delivered = bool(result.get("delivered"))
-                transport_name = result.get("transport", transport_name)
-            except Exception as exc:  # noqa: BLE001 — alert must never crash the caller
-                log.error("alert transport failed: %s", exc)
-                alert["action_required"] = f"{action_required} (transport error: {exc})"
+            import time as _time
+
+            last_exc: Exception | None = None
+            for attempt, delay in enumerate((0.0, 1.0, 4.0), start=1):
+                if delay:
+                    _time.sleep(delay)
+                try:
+                    result = self.transport.send(alert)
+                    delivered = bool(result.get("delivered"))
+                    transport_name = result.get("transport", transport_name)
+                    if delivered:
+                        break
+                    last_exc = RuntimeError(f"transport returned delivered=false (attempt {attempt})")
+                except Exception as exc:  # noqa: BLE001 — alert must never crash the caller
+                    last_exc = exc
+                    log.error("alert transport failed (attempt %d/3): %s", attempt, exc)
+            if not delivered and last_exc is not None:
+                alert["action_required"] = (
+                    f"{action_required} (delivery failed after 3 attempts: {last_exc})")
+                log.error("[ALERT-UNDELIVERED] %s: %s", severity, title)  # forensic trace
         elif severity == "LOW":
             log.info("[ALERT][LOW] %s", title)
 

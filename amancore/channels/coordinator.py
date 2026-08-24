@@ -419,7 +419,8 @@ class MessageCoordinator:
         check = self.filter.check(text)
         if not check["allowed"]:
             self._audit("channel.leak_blocked", "lead", result=str(check["found"]))
-            self.owner_alert("high", f"Internal data leak blocked for lead {lead['lead_id']}: {check['found']}", corr)
+            self.owner_alert("high", f"Internal data leak blocked for lead {lead['lead_id']}: {check['found']}", corr,
+                             event_type="leak_blocked", resource=str(lead["lead_id"]))
             text = self._draft_reply(lead, "", "en",
                                      intent_note="polite follow-up-later acknowledgment",
                                      base=_SAFE_FALLBACK)
@@ -454,6 +455,8 @@ class MessageCoordinator:
             f"Handoff {reason} — lead {lead.get('name', lead['lead_id'])} "
             f"(score={lead.get('lead_score')}, stage={opp.get('stage', '') if opp else ''})",
             None,
+            event_type=reason.split(" —")[0].split()[0] if reason else "handoff",
+            resource=str(lead["lead_id"]),
         )
 
     def _raw(self, body) -> bytes:
