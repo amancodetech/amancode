@@ -24,6 +24,8 @@ log = get_logger("telegram_console")
 
 _API = "https://api.telegram.org/bot{token}/{method}"
 
+NL = chr(10)
+
 
 def _env(key: str) -> str:
     return os.environ.get(key, "").strip()
@@ -161,12 +163,16 @@ class TelegramOwnerConsole:
     INTERPRET_PROMPT = (
         "You are the command parser of AmanCore business system. "
         "Convert the user request into ONE JSON action, no prose. "
+        "For the target person: if the user gives digits use \"number\", "
+        "if they give a saved customer name use \"who\" (keep the name exactly as written). "
         "Allowed actions:\n"
         '{{"action":"status"}}\n'
         '{{"action":"leads","limit":<int optional>}}\n'
-        '{{"action":"customer","number":"<digits>","name":"<optional>"}}\n'
+        '{{"action":"customer","number":"<full digits>","name":"<person name>"}}\n'
+        '{{"action":"send","number":"","who":"<saved customer name>","text":"..."}}\n'
+        '{{"action":"chat","number":"","who":"<saved customer name>","topic":"..."}}\n'
+        '{{"action":"mode","number":"","who":"<saved customer name>","mode":"ai|human"}}\n'
         '{{"action":"send","number":"<digits>","text":"<exact message body>"}}\n'
-'{{"action":"chat","number":"<digits>","topic":"<optional topic>"}}\n'
         '{{"action":"mode","number":"<digits>","mode":"ai|human"}}\n'
         'If the request does not map to these, output {{"action":"unknown"}}.\n'
         "User request: "
@@ -206,15 +212,20 @@ class TelegramOwnerConsole:
             args = f"{action.get('number', '')} {action.get('name') or ''}".strip()
             return self._act_customer(args)
         if act == "send":
-            return self._act_send(
-                f"{action.get('number', '')} {action.get('text', '')}".strip())
+            who = action.get("who") or action.get("number") or ""
+            return self._act_send(f"{who} {action.get('text', '')}".strip())
+        if act == "chat":
+            who = action.get("who") or action.get("number") or ""
+            topic = action.get("topic") or ""
+            return self._act_chat(f"{who} {topic}".strip())
         if act == "chat":
             args = f"{action.get('number', '')} {action.get('topic') or ''}".strip()
             return self._act_chat(args)
         if act == "mode":
             mode = action.get("mode", "")
             mode = {"ai": "ai", "auto": "ai", "human": "human"}.get(mode.lower(), mode)
-            return self._act_mode(f"{action.get('number', '')} {mode}".strip())
+            who = action.get("who") or action.get("number") or ""
+            return self._act_mode(f"{who} {mode}".strip())
         return "هذا الطلب خارج صلاحياتي حالياً.\n\n" + HELP_TEXT
 
     # ── actions (all read/write the LIVE runtime) ──
@@ -272,6 +283,68 @@ class TelegramOwnerConsole:
                        f"{(' · ' + r['last_at'][:16]) if r['last_at'] else ''}")
         return "\n".join(out)
 
+    def _resolve_who(self, value: str):
+        """Accepts full number, partial digits, or a saved customer name.
+        Returns (wa_id, error_message)."""
+        v = (value or "").strip()
+        if not v:
+            return None, "حدّد الرقم أو اسم العميل."
+        digits = normalize_number(v)
+        has_letters = any(c.isalpha() for c in v)
+        if not has_letters:
+            if len(digits) >= 8:
+                return digits, None
+            return self._by_suffix(digits)
+        return self._by_name(v)
+
+    def _by_suffix(self, digits: str):
+        rows = self.runtime["db"].execute(
+            "SELECT l.contact_whatsapp AS wa_id, COALESCE(l.name,'') AS name"
+            " FROM leads l WHERE l.contact_whatsapp LIKE ?"
+            " ORDER BY l.contact_whatsapp LIMIT 8",
+            ("%" + digits,),
+        ).fetchall()
+        return self._pick(rows, f"ينتهي بـ {digits}")
+
+    def _by_name(self, name: str):
+        rows = self.runtime["db"].execute(
+            "SELECT contact_whatsapp AS wa_id, COALESCE(name,'') AS name"
+            " FROM leads WHERE name LIKE ? ORDER BY contact_whatsapp LIMIT 6",
+            ("%" + name + "%",),
+        ).fetchall()
+        return self._pick(rows, f"باسم {name}")
+
+    def _pick(self, rows, desc: str):
+        if not rows:
+            return None, f"لا يوجد عميل {desc}. جرّب /leads لعرض المحادثات."
+        if len(rows) > 1:
+            lst = (NL).join(f"• {r['name'] or 'عميل'} — +{r['wa_id']}" for r in rows)
+            return None, f"وجدت أكثر من عميل {desc}، حدّد أيهم:" + NL + lst
+        return rows[0]["wa_id"], None
+
+    def _resolve_number(self, raw: str):
+        """Full number -> digits. Short/partial -> search saved leads by suffix.
+        Returns (wa_id, error_message)."""
+        digits = normalize_number(raw)
+        if not digits:
+            return None, "رقم غير صالح."
+        if len(digits) >= 8:
+            return digits, None
+        rows = self.runtime["db"].execute(
+            "SELECT DISTINCT l.contact_whatsapp AS wa_id,"
+            " COALESCE(l.name,'') AS name"
+            " FROM leads l WHERE l.contact_whatsapp LIKE ? ORDER BY l.contact_whatsapp LIMIT 8",
+            ("%" + digits,),
+        ).fetchall()
+        # LIKE مع لاحقة: نرشح يدوياً على الانتهاء
+        rows = [r for r in rows if r["wa_id"].endswith(digits)]
+        if not rows:
+            return None, f"لا يوجد عميل رقمه ينتهي بـ {digits}. جرّب /leads لعرض المحادثات."
+        if len(rows) > 1:
+            lst = "\n".join(f"• {r['name'] or 'عميل'} — +{r['wa_id']}" for r in rows)
+            return None, f"وجدت أكثر من رقم ينتهي بـ {digits}، حدّد أيهم:\n{lst}"
+        return rows[0]["wa_id"], None
+
     def _find_or_create(self, number: str, name: str | None):
         crm = self.runtime["coordinator"].crm
         wa_id = normalize_number(number)
@@ -279,7 +352,7 @@ class TelegramOwnerConsole:
             return None
         lead = crm.find_lead_by_whatsapp(wa_id)
         if lead is None:
-            lead_id = crm.create_lead(contact_whatsapp=wa_id,
+            lead_id = crm.create_lead(name=name or None, contact_whatsapp=wa_id,
                                       source_channel="whatsapp")
             lead = crm.get_lead(lead_id)
         elif name:
@@ -296,7 +369,10 @@ class TelegramOwnerConsole:
             return "الصيغة: /customer <رقم> [اسم]"
         number = parts[0]
         name = parts[1].strip() if len(parts) > 1 else None
-        lead = self._find_or_create(number, name)
+        resolved, err = self._resolve_number(number)
+        if err:
+            return err
+        lead = self._find_or_create(resolved, name)
         if lead is None:
             return "رقم غير صالح."
         return (f"✅ العميل مسجل:\n"
@@ -309,6 +385,10 @@ class TelegramOwnerConsole:
         if not m:
             return "الصيغة: /send <رقم> <نص>"
         number, text = m.group(1), m.group(2).strip()
+        resolved, err = self._resolve_number(number)
+        if err:
+            return err
+        number = resolved
         lead = self._find_or_create(number, None)
         if lead is None:
             return "رقم غير صالح."
@@ -328,10 +408,13 @@ class TelegramOwnerConsole:
             return "الصيغة: /chat <رقم> [موضوع]"
         number = parts[0]
         topic = parts[1].strip() if len(parts) > 1 else ""
-        lead = self._find_or_create(number, None)
+        resolved, err = self._resolve_number(number)
+        if err:
+            return err
+        lead = self._find_or_create(resolved, None)
         if lead is None:
             return "رقم غير صالح."
-        wa_id = normalize_number(number)
+        wa_id = resolved
 
         # compose opener in the customer's likely language
         lang_hint = ("Indonesian" if wa_id.startswith("62")
@@ -375,7 +458,11 @@ class TelegramOwnerConsole:
         if len(parts) != 2 or parts[1].lower() not in ("ai", "human"):
             return "الصيغة: /mode <رقم> ai|human"
         number, want = parts[0], parts[1].lower()
-        lead = self.runtime["coordinator"].crm.find_lead_by_whatsapp(normalize_number(number))
+        resolved, err = self._resolve_number(number)
+        if err:
+            return err
+        number = resolved
+        lead = self.runtime["coordinator"].crm.find_lead_by_whatsapp(number)
         if lead is None:
             return "هذا الرقم غير مسجل — استخدم /customer أولاً."
         from .handover import HandoverService
