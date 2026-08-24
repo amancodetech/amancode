@@ -781,7 +781,8 @@ def serve(root: Path, host: str = "127.0.0.1", port: int = 8010) -> int:
         from ..ops.telegram_console import TelegramOwnerConsole
 
         console = TelegramOwnerConsole(runtime)
-        console.start()
+        if not console.start():
+            print("telegram console disabled: missing token/chat_id", flush=True)
     except Exception as exc:  # noqa: BLE001 — console must never block serving
         log.error("telegram console failed to start: %s", exc)
 
