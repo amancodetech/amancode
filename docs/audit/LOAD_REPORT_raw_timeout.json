@@ -1,0 +1,41 @@
+{
+  "profile_mock_llm": "timeout",
+  "tested_load": 288,
+  "p50_latency_s": 0.756,
+  "p95_latency_s": 4.826,
+  "p99_latency_s": 8.761,
+  "error_rate_pct": 0.0,
+  "max_concurrent_workers_observed": 43,
+  "memory_trend_mb": {
+    "start": 38.4,
+    "peak": 113.6,
+    "end": 113.6
+  },
+  "outbox_lag_s": null,
+  "ramp": [
+    {
+      "concurrency": 1,
+      "msgs": 8,
+      "wall_s": 6.04,
+      "throughput_msg_s": 1.33
+    },
+    {
+      "concurrency": 5,
+      "msgs": 40,
+      "wall_s": 9.2,
+      "throughput_msg_s": 4.35
+    },
+    {
+      "concurrency": 10,
+      "msgs": 80,
+      "wall_s": 21.3,
+      "throughput_msg_s": 3.76
+    },
+    {
+      "concurrency": 20,
+      "msgs": 160,
+      "wall_s": 13.97,
+      "throughput_msg_s": 11.45
+    }
+  ]
+}

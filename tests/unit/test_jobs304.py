@@ -20,16 +20,13 @@ from amancore.storage.db import _split_schema  # noqa: E402
 
 class Harness(unittest.TestCase):
     def setUp(self):
-        self.path = ROOT / "storage" / "_test_jobs304.db"
-        self.path.unlink(missing_ok=True)
-        self.db = Database(self.path)
-        schema = (ROOT / "amancore" / "storage" / "schema.sql").read_text()
-        self.db.apply_schema(schema)
-        ensure_columns(self.db)
+        from tests._db import fresh_db, wipe
+
+        self.db = fresh_db()
+        wipe(self.db)
 
     def tearDown(self):
         self.db.close()
-        self.path.unlink(missing_ok=True)
 
 
 class CC1CooperativeCancel(Harness):

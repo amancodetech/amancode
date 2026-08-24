@@ -7,7 +7,7 @@ environment:
   api_version: v24.0
   base_url: https://graph.facebook.com
   webhook_url: "https://webhook.amancam.com/webhook/whatsapp"  # permanent named tunnel (cloudflared-amancore systemd service)
-  production_enabled: true
+  production_enabled: false  # EMERGENCY FREEZE 2026-08-24: WABA banned, containment
 
 official_verification:
   # Verified live 2026-08-24 by opencode session (owner-directed):

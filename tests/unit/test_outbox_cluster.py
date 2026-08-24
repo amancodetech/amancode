@@ -21,21 +21,13 @@ from amancore.storage.db import (  # noqa: E402
 
 class ClusterHarness(unittest.TestCase):
     def setUp(self):
-        self.db = Database(ROOT / "storage" / "_test_outbox_cluster.db")
-        from amancore.storage.db import _split_schema
+        from tests._db import fresh_db, wipe
 
-        schema = (ROOT / "amancore" / "storage" / "schema.sql").read_text()
-        tables_sql, index_sql = _split_schema(schema)
-        self.db.apply_schema(tables_sql)
-        ensure_columns(self.db)
-        ensure_unique_indexes(self.db)
-        self.db.execute("DELETE FROM channel_messages")
-        self.db.execute("DELETE FROM message_outbox")
-        self.db.commit()
+        self.db = fresh_db()
+        wipe(self.db)
 
     def tearDown(self):
         self.db.close()
-        (ROOT / "storage" / "_test_outbox_cluster.db").unlink(missing_ok=True)
 
 
 class Out203InboundIdempotency(ClusterHarness):

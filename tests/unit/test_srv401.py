@@ -92,18 +92,11 @@ if __name__ == "__main__":
 
 class UI403ServerPagination(unittest.TestCase):
     def setUp(self):
-        import tempfile
+        from tests._db import fresh_db, wipe
 
-        self.tmp = Path(tempfile.mkdtemp(dir=str(ROOT / "storage")))
-        from amancore.storage.db import Database, ensure_columns, ensure_unique_indexes
-        from amancore.storage.db import _split_schema
-
-        self.db = Database(self.tmp / "u.db")
-        schema = (ROOT / "amancore" / "storage" / "schema.sql").read_text()
-        tables_sql, _ = _split_schema(schema)
-        self.db.apply_schema(tables_sql)
-        ensure_columns(self.db)
-        ensure_unique_indexes(self.db)
+        self.tmp = None  # shared fixture — no temp dir
+        self.db = fresh_db()
+        wipe(self.db)
         now = "2026-08-24T12:00:00"
         for i in range(600):
             self.db.execute(
@@ -114,9 +107,6 @@ class UI403ServerPagination(unittest.TestCase):
 
     def tearDown(self):
         self.db.close()
-        for f in self.tmp.iterdir():
-            f.unlink()
-        self.tmp.rmdir()
 
     def _rows(self, before_id=None):
         base = ("SELECT m.id, m.body FROM channel_messages m"

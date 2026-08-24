@@ -285,6 +285,7 @@ def sync_channel_messages(db) -> None:
            AND o.created_at >= datetime('now', '-7 days')
            AND NOT EXISTS (
                SELECT 1 FROM channel_messages c WHERE c.outbox_message_id = o.message_id)
+         ON CONFLICT(wa_message_id) WHERE wa_message_id IS NOT NULL DO NOTHING
         """
     )
     db.commit()

@@ -7,6 +7,7 @@ architecture test).
 
 from __future__ import annotations
 
+import os
 import sqlite3
 import threading
 from pathlib import Path
@@ -21,6 +22,14 @@ class Database:
     SQLite itself serializes writers at the file level."""
 
     def __init__(self, path: Path):
+        resolved = Path(path).resolve()
+        # LAST-LINE DEFENSE (LOAD-601 incident): load/mock contexts may NEVER
+        # touch the production database, whatever the configuration says.
+        if os.environ.get("LOAD_MOCK_LLM") or os.environ.get("AMANCORE_ISOLATED"):
+            if resolved.name == "aman_core.db":
+                raise RuntimeError(
+                    "SAFETY GUARD: refusing to open production aman_core.db "
+                    "in a load/isolated context (2026-08-24 WABA-ban incident)")
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path = path
@@ -33,15 +42,46 @@ class Database:
     def _thread_conn(self) -> sqlite3.Connection:
         conn = getattr(self._local, "conn", None)
         if conn is None:
-            conn = sqlite3.connect(str(self.path), check_same_thread=False)
+            # INCIDENT 2026-08-24 21:54: a thread that died mid-request left an
+            # IMPLICIT write txn open forever — every other writer starved
+            # ("database is locked" storm, WAL frozen 50min). Autocommit mode
+            # makes each statement its own txn: lingering write locks become
+            # structurally impossible. Nothing relied on multi-statement
+            # implicit atomicity (zero transaction() callers audited).
+            conn = sqlite3.connect(str(self.path), check_same_thread=False,
+                                   isolation_level=None)
             conn.row_factory = sqlite3.Row
             conn.execute("PRAGMA foreign_keys = ON")
             conn.execute("PRAGMA busy_timeout = 5000")
+            # LOAD-601 finding: autocommit mode pays an fsync per statement;
+            # NORMAL keeps WAL durability for app-crashes while restoring
+            # write throughput (power-loss window tradeoff documented).
+            conn.execute("PRAGMA synchronous = NORMAL")
             self._local.conn = conn
         return conn
 
+    #: LOAD-601 outcome: thread-per-request × concurrent webhooks saturated
+    #: SQLite's single-writer lock; hard BUSY errors became 500 storms.
+    #: Escalation policy §20 step ① — absorb contention at the wrapper with
+    #: bounded retries (Postgres remains explicitly OUT of scope without an
+    #: architecture decision).
+    BUSY_RETRIES = 6
+    BUSY_BASE_SLEEP = 0.05
+
     def execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
-        return self._thread_conn().execute(sql, params)
+        import random
+        import time as _t
+
+        last_exc: Exception | None = None
+        for attempt in range(self.BUSY_RETRIES):
+            try:
+                return self._thread_conn().execute(sql, params)
+            except sqlite3.OperationalError as exc:
+                if "database is locked" not in str(exc):
+                    raise
+                last_exc = exc
+                _t.sleep(self.BUSY_BASE_SLEEP * (2 ** attempt) * (0.5 + random.random()))
+        raise last_exc  # type: ignore[misc]
 
     def backup_to(self, dst_path) -> None:
         """Consistent online backup via the sqlite backup API (same thread)."""
@@ -83,6 +123,7 @@ class _Transaction:
         self.conn = conn
 
     def __enter__(self):
+        self.conn.execute("BEGIN IMMEDIATE")   # explicit under autocommit
         return self.conn
 
     def __exit__(self, exc_type, exc, tb):

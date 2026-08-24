@@ -64,6 +64,13 @@ class Config:
 
     @property
     def database_path(self) -> Path:
+        # INCIDENT FIX 2026-08-24: env override must win — a silent ignore here
+        # routed load-test writes into the PRODUCTION database (WABA ban).
+        import os as _os
+
+        env_db = _os.environ.get("DATABASE_PATH", "").strip()
+        if env_db:
+            return Path(env_db)
         raw = self.app.get("database_path", "storage/aman_core.db")
         p = Path(raw)
         return p if p.is_absolute() else self.root / p

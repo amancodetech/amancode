@@ -13,7 +13,6 @@ sys.path.insert(0, str(ROOT))
 
 from amancore.channels.outbox import MessageOutbox, OutboxWorker  # noqa: E402
 from amancore.ids import utcnow  # noqa: E402
-from amancore.storage.db import Database, ensure_columns  # noqa: E402
 
 
 class RecordingAdapter:
@@ -30,19 +29,12 @@ class RecordingAdapter:
 
 class Harness(unittest.TestCase):
     def setUp(self):
-        self.db = Database(ROOT / "storage" / "_test_outbox202.db")
-        from amancore.storage.db import _split_schema
+        # same shared FILE as everyone, but a dedicated connection instance —
+        # multi-connection WAL is exactly what the atomic-claim tests exercise
+        from tests._db import fresh_db, wipe
 
-        schema = (ROOT / "amancore" / "storage" / "schema.sql").read_text()
-        tables_sql, _ = _split_schema(schema)
-        self.db.apply_schema(tables_sql)
-        ensure_columns(self.db)
-        self.db.execute("DELETE FROM message_outbox")
-        self.db.commit()
-
-    def tearDown(self):
-        self.db.close()
-        (ROOT / "storage" / "_test_outbox202.db").unlink(missing_ok=True)
+        self.db = fresh_db()
+        wipe(self.db)
 
     def make(self, n=5):
         outbox = MessageOutbox(self.db)
@@ -128,6 +120,8 @@ class OutboxAtomicTests(Harness):
             self.worker(RecordingAdapter(), "yolo")
 
     def test_migration_columns_idempotent(self):
+        from tests._db import ensure_columns
+
         ensure_columns(self.db); ensure_columns(self.db)   # twice → no error
         cols = {r["name"] for r in self.db.execute("PRAGMA table_info(message_outbox)").fetchall()}
         self.assertLessEqual({"claimed_at", "claim_token"}, cols)
