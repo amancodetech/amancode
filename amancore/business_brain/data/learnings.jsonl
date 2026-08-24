@@ -12,3 +12,5 @@
 {"topic": "website goals", "category": "sales", "objection": "", "new_need": "", "ts": "2026-08-24T11:36:34Z", "wa_id": "905349998899"}
 {"topic": "Project Start", "category": "sales", "objection": "", "new_need": "", "ts": "2026-08-24T11:36:49Z", "wa_id": "905349998899"}
 {"topic": "price objection", "category": "pricing", "objection": "customer disagrees with price", "new_need": "customized quote", "ts": "2026-08-24T11:36:56Z", "wa_id": "905349998899"}
+{"category": "need", "value": "whatsapp catalog for charity"}
+{"category": "sales", "value": "Needs discovery after customer acknowled", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-24T11:48:23Z", "wa_id": "905349998899"}
