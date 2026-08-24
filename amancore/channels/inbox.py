@@ -175,6 +175,7 @@ _LOGIN_PAGE = """<!DOCTYPE html>
 <html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex,nofollow"><title>·</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💬</text></svg>">
 <style>
 body{{font-family:system-ui,sans-serif;background:#101c30;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}}
 form{{background:#f7f3ea;padding:2rem;border-radius:12px;width:min(320px,90vw);box-shadow:0 10px 40px rgba(0,0,0,.4)}}
@@ -198,6 +199,7 @@ _INBOX_PAGE = """<!DOCTYPE html>
 <html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex,nofollow"><title>AmanCore Inbox</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💬</text></svg>">
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
 body{{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#0b141a;height:100vh;display:flex}}
@@ -229,7 +231,8 @@ header form button:hover{{background:#2a3942}}
 .tick.blue{{color:#53bdeb}}
 .day{{align-self:center;background:#182229;color:#8696a0;font-size:.72rem;padding:.25rem .8rem;border-radius:8px;margin-bottom:.5rem}}
 .empty{{color:#8696a0;text-align:center;margin-top:3rem;font-size:.9rem}}
-#composer{{display:flex;gap:.5rem;padding:.6rem .8rem;background:#202c33;align-items:center}}
+#composer{{display:none;gap:.5rem;padding:.6rem .8rem;background:#202c33;align-items:center}}
+#composer.on{{display:flex}}
 #text{{flex:1;padding:.7rem 1rem;border:0;border-radius:10px;background:#2a3942;color:#e9edef;font-size:1rem;outline:none}}
 #send{{width:44px;height:44px;border-radius:50%;border:0;background:#00a884;color:#fff;font-size:1.2rem;cursor:pointer;flex-shrink:0}}
 #attach,#mic{{width:40px;height:40px;border-radius:50%;border:0;background:#2a3942;font-size:1rem;cursor:pointer;flex-shrink:0}}
@@ -246,6 +249,17 @@ audio{{max-width:250px;height:38px}}
 .msg:hover{{filter:brightness(1.12)}}
 .acts,.reactbar{{position:absolute;top:-14px;left:6px;display:none;background:#233138;border-radius:14px;padding:.1rem .35rem;z-index:5}}
 .msg:hover .acts,.msg:hover .reactbar,.msg.open .acts,.msg.open .reactbar{{display:flex}}
+#composer{{position:relative}}
+#emojiPanel{{position:absolute;bottom:105%;left:8px;right:8px;max-width:360px;height:300px;background:#233138;border:1px solid #2a3942;border-radius:14px;display:none;flex-direction:column;z-index:60;box-shadow:0 -6px 24px rgba(0,0,0,.45);overflow:hidden}}
+#emojiPanel.open{{display:flex}}
+.ep-tabs{{display:flex;border-bottom:1px solid #111b21;background:#1f2c33}}
+.ep-tabs button{{flex:1;background:none;border:0;font-size:1.05rem;padding:.4rem 0;cursor:pointer;opacity:.5;border-bottom:2px solid transparent}}
+.ep-tabs button.on{{opacity:1;border-bottom-color:#00a884;background:#233138}}
+.ep-grid{{display:grid;grid-template-columns:repeat(8,1fr);gap:.1rem;padding:.45rem;overflow-y:auto;flex:1;margin:0}}
+.ep-grid button{{background:none;border:0;font-size:1.3rem;cursor:pointer;border-radius:8px;padding:.12rem;line-height:1.3}}
+.ep-grid button:hover{{background:#2a3942}}
+.qreact{{position:absolute;top:-11px;left:4px;display:flex;align-items:center;justify-content:center;border:1px solid #374248;background:#233138;border-radius:50%;width:24px;height:24px;font-size:.72rem;cursor:pointer;opacity:.9;z-index:4}}
+.qreact:hover{{transform:scale(1.15)}}
 .msg.in{{cursor:pointer}}
 .acts button{{border:0;background:none;cursor:pointer;font-size:.85rem;padding:.1rem .3rem}}
 .reactbar button{{border:0;background:none;cursor:pointer;font-size:.95rem;padding:.05rem}}
@@ -264,8 +278,10 @@ audio{{max-width:250px;height:38px}}
 <input type="file" id="file" hidden>
 <button type="button" id="attach" title="مرفق">📎</button>
 <button type="button" id="mic" title="تسجيل صوتي">🎤</button>
+<button type="button" id="emojibtn" title="إيموجي">😊</button>
 <input id="text" placeholder="اكتب رسالة…" autocomplete="off">
 <button id="send">➤</button>
+<div id="emojiPanel"><div class="ep-tabs" id="epTabs"></div><div class="ep-grid" id="epGrid"></div></div>
 </form>
 <div id="preview" hidden><span id="preview-info"></span><button id="preview-cancel">✕</button></div>
 </main>
@@ -276,6 +292,12 @@ FILE=document.getElementById('file'),PREVIEW=document.getElementById('preview');
 let current=null,timer=null,pendingMedia=null,recorder=null,chunks=[];
 function esc(s){{const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML}}
 function fmtSize(n){{return n>1048576?(n/1048576).toFixed(1)+' MB':Math.ceil(n/1024)+' KB'}}
+function syncComposer(){{
+ const c=document.getElementById('composer'),rb=document.getElementById('replybar'),
+ pv=document.getElementById('preview');
+ if(current){{c.classList.add('on')}}
+ else{{c.classList.remove('on');rb.style.display='none';pv.hidden=true;
+  pendingReply=null;pendingMedia=null;c.reset();}}}}
 async function loadLeads(){{
  const r=await fetch('{base}/api/leads');if(r.status===403)location.reload();
  const d=await r.json();
@@ -292,7 +314,7 @@ async function loadLeads(){{
   el.onclick=()=>{{
    current=l.wa_id;WHO.textContent=(l.name||'')+' · '+l.wa_id;
    document.querySelectorAll('.lead').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');
-   document.body.classList.add('chatting');loadMsgs();TEXT.focus()}};
+   document.body.classList.add('chatting');syncComposer();loadMsgs();TEXT.focus()}};
   LEADS.appendChild(el);
  }});}}
 function ticks(m){{
@@ -339,6 +361,10 @@ async function loadMsgs(){{
    const rep=document.createElement('button');rep.textContent='↩';rep.title='رد';
    rep.onclick=(ev)=>{{ev.stopPropagation();w.classList.remove('open');startReply(m)}};
    acts.appendChild(rep);
+   const qb=document.createElement('button');qb.type='button';qb.className='qreact';
+   qb.textContent='😊';qb.title='تفاعل';
+   qb.onclick=(ev)=>{{ev.stopPropagation();w.classList.remove('open');openEp('react',m.wa_message_id)}};
+   w.appendChild(qb);
   }} else {{
    acts.className='acts';
    const del=document.createElement('button');del.textContent='🗑';del.title='إخفاء لدي فقط';
@@ -361,6 +387,52 @@ async function sendPayload(payload){{
  await fetch('{base}/api/send',{{method:'POST',headers:{{'Content-Type':'application/json'}},
   body:JSON.stringify(payload)}});
  loadMsgs();loadLeads();}}
+const EP_CATS=[
+ ['😀','وجوه','😀 😃 😄 😁 😆 😅 😂 🤣 🥲 ☺️ 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😗 😙 😚 😋 😛 😝 😜 🤪 🤨 🧐 🤓 😎 🥸 🤩 🥳 😏 😒 😞 😔 😟 😕 🙁 ☹️ 😣 😖 😫 😩 🥺 😢 😭 😤 😠 😡 🤬 🤯 😳 🥵 🥶 😨 😰 😥 😓 🫡 🤗 🫢 🤭 🫣 🤫 🤥 😶 😐 😑 😬 🙄 😯 😦 😧 😮 😲 🥱 😴 🤤 😪 😵 🤐 🥴 🤢 🤮 🤧 😷 🤒 🤕'],
+ ['👍','إشارات','👍 👎 👌 🤌 🤏 ✌️ 🤞 🫰 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ 👋 🤚 🖐️ ✋ 🖖 👏 🙌 🤲 🤝 🙏 ✍️ 💅 🤳 💪 🦾 🦵 🦶 👂 👃 🧠 🫀 👀 👁️ 👅 👄 💋 🩸'],
+ ['❤️','قلوب','❤️ 🩷 🧡 💛 💚 💙 🩵 💜 🖤 🩶 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 ✨ ⭐ 🌟 💫 ⚡ 🔥 💥 💯 🎉 🎊 🎈 🎁 🏆 🥇 🎯'],
+ ['🐶','حيوانات','🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐻‍❄️ 🐨 🐯 🦁 🐮 🐷 🐸 🐵 🙈 🙉 🙊 🐔 🐧 🐦 🐤 🦆 🦅 🦉 🦇 🐺 🐗 🐴 🦄 🐝 🐛 🦋 🐌 🐞 🐜 🕷️ 🦂 🐢 🐍 🦎 🐙 🦑 🦐 🦞 🦀 🐡 🐠 🐟 🐬 🐳 🐋 🦈'],
+ ['🍕','طعام','🍏 🍎 🍐 🍊 🍋 🍌 🍉 🍇 🍓 🫐 🍈 🍒 🍑 🥭 🍍 🥥 🥝 🍅 🍆 🥑 🥦 🥬 🌽 🥕 🧄 🧅 🥔 🍠 🥐 🍞 🥖 🥨 🧀 🥚 🍳 🥞 🧇 🥓 🍗 🍖 🌭 🍔 🍟 🍕 🥪 🌮 🌯 🥗 🍝 🍜 🍲 🍛 🍣 🍱 🍤 🍙 🍚 🥟 🍦 🍩 🍪 🎂 🍰 🧁 🍫 🍬 🍭 ☕ 🍵 🧃 🥤 🧋'],
+ ['⚽','أنشطة','⚽ 🏀 🏈 ⚾ 🥎 🎾 🏐 🏉 🎱 🏓 🏸 🥅 🏒 🏑 🏏 ⛳ 🏹 🎣 🥊 🥋 🎽 🛹 🛼 ⛸️ 🎿 ⛷️ 🏂 🏋️ 🤼 🤸 ⛹️ 🤺 🤾 🏌️ 🏇 🧘 🏄 🏊 🤽 🚣 🧗 🚴 🚵 🎮 🕹️ 🎲 ♟️ 🧩 🎯 🎳 🎪 🎭 🎨 🎬 🎤 🎧 🎸 🎹 🥁 🎷 🎺 🎻'],
+ ['✈️','سفر','🚗 🚕 🚙 🚌 🚎 🏎️ 🚓 🚑 🚒 🚐 🛻 🚚 🚛 🚜 🛵 🏍️ 🚲 🛴 ✈️ 🛫 🛬 🚀 🛸 🚁 ⛵ 🚢 🚤 🛥️ ⛴️ 🗺️ 🧭 🏝️ 🏔️ ⛰️ 🌋 🏕️ 🏖️ 🏜️ 🎡 🎢 🎠 ⛲ ⛱️ 🌅 🌄 🌇 🌃 🗽 🗼 🕌 ⛩️ 🏰 🏯'],
+ ['🔧','أشياء','⌚ 📱 💻 ⌨️ 🖥️ 🖨️ 💾 💿 📷 📹 🎥 📞 ☎️ 📺 📻 🎙️ ⏰ ⌛ 💡 🔋 🔌 📚 📖 📝 ✏️ 📌 📎 🔒 🔑 🔨 🛠️ ⚙️ 🧲 💊 💉 🩹 🧬 🔬 🔭 🧸 💎 🛒 🎈 ✉️ 📦 🚪 🪑 🛏️ 🚿 🧴 🧹 🕯️ 💰 💳'],
+];
+let epMode=null,epWmid=null,epCat=0;
+function renderEpTabs(){{
+ const t=document.getElementById('epTabs');t.innerHTML='';
+ EP_CATS.forEach((c,i)=>{{
+  const b=document.createElement('button');b.textContent=c[0];b.title=c[1];
+  b.className=i===epCat?'on':'';b.onclick=()=>{{epCat=i;renderEpTabs();renderEpGrid()}};
+  t.appendChild(b);}});}}
+function renderEpGrid(){{
+ const g=document.getElementById('epGrid');g.innerHTML='';
+ EP_CATS[epCat][2].split(' ').forEach(em=>{{
+  const b=document.createElement('button');b.textContent=em;b.type='button';
+  b.onclick=()=>epPick(em);g.appendChild(b);}});
+ g.scrollTop=0;}}
+function openEp(mode,wmid){{
+ epMode=mode;epWmid=wmid||null;
+ document.getElementById('emojiPanel').classList.add('open');
+ renderEpTabs();renderEpGrid();}}
+function closeEp(){{
+ document.getElementById('emojiPanel').classList.remove('open');epMode=null;epWmid=null;}}
+function epPick(em){{
+ if(epMode==='composer'){{
+  const s=TEXT.selectionStart??TEXT.value.length,e=TEXT.selectionEnd??s;
+  TEXT.value=TEXT.value.slice(0,s)+em+TEXT.value.slice(e);
+  TEXT.selectionStart=TEXT.selectionEnd=s+em.length;TEXT.focus();}}
+ else if(epMode==='react'&&epWmid)doReact(epWmid,em);
+ closeEp();}}
+document.getElementById('emojibtn').onclick=(ev)=>{{
+ ev.stopPropagation();
+ document.getElementById('emojiPanel').classList.contains('open')?closeEp():openEp('composer');}};
+document.addEventListener('click',e=>{{
+ const pnl=document.getElementById('emojiPanel');
+ if(!pnl.classList.contains('open'))return;
+ if(pnl.contains(e.target))return;
+ if(e.target.id==='emojibtn')return;
+ if(e.target.closest&&e.target.closest('.qreact'))return;
+ closeEp();}});
 async function doReact(wmid,emoji){{
  if(!wmid)return;
  await fetch('{base}/api/react',{{method:'POST',headers:{{'Content-Type':'application/json'}},
