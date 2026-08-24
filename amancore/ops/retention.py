@@ -40,8 +40,10 @@ class RetentionService:
         cur = self.db.execute(
             "DELETE FROM leads WHERE lead_stage = 'nurture' AND created_at < ? "
             "AND NOT EXISTS (SELECT 1 FROM opportunities o WHERE o.lead_id = leads.lead_id) "
-            "AND NOT EXISTS (SELECT 1 FROM support_cases sc WHERE sc.lead_id = leads.lead_id)",
-            (cutoff,),
+            "AND NOT EXISTS (SELECT 1 FROM support_cases sc WHERE sc.lead_id = leads.lead_id) "
+            "AND NOT EXISTS (SELECT 1 FROM conversations c WHERE c.lead_id = leads.lead_id "
+            "  AND COALESCE(c.last_message_at, c.created_at) >= ?)",
+            (cutoff, cutoff),
         )
         self.db.commit()
         return cur.rowcount
@@ -49,7 +51,7 @@ class RetentionService:
     def _clean_conversations(self) -> int:
         cutoff = self._cutoff("conversation_active_days", 90)
         cur = self.db.execute(
-            "DELETE FROM conversations WHERE created_at < ? AND lead_id NOT IN ("
+            "DELETE FROM conversations WHERE COALESCE(last_message_at, created_at) < ? AND lead_id NOT IN ("
             "  SELECT lead_id FROM opportunities WHERE stage NOT IN ('won','lost','closed_won','closed_lost')"
             ") AND lead_id NOT IN ("
             "  SELECT lead_id FROM support_cases WHERE status IN "

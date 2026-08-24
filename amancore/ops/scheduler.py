@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import signal
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from ..log import get_logger
 from .jobs import JobRunner, JobStore
@@ -35,6 +35,21 @@ def _field_matches(expr: str, value: int) -> bool:
     return False
 
 
+def _business_tz(tz_name: str | None):
+    """CC5: honor configured business timezone (scheduler.yaml timezone:)."""
+    if not tz_name:
+        return timezone.utc
+    try:
+        from zoneinfo import ZoneInfo
+
+        return ZoneInfo(tz_name)
+    except Exception:  # noqa: BLE001 — unknown tz falls back to UTC loudly
+        from ..log import get_logger
+
+        get_logger("ops.scheduler").warning("unknown timezone %s — using UTC", tz_name)
+        return timezone.utc
+
+
 def cron_matches(expr: str, now: datetime | None = None) -> bool:
     """Match a 5-field cron expression against `now` (UTC by default)."""
     now = now or datetime.now(timezone.utc)
@@ -52,10 +67,19 @@ def cron_matches(expr: str, now: datetime | None = None) -> bool:
 
 
 class SchedulerRuntime:
+    CATCHUP_MINUTES_DEFAULT = 60  # restart gaps shorter than this still fire
+
     def __init__(self, store: JobStore, runner: JobRunner, config: dict | None = None):
         self.store = store
         self.runner = runner
         self.config = config or {}
+        self.tz = _business_tz(self.config.get("timezone"))
+        try:
+            self.catchup_minutes = max(0, int(self.config.get("catchup_minutes",
+                                       self.CATCHUP_MINUTES_DEFAULT)))
+        except (TypeError, ValueError):
+            self.catchup_minutes = self.CATCHUP_MINUTES_DEFAULT
+        self._last_tick: datetime | None = None   # in-memory continuity marker
         jobs_cfg = self.config.get("jobs", {})
         self.enabled = {}
         self.crons = {}
@@ -63,6 +87,12 @@ class SchedulerRuntime:
             if isinstance(jconf, dict):
                 self.enabled[jtype] = bool(jconf.get("enabled", False))
                 self.crons[jtype] = jconf.get("cron")
+
+    def db_ok(self, idempotency_key: str) -> bool:
+        row = self.store.db.execute(
+            "SELECT 1 FROM jobs WHERE idempotency_key = ?", (idempotency_key,)
+        ).fetchone()
+        return row is not None
 
     def due_job_types(self, now: datetime | None = None) -> list[str]:
         now = now or datetime.now(timezone.utc)
@@ -73,19 +103,44 @@ class SchedulerRuntime:
         return due
 
     def tick(self, worker_id: str = "scheduler", now: datetime | None = None) -> dict:
-        """Enqueue due enabled jobs (idempotent per slot). Returns summary."""
-        now = now or datetime.now(timezone.utc)
-        self.store.requeue_expired_leases(worker_id)
+        """Enqueue due enabled jobs. CC5: evaluated in the business timezone,
+        with a catch-up sweep over missed minutes (restart/downtime gaps) —
+        slot idempotency keys keep every backfilled slot firing exactly once."""
+        now = now or datetime.now(self.tz)
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=self.tz)
+        exclude = self.runner.zombie_job_ids() if self.runner is not None else None
+        self.store.requeue_expired_leases(worker_id, exclude_job_ids=exclude)
         enqueued: list[str] = []
         skipped: list[str] = []
-        for jtype in self.due_job_types(now):
-            if not self.enabled.get(jtype, False):
-                skipped.append(jtype)
-                continue
-            slot = now.strftime("%Y-%m-%dT%H:%M")
-            job_id = self.store.enqueue(jtype, idempotency_key=f"{jtype}:{slot}")
-            enqueued.append(f"{jtype}:{job_id[:8]}")
-        return {"enqueued": enqueued, "skipped_disabled": skipped}
+        # CC5 catch-up window: everything since the LAST tick (capped), so a
+        # healthy every-minute cron still fires exactly once per minute, and a
+        # restart gap backfills each missed slot once (idempotency keys dedupe).
+        first_tick = self._last_tick is None
+        if first_tick or now <= self._last_tick:
+            start = now
+        else:
+            start = max(now - timedelta(minutes=self.catchup_minutes),
+                        self._last_tick + timedelta(minutes=1))
+        minutes = [start + timedelta(minutes=i) for i in range(0, 10000)]
+        minutes = [m for m in minutes if m <= now]
+        if now not in minutes:
+            minutes.append(now)
+        self._last_tick = now
+        for slot_dt in minutes:
+            local_dt = slot_dt.astimezone(self.tz)
+            for jtype in self.due_job_types(local_dt):
+                if not self.enabled.get(jtype, False):
+                    skipped.append(jtype)
+                    continue
+                slot = local_dt.strftime("%Y-%m-%dT%H:%M")
+                key = f"{jtype}:{slot}"
+                exists = self.db_ok(key)
+                if exists:
+                    continue  # backfill slot already has a live/completed job
+                job_id = self.store.enqueue(jtype, idempotency_key=key)
+                enqueued.append(f"{jtype}:{job_id[:8]}")
+        return {"enqueued": sorted(set(enqueued)), "skipped_disabled": sorted(set(skipped))}
 
     def run_once(self, worker_id: str = "scheduler", limit: int = 10) -> dict:
         """One pass: enqueue due + execute queued jobs. Returns summary."""

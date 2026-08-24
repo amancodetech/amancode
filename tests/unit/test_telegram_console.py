@@ -13,8 +13,14 @@ class TestNormalizeNumber(unittest.TestCase):
     def test_strips_formatting(self):
         self.assertEqual(normalize_number("+90 534 242-25-65"), "905342422565")
 
-    def test_drops_leading_zero(self):
-        self.assertEqual(normalize_number("081234567890"), "81234567890")
+    def test_no_silent_country_code_invention(self):
+        # WA-302/W2: the old lstrip("0") corrupted local numbers by eating a
+        # meaningful trunk zero — normalization now strips ONLY the literal
+        # "00" international prefix, never a lone leading 0.
+        self.assertEqual(normalize_number("081234567890"), "081234567890")
+
+    def test_double_zero_international_prefix_still_stripped(self):
+        self.assertEqual(normalize_number("00905321112233"), "905321112233")
 
     def test_empty(self):
         self.assertEqual(normalize_number(""), "")

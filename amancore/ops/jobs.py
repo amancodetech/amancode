@@ -104,14 +104,25 @@ class JobStore:
                 claimed.append(self.get(r["job_id"]))
         return claimed
 
-    def requeue_expired_leases(self, worker_id: str = "scheduler") -> int:
-        """Reclaim jobs whose lease expired while running (worker crashed)."""
+    def requeue_expired_leases(self, worker_id: str = "scheduler",
+                               exclude_job_ids: set | None = None) -> int:
+        """Reclaim jobs whose lease expired while running (worker crashed).
+        CC1: jobs with LIVE zombie threads are excluded — their handler may
+        still be writing; freeing the lease would allow parallel execution."""
         now = _iso(_now())
-        cur = self.db.execute(
-            "UPDATE jobs SET status = 'queued', locked_by = NULL, locked_until = NULL "
-            "WHERE status = 'running' AND locked_until < ?",
-            (now,),
-        )
+        if exclude_job_ids:
+            marks = ",".join("?" * len(exclude_job_ids))
+            cur = self.db.execute(
+                f"UPDATE jobs SET status = 'queued', locked_by = NULL, locked_until = NULL "
+                f"WHERE status = 'running' AND locked_until < ? AND job_id NOT IN ({marks})",
+                (now, *exclude_job_ids),
+            )
+        else:
+            cur = self.db.execute(
+                "UPDATE jobs SET status = 'queued', locked_by = NULL, locked_until = NULL "
+                "WHERE status = 'running' AND locked_until < ?",
+                (now,),
+            )
         self.db.commit()
         return cur.rowcount
 
@@ -167,11 +178,16 @@ class JobStore:
         return self.counts().get("dead", 0)
 
 
+class JobCancelled(Exception):
+    """Raised inside a handler when its cancellation token fires (CC1)."""
+
+
 class JobRunner:
     """Executes a handler for a job with lease + retry semantics."""
 
     def __init__(self, store: JobStore, handlers: dict, worker_id: str = "worker-1",
                  timeout_seconds: int | None = None):
+        self._zombies: dict = {}   # job_id → thread still running past grace
         self.store = store
         self.handlers = handlers
         self.worker_id = worker_id
@@ -190,7 +206,7 @@ class JobRunner:
             self.store.fail(job["job_id"], error, retryable=False)
             return {"job_id": job["job_id"], "status": "dead", "error": error}
         try:
-            result = self._run_with_timeout(handler, job["payload"] or {})
+            result = self._run_with_timeout(handler, job["payload"] or {}, job_id=job["job_id"])
             self.store.complete(job["job_id"], result)
             return {"job_id": job["job_id"], "status": "completed", "result": result}
         except Exception as exc:  # noqa: BLE001 — job isolation
@@ -200,14 +216,21 @@ class JobRunner:
                         job["job_id"], job["type"], exc, retryable)
             return {"job_id": job["job_id"], "status": status, "error": str(exc)}
 
-    def _run_with_timeout(self, handler, payload: dict) -> dict:
+    def _run_with_timeout(self, handler, payload: dict, job_id: str | None = None) -> dict:
+        """CC1: cooperative cancellation — on timeout we signal the worker
+        thread and give it a grace period to abort cleanly; a thread that
+        survives grace is tracked as a zombie so its expired lease is NOT
+        requeued while it still runs (no parallel double-execution)."""
         import threading
 
         box: dict = {"result": None, "error": None}
+        cancel = threading.Event()
+        work_payload = dict(payload or {})
+        work_payload["_cancel_event"] = cancel   # handlers may check between phases
 
         def target():
             try:
-                box["result"] = handler(payload)
+                box["result"] = handler(work_payload)
             except Exception as exc:  # noqa: BLE001
                 box["error"] = exc
 
@@ -215,15 +238,26 @@ class JobRunner:
         t.start()
         t.join(self.timeout_seconds)
         if t.is_alive():
+            cancel.set()
+            t.join(5.0)  # grace for checkpoint aborts
+            if t.is_alive() and job_id:
+                self._zombies[job_id] = t
             raise TimeoutError(f"job exceeded timeout {self.timeout_seconds}s")
         if box["error"] is not None:
             raise box["error"]
         return box["result"] or {}
 
+    def zombie_job_ids(self) -> set:
+        """CC1: job ids whose worker thread is STILL alive past its grace."""
+        alive = {jid for jid, t in self._zombies.items() if t.is_alive()}
+        for jid in set(self._zombies) - alive:
+            del self._zombies[jid]      # finished zombies stop blocking requeue
+        return alive
+
     def _is_retryable(self, exc: Exception) -> bool:
         name = type(exc).__name__
         retryable = {
             "OperationalError", "TimeoutError", "ConnectionError", "ConnectionRefusedError",
-            "requests.ConnectionError", "requests.Timeout",
+            "requests.ConnectionError", "requests.Timeout", "JobCancelled",
         }
         return name in retryable or any(k in name for k in ("Timeout", "Connection"))

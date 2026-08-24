@@ -5,6 +5,7 @@
 scheduler:
   enabled: true
   timezone: Asia/Makassar
+  catchup_minutes: 60   # JOBS-304/CC5 — restart gaps ≤ this still fire
   concurrency: 1
   poll_interval_seconds: 30
   lease_seconds: 300

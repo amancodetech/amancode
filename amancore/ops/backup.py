@@ -30,6 +30,15 @@ def sha256_of(path: Path) -> str:
 
 
 class BackupService:
+
+    @staticmethod
+    def _check_cancel(payload: dict) -> None:
+        """CC1: abort cleanly between phases when the job token fired."""
+        ev = (payload or {}).get("_cancel_event")
+        if ev is not None and getattr(ev, "is_set", lambda: False)():
+            from .jobs import JobCancelled
+
+            raise JobCancelled("backup cancelled before completion")
     def __init__(self, db: Database, root: Path, database_path: Path | None = None):
         self.db = db
         self.root = Path(root)
@@ -43,18 +52,19 @@ class BackupService:
         self.secondary_dir.mkdir(parents=True, exist_ok=True)
 
     # ---- create ---------------------------------------------------------
-    def create_backup(self, kind: str = "all") -> dict:
+    def create_backup(self, kind: str = "all", payload: dict | None = None) -> dict:
         """Any kind failure RAISES — JobRunner must see failure as failure
         (BAK-103/C8). A backup job that reports success on partial failure is
         the silent-data-loss bug this fixes."""
         kinds = ("database", "business_brain", "configs", "audit")
         targets = kinds if kind == "all" else (kind,)
+        self._check_cancel(payload)  # CC1 checkpoint: before any work
         results = {}
         for k in targets:
-            results[k] = self._backup_kind(k)  # raises on failure
+            results[k] = self._backup_kind(k, payload=payload)  # raises on failure
         return {"status": "created", "kinds": results, "created_at": utcnow()}
 
-    def _backup_kind(self, kind: str) -> dict:
+    def _backup_kind(self, kind: str, payload: dict | None = None) -> dict:
         ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         dest_dir = self.backup_dir / f"{kind}-{ts}"
         dest_dir.mkdir(parents=True, exist_ok=True)
@@ -69,6 +79,7 @@ class BackupService:
         else:
             raise ValueError(f"unknown backup kind: {kind}")
         # secondary copy + registry — INSIDE the raise-domain now
+        self._check_cancel(payload)  # CC1 checkpoint: before secondary copy/verify
         for art in artifacts:
             backup_id = self._register(kind, art)
             secondary = self.secondary_dir / Path(art["path"]).name

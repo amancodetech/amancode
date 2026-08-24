@@ -60,37 +60,58 @@ class JobRegistry:
             return engine.run(period_days=days)
 
         def _followups():
-            from ..ids import utcnow
+            """CC2: REAL follow-ups — policy-gated outbox messages with daily
+            idempotency, then the lead's next_followup_at advances so we do
+            not re-message daily. No more fire-and-forget phantom events."""
+            from datetime import timedelta
+            from ..ids import new_id, utcnow
+            from ..channels.outbox import MessageOutbox
+            from ..channels.wa_errors import normalize_e164_digits
 
             due = self.db.execute(
-                "SELECT lead_id, name, company, next_followup_at FROM leads "
-                "WHERE next_followup_at IS NOT NULL AND next_followup_at <= ? AND opt_out = 0",
+                "SELECT l.lead_id, l.name, l.contact_whatsapp, l.language, "
+                "       l.next_followup_at, c.mode "
+                "FROM leads l LEFT JOIN conversations c ON c.lead_id = l.lead_id "
+                "WHERE l.next_followup_at IS NOT NULL AND l.next_followup_at <= ? "
+                "AND l.opt_out = 0 AND COALESCE(c.mode, 'AI_ACTIVE') = 'AI_ACTIVE'",
                 (utcnow(),),
             ).fetchall()
+            outbox = MessageOutbox(self.db)
+            today = utcnow()[:10]
+            enqueued = []
             for r in due:
-                from ..ids import new_id
-
-                from ..services.events import CanonicalEvent
-                from ..services.events import EventDispatcher
-
-                dispatcher = EventDispatcher()
-                dispatcher.publish(CanonicalEvent(
-                    event_id=new_id(), event_type="followup.due",
-                    timestamp=utcnow(), source="scheduler", actor_type="system",
-                    payload={"lead_id": r["lead_id"]},
-                ))
-            return {"due_followups": len(due), "leads": [r["lead_id"] for r in due]}
+                recipient = normalize_e164_digits(r["contact_whatsapp"] or "")
+                if not recipient:
+                    continue
+                text = ("نود المتابعة معك بخصوص مشروع موقعكم — هل الوقت مناسب للحديث؟"
+                        if (r["language"] or "ar").startswith("ar") else
+                        "Following up on your website project — is now a good time to talk?")
+                mid = outbox.enqueue(
+                    channel="whatsapp", recipient=recipient, message_type="text",
+                    payload={"body": text},
+                    idempotency_key=f"followup:{r['lead_id']}:{today}",
+                    lead_id=r["lead_id"], correlation_id=new_id(),
+                )
+                nxt = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
+                self.db.execute(
+                    "UPDATE leads SET next_followup_at = ? WHERE lead_id = ?",
+                    (nxt, r["lead_id"]))
+                enqueued.append(mid)
+            self.db.commit()
+            return {"due_followups": len(due), "enqueued": len(enqueued),
+                    "message_ids": enqueued}
 
         def _retention():
             from ..ops.retention import RetentionService
 
             return RetentionService(self.db, config=cfg.retention).run()
 
-        def _backup():
+        def _backup(payload=None):
             from ..ops.backup import BackupService
 
             return BackupService(self.db, self.root,
-                                 database_path=root / cfg.database_path).create_backup(kind="all")
+                                 database_path=root / cfg.database_path).create_backup(
+                                     kind="all", payload=payload)
 
         def _backup_verify():
             from ..ops.backup import BackupService
