@@ -744,6 +744,16 @@ def serve(root: Path, host: str = "127.0.0.1", port: int = 8010) -> int:
     runtime = build_runtime(root)
     httpd = WebhookServer((host, port), runtime)
 
+    # owner console: Telegram natural-language remote control (owner chat only)
+    console = None
+    try:
+        from ..ops.telegram_console import TelegramOwnerConsole
+
+        console = TelegramOwnerConsole(runtime)
+        console.start()
+    except Exception as exc:  # noqa: BLE001 — console must never block serving
+        log.error("telegram console failed to start: %s", exc)
+
     stop = {"flag": False}
 
     def _shutdown(signum, frame):  # noqa: ARG001
@@ -761,6 +771,8 @@ def serve(root: Path, host: str = "127.0.0.1", port: int = 8010) -> int:
     try:
         httpd.serve_forever(poll_interval=0.5)
     finally:
+        if console:
+            console.stop()
         httpd.server_close()
         runtime["db"].close()
         log.info("webhook server stopped cleanly")
