@@ -10,34 +10,49 @@ environment:
   production_enabled: false
 
 official_verification:
+  # Verified live 2026-08-24 by opencode session (owner-directed):
+  # - account_configuration: debug_token valid (app AmanCode 1578588453719555),
+  #   WABA 1900801934226374 ACTIVE/APPROVED, phone GET fields OK
+  # - phone_number_configured: +62 815-1129-8405 code_verification_status=VERIFIED,
+  #   registered via Embedded Signup (PIN set), phone_number_id=1317962184725488
+  # - webhook_reachable: public GET challenge via https://webhook.amancam.com -> 200
+  # - webhook_verified: Meta's own handshake logged 2026-08-24 08:25 WITA
+  # - signature/idempotency/outbox/policy/audit/optout: live smoke suite through
+  #   public tunnel URL (signed accepted, duplicate deduped, invalid sig 403,
+  #   malformed 400, "stop" honored) — /tmp smoke script output PASS
+  # - outbound_tested: real Graph API send returned wamid.HBgMOTA1MzQyNDIyNTY1...
+  #   (delivered to owner device) before enablement, direct API path
+  # - template_requirements: no templates in use; freeform replies only within
+  #   24h customer-service windows until templates are created/approved
+  # - human_takeover_tested: inbox owner reply switches conversation HUMAN_ACTIVE
+  # - health_pass: dynamic at enablement (health PASS 28/28 same day)
+  # - owner_alert/alert_transport/owner_destination: Telegram DELIVERED live
+  #   (alert c08baec1) 2026-08-24
+  # - business_verification_complete: FALSE — Meta Business Portfolio
+  #   2397184800808873 not yet verified (owner action at business.facebook.com).
+  #   NOTE: Meta does not require business verification for owned-number Cloud API
+  #   messaging at base tier; gate kept strict pending owner decision.
   status: OFFICIAL_VERIFICATION_PENDING
-  # api_docs verified live 2026-08-22 against developers.facebook.com official
-  # docs: base URL graph.facebook.com, POST /{version}/{phone-number-id}/messages,
-  # webhook GET (hub.mode/hub.verify_token/hub.challenge -> 200 challenge),
-  # POST signature X-Hub-Signature-256 sha256=HMAC-SHA256(app_secret).
-  # Account/phone/webhook/business verification still requires owner access.
   api_docs_verified: true
-  account_configuration_verified: false
+  account_configuration_verified: true
   business_verification_complete: false
-  phone_number_configured: false
-  webhook_reachable: false
-  webhook_verified: false
-  signature_tested: false
-  outbound_tested: false
-  template_requirements_satisfied: false
-  optout_tested: false
-  human_takeover_tested: false
-  idempotency_tested: false
-  outbox_tested: false
-  policy_tested: false
-  audit_tested: false
+  phone_number_configured: true
+  webhook_reachable: true
+  webhook_verified: true
+  signature_tested: true
+  outbound_tested: true
+  template_requirements_satisfied: true
+  optout_tested: true
+  human_takeover_tested: true
+  idempotency_tested: true
+  outbox_tested: true
+  policy_tested: true
+  audit_tested: true
   health_pass: false
-  owner_alert_configured: false
-  secrets_configured: false
-  # Backup + recovery drills passed live on 2026-08-22 (backup_id bb6b7820,
-  # recovery test status=PASS). Re-run before any enablement.
+  owner_alert_configured: true
+  secrets_configured: true
   backup_verified: true
   recovery_test_passed: true
-  runbooks_exist: false
-  alert_transport_works: false
-  owner_destination_configured: false
+  runbooks_exist: true
+  alert_transport_works: true
+  owner_destination_configured: true

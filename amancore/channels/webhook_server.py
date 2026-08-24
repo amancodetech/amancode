@@ -82,7 +82,21 @@ def build_runtime(root: Path):
         owner_alert=send_owner_alert,
         audit=audit, dispatcher=dispatcher,
     )
-    return {"db": db, "adapter": adapter, "coordinator": coordinator, "inbox": build_inbox_runtime(db, coordinator)}
+    inbox = build_inbox_runtime(db, coordinator)
+
+    if inbox is not None:
+        def _record_inbound(direction, wa_id, lead_id, wa_message_id=None, body="", **_):
+            db.execute(
+                "INSERT INTO channel_messages"
+                " (direction, wa_id, lead_id, wa_message_id, body, status, created_at)"
+                " VALUES (?, ?, ?, ?, ?, '', datetime('now'))",
+                (direction, wa_id, lead_id, wa_message_id, body),
+            )
+            db.commit()
+
+        coordinator.message_recorder = _record_inbound
+
+    return {"db": db, "adapter": adapter, "coordinator": coordinator, "inbox": inbox}
 
 
 def build_inbox_runtime(db, coordinator):

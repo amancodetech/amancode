@@ -197,57 +197,94 @@ def render_login_page(action_path: str, error: str = "") -> str:
 _INBOX_PAGE = """<!DOCTYPE html>
 <html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="robots" content="noindex,nofollow"><title>Inbox · AmanCore</title>
+<meta name="robots" content="noindex,nofollow"><title>AmanCore Inbox</title>
 <style>
-*{{box-sizing:border-box}} body{{font-family:system-ui,sans-serif;margin:0;background:#f7f3ea;color:#101c30;display:flex;height:100vh}}
-aside{{width:min(320px,35vw);background:#fff;border-left:1px solid #e5ddcc;overflow-y:auto}}
-main{{flex:1;display:flex;flex-direction:column}}
-header{{padding:.8rem 1rem;background:#101c30;color:#c9a86a;display:flex;justify-content:space-between;align-items:center}}
-header form{{display:inline}} header button{{background:none;border:1px solid #c9a86a;color:#c9a86a;border-radius:5px;padding:.25rem .6rem;cursor:pointer;font-size:.8rem}}
-#log{{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:.4rem}}
-.msg{{max-width:70%;padding:.55rem .8rem;border-radius:12px;font-size:.95rem;white-space:pre-wrap;word-break:break-word}}
-.in{{background:#fff;align-self:flex-start;border:1px solid #e5ddcc}}
-.out{{background:#101c30;color:#f7f3ea;align-self:flex-end}}
-.meta{{font-size:.7rem;opacity:.65;margin-top:.2rem}}
-.lead{{padding:.8rem 1rem;border-bottom:1px solid #eee;cursor:pointer}}
-.lead:hover,.lead.sel{{background:#fdfaf3}}
-.lead small{{color:#5b6472;display:block;direction:ltr;text-align:right}}
-#composer{{display:flex;gap:.5rem;padding:.8rem;border-top:1px solid #e5ddcc;background:#fff}}
-#text{{flex:1;padding:.6rem;border:1px solid #c9a86a;border-radius:8px;font-size:1rem}}
-#send{{padding:.6rem 1.2rem;background:#101c30;color:#c9a86a;border:0;border-radius:8px;cursor:pointer}}
-.empty{{color:#5b6472;text-align:center;margin-top:2rem}}
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#0b141a;height:100vh;display:flex}}
+aside{{width:min(340px,38vw);background:#111b21;color:#e9edef;display:flex;flex-direction:column;border-left:1px solid #2a3942}}
+aside .panel-head{{padding:.9rem 1rem;background:#202c33;font-weight:600;font-size:1rem;border-bottom:1px solid #2a3942}}
+#leads{{flex:1;overflow-y:auto}}
+.lead{{display:flex;gap:.7rem;padding:.65rem .9rem;cursor:pointer;border-bottom:1px solid #222d34;align-items:center}}
+.lead:hover{{background:#202c33}} .lead.sel{{background:#2a3942}}
+.avatar{{width:44px;height:44px;border-radius:50%;background:#676f73;display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:600;color:#111b21;flex-shrink:0}}
+.lead-info{{flex:1;min-width:0}}
+.lead-name{{font-size:.95rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+.lead-sub{{font-size:.78rem;color:#8696a0;direction:ltr;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+.mode-chip{{font-size:.62rem;padding:.1rem .45rem;border-radius:10px;background:#3b4a54;color:#8696a0;margin-right:.35rem}}
+.mode-chip.human{{background:#1f6b49;color:#c9f0d2}}
+main{{flex:1;display:flex;flex-direction:column;background:#0b141a;
+ background-image:radial-gradient(#182229 1px,transparent 1px);background-size:22px 22px}}
+header{{padding:.65rem 1rem;background:#202c33;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a3942}}
+#who{{color:#e9edef;font-weight:600;font-size:.95rem}}
+header form button{{background:none;border:1px solid #667781;color:#8696a0;border-radius:20px;padding:.3rem .9rem;cursor:pointer;font-size:.8rem}}
+header form button:hover{{background:#2a3942}}
+#log{{flex:1;overflow-y:auto;padding:1.2rem 4%;display:flex;flex-direction:column;gap:.3rem}}
+.msg{{max-width:72%;padding:.45rem .7rem .3rem;border-radius:8px;font-size:.93rem;line-height:1.45;
+ white-space:pre-wrap;word-break:break-word;position:relative;box-shadow:0 1px 1px rgba(0,0,0,.2)}}
+.in{{background:#202c33;color:#e9edef;align-self:flex-start;border-top-right-radius:0}}
+.out{{background:#005c4b;color:#e9edef;align-self:flex-end;border-top-left-radius:0}}
+.meta{{display:flex;justify-content:flex-end;align-items:center;gap:.25rem;font-size:.65rem;color:#8696a0;margin-top:.15rem}}
+.msg.out .meta{{color:#8fd0bd}}
+.tick{{color:#53bdeb;font-weight:bold}}
+.day{{align-self:center;background:#182229;color:#8696a0;font-size:.72rem;padding:.25rem .8rem;border-radius:8px;margin-bottom:.5rem}}
+.empty{{color:#8696a0;text-align:center;margin-top:3rem;font-size:.9rem}}
+#composer{{display:flex;gap:.5rem;padding:.6rem .8rem;background:#202c33;align-items:center}}
+#text{{flex:1;padding:.7rem 1rem;border:0;border-radius:10px;background:#2a3942;color:#e9edef;font-size:1rem;outline:none}}
+#send{{width:44px;height:44px;border-radius:50%;border:0;background:#00a884;color:#fff;font-size:1.2rem;cursor:pointer;flex-shrink:0}}
+#send:hover{{background:#06cf9c}}
+@media(max-width:700px){{aside{{width:100%;display:none}} aside.open{{display:flex}}
+ body.chatting aside{{display:none}} main{{display:none}} body.chatting main{{display:flex}}}}
+::-webkit-scrollbar{{width:6px}} ::-webkit-scrollbar-thumb{{background:#374248;border-radius:3px}}
 </style></head><body>
-<aside id="leads"><div class="empty">لا محادثات بعد</div></aside>
-<main>
-<header><span id="who">اختر محادثة</span><form method="post" action="{logout}"><button>خروج</button></form></header>
-<div id="log"><div class="empty">—</div></div>
-<form id="composer"><input id="text" placeholder="اكتب ردك…" autocomplete="off"><button id="send">إرسال</button></form>
+<aside id="leadsPanel"><div class="panel-head">💬 المحادثات</div><div id="leads"><div class="empty">لا محادثات بعد</div></div></aside>
+<main id="chatArea">
+<header><span id="who">AmanCore Inbox</span><form method="post" action="{logout}"><button>خروج ⏻</button></form></header>
+<div id="log"><div class="empty">اختر محادثة من القائمة لعرض الرسائل</div></div>
+<form id="composer"><input id="text" placeholder="اكتب رسالة…" autocomplete="off"><button id="send">➤</button></form>
 </main>
 <script>
 const LEADS=document.getElementById('leads'),LOG=document.getElementById('log'),
 WHO=document.getElementById('who'),TEXT=document.getElementById('text');
 let current=null,timer=null;
+function esc(s){{const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML}}
 async function loadLeads(){{
  const r=await fetch('{base}/api/leads');if(r.status===403)location.reload();
- const d=await r.json();LEADS.innerHTML='';
- if(!d.length){{LEADS.innerHTML='<div class="empty">لا محادثات بعد</div>';return}}
+ const d=await r.json();
+ if(!d.length){{LEADS.innerHTML='<div class="empty">لا محادثات بعد<br>ستظهر هنا رسائل العملاء تلقائيًا</div>';return}}
+ LEADS.innerHTML='';
  d.forEach(l=>{{
   const el=document.createElement('div');el.className='lead'+(l.wa_id===current?' sel':'');
-  el.innerHTML='<strong>'+esc(l.name||'بدون اسم')+'</strong><small>'+esc(l.wa_id)+' · '+esc(l.mode||'')+'</small>';
-  el.onclick=()=>{{current=l.wa_id;WHO.textContent=(l.name||'')+' ('+l.wa_id+')';document.querySelectorAll('.lead').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');loadMsgs()}};
+  const initial=esc((l.name||l.wa_id||'?').trim()[0]||'?').toUpperCase();
+  const human=(l.mode==='HUMAN_ACTIVE'||l.mode==='HUMAN_REQUESTED');
+  el.innerHTML='<div class="avatar">'+initial+'</div>'+
+   '<div class="lead-info"><div class="lead-name">'+esc(l.name||'عميل')+
+   '<span class="mode-chip'+(human?' human':'')+'">'+(human?'👤 بشري':'🤖 AI')+'</span></div>'+
+   '<div class="lead-sub">'+esc(l.wa_id)+(l.last_at?' · '+esc(l.last_at.slice(5,16)):'')+'</div></div>';
+  el.onclick=()=>{{
+   current=l.wa_id;WHO.textContent=(l.name||'')+' · '+l.wa_id;
+   document.querySelectorAll('.lead').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');
+   document.body.classList.add('chatting');loadMsgs();TEXT.focus()}};
   LEADS.appendChild(el);
  }});}}
-function esc(s){{const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML}}
 async function loadMsgs(){{
  if(!current)return;
  const r=await fetch('{base}/api/messages?wa_id='+encodeURIComponent(current));
  if(r.status===403)location.reload();
  const d=await r.json();LOG.innerHTML='';
+ if(!d.length){{LOG.innerHTML='<div class="empty">لا رسائل في هذه المحادثة</div>';return}}
+ let lastDay='';
  d.forEach(m=>{{
+  const day=(m.created_at||'').slice(0,10);
+  if(day&&day!==lastDay){{lastDay=day;
+   const dd=document.createElement('div');dd.className='day';dd.textContent=day;LOG.appendChild(dd)}}
   const w=document.createElement('div');w.className='msg '+m.direction;
-  w.textContent=m.body;
+  w.appendChild(document.createTextNode(m.body));
   const meta=document.createElement('div');meta.className='meta';
-  meta.textContent=(m.direction==='in'?'← ':'→ ')+m.created_at+(m.status?' · '+m.status:'');
+  meta.innerHTML='<span>'+esc((m.created_at||'').slice(11,16))+'</span>'+
+   (m.direction==='out'
+     ?(m.status==='sent'?'<span class="tick">✓✓</span>'
+       :m.status==='failed'?'<span style="color:#f15c6d">✗ '+esc(m.status)+'</span>'
+       :'<span>🕐</span>'):'');
   w.appendChild(meta);LOG.appendChild(w);
  }});
  LOG.scrollTop=LOG.scrollHeight;}}
@@ -256,7 +293,7 @@ document.getElementById('composer').addEventListener('submit',async e=>{{
  await fetch('{base}/api/send',{{method:'POST',headers:{{'Content-Type':'application/json'}},
   body:JSON.stringify({{wa_id:current,text:TEXT.value.trim()}})}});
  TEXT.value='';loadMsgs();}});
-timer=setInterval(()=>{{loadLeads();if(current)loadMsgs();}},8000);
+timer=setInterval(()=>{{loadLeads();if(current)loadMsgs();}},6000);
 loadLeads();
 </script></body></html>"""
 
