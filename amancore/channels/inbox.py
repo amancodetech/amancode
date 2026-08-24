@@ -245,7 +245,8 @@ audio{{max-width:250px;height:38px}}
 #replybar button{{background:none;border:0;color:#f15c6d;cursor:pointer;font-size:.9rem}}
 .msg:hover{{filter:brightness(1.12)}}
 .acts,.reactbar{{position:absolute;top:-14px;left:6px;display:none;background:#233138;border-radius:14px;padding:.1rem .35rem;z-index:5}}
-.msg:hover .acts,.msg:hover .reactbar{{display:flex}}
+.msg:hover .acts,.msg:hover .reactbar,.msg.open .acts,.msg.open .reactbar{{display:flex}}
+.msg.in{{cursor:pointer}}
 .acts button{{border:0;background:none;cursor:pointer;font-size:.85rem;padding:.1rem .3rem}}
 .reactbar button{{border:0;background:none;cursor:pointer;font-size:.95rem;padding:.05rem}}
 #preview button{{background:none;border:0;color:#f15c6d;font-size:1rem;cursor:pointer}}
@@ -335,16 +336,19 @@ async function loadMsgs(){{
     const b=document.createElement('button');b.textContent=em;b.type='button';
     b.onclick=(ev)=>{{ev.stopPropagation();doReact(m.wa_message_id,em)}};
     acts.appendChild(b);}});
+   const rep=document.createElement('button');rep.textContent='↩';rep.title='رد';
+   rep.onclick=(ev)=>{{ev.stopPropagation();w.classList.remove('open');startReply(m)}};
+   acts.appendChild(rep);
   }} else {{
    acts.className='acts';
    const del=document.createElement('button');del.textContent='🗑';del.title='إخفاء لدي فقط';
    del.onclick=(ev)=>{{ev.stopPropagation();hideMsg(+m.id)}};
    acts.appendChild(del);}}
   w.appendChild(acts);
-  if(m.direction==='in'&&m.wa_message_id){{
-   w.style.cursor='pointer';
-   w.onclick=()=>startReply(m);
-  }}
+  w.onclick=(ev)=>{{
+   document.querySelectorAll('.msg.open').forEach(x=>{{if(x!==w)x.classList.remove('open')}});
+   w.classList.toggle('open');
+  }};
   const meta=document.createElement('div');meta.className='meta';
   meta.innerHTML='<span>'+esc((m.created_at||'').slice(11,16))+'</span>'+ticks(m);
   w.appendChild(meta);LOG.appendChild(w);
