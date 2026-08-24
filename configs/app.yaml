@@ -2,3 +2,12 @@ env: development
 database_path: storage/aman_core.db
 log_level: INFO
 shadow_rate: 40
+
+# COST-402 — AI spend protection (all thresholds configurable, H5)
+cost:
+  enabled: true
+  per_wa_id_hourly_calls: 10      # burst shield per customer
+  per_wa_id_daily_calls: 60       # generous ceiling for a real lead
+  global_daily_calls: 5000        # circuit breaker for the whole business day
+  daily_token_budget: 400000      # ~chars/4 estimate across prompts+outputs
+  trusted_wa_ids: []              # owner numbers exempt from limits

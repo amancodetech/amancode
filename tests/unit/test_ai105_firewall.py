@@ -125,6 +125,9 @@ class PromptPlacement(unittest.TestCase):
                 return FakeResult()
 
         class Stub:
+            cost_governor = None  # COST-402 gate is optional in this probe
+            _drafter = None
+
             def _quote_drafter(self_inner):
                 return FakeProvider()
 

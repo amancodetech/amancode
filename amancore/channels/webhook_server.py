@@ -98,6 +98,15 @@ def build_runtime(root: Path):
         ObjectionHandlingSkill(brain), FollowupEngine(), HandoffService(dispatcher),
         audit=audit, dispatcher=dispatcher,
     )
+    from ..ops.cost_governor import CostGovernor
+
+    cost_cfg = {}
+    try:
+        cost_cfg = dict(cfg.app.get("cost") or {})
+    except Exception:  # noqa: BLE001 — governor must never block startup
+        cost_cfg = {}
+    governor = CostGovernor(cost_cfg)
+
     coordinator = MessageCoordinator(
         adapter, outbox, worker, sales, crm, memory,
         HandoverService(crm, dispatcher), ExternalResponseFilter(), policy,
@@ -105,6 +114,7 @@ def build_runtime(root: Path):
         PricingSnapshotStore(db), ProposalStore(db),
         owner_alert=send_owner_alert,
         audit=audit, dispatcher=dispatcher,
+        cost_governor=governor,
     )
     inbox = build_inbox_runtime(db, coordinator)
 
@@ -396,6 +406,9 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
                 if in_row:
                     import threading as _th
                     from ..ops.learning import record_learning
+
+                    if governor.allow(wa_id)[0]:
+                        pass  # learning shares the customer's budget slot
 
                     _th.Thread(target=record_learning,
                                args=(frm, in_row["body"], last),

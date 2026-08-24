@@ -60,6 +60,7 @@ class MessageCoordinator:
         message_recorder=None,
         status_recorder=None,
         reaction_recorder=None,
+        cost_governor=None,
     ):
         self.whatsapp = whatsapp_adapter
         self.outbox = outbox
@@ -84,6 +85,7 @@ class MessageCoordinator:
         self.message_recorder = message_recorder
         self.reaction_recorder = reaction_recorder
         self.status_recorder = status_recorder
+        self.cost_governor = cost_governor
 
     def handle_whatsapp_webhook(self, body, headers=None, raw_body: bytes | None = None) -> dict:
         if self.whatsapp.config.get("signature_required"):
@@ -340,6 +342,13 @@ class MessageCoordinator:
                      history: str = "") -> str:
         """AI composes the final customer-facing reply; deterministic layer
         supplies facts via `base`/`intent_note`. Falls back to `base`."""
+        # COST-402: enforce BEFORE the LLM; blocked → deterministic fallback
+        wa = str(lead.get("contact_whatsapp") or "")
+        if self.cost_governor is not None:
+            allowed, reason = self.cost_governor.allow(wa)
+            if not allowed:
+                log.info("cost.blocked wa=%s reason=%s", wa, reason)
+                return self._localize(base or _SAFE_FALLBACK, language)
         try:
             learnings = ""
             try:
@@ -380,6 +389,10 @@ class MessageCoordinator:
             ]
             r = self._quote_drafter().complete(messages)
             out = (r.text or "").strip().strip('"')[:700]
+            if self.cost_governor is not None:
+                self.cost_governor.record(
+                    wa, prompt_chars=sum(len(m["content"]) for m in messages),
+                    output_chars=len(out))
             log.info("draft.completed provider=deepseek-v4-flash chars=%d", len(out))
             return out or self._localize(base or _SAFE_FALLBACK, language)
         except Exception as exc:  # noqa: BLE001 — deterministic fallback covers failures
@@ -402,6 +415,9 @@ class MessageCoordinator:
 
     def _draft_quote_reply(self, lead: dict) -> str:
         """AI-drafted price-safe reply in the customer's own language."""
+        if self.cost_governor is not None and not self.cost_governor.allow(
+                str(lead.get("contact_whatsapp") or ""))[0]:
+            return None  # caller falls back to the approved canned line
         try:
             learnings = ""
             try:
