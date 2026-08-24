@@ -210,6 +210,22 @@ class MessageCoordinator:
         result = self.sales_agent.process_message(lead, text)
         raw_reply = result.get("reply") or ""
         history = self._recent_history(wa_id)
+
+        # customer approved the discovery summary → owner takes over closing
+        _APPROVAL = re.compile(r"(موافق|متفق|تم\s*$|اوك|أوك|نعم\s*نعم|approved)", re.I)
+        prev_out = ""
+        try:
+            row = self.crm.db.execute(
+                "SELECT body FROM channel_messages WHERE wa_id=? AND direction='out'"
+                " ORDER BY id DESC LIMIT 1", (wa_id,)).fetchone()
+            prev_out = str(row["body"]) if row else ""
+        except Exception:  # noqa: BLE001
+            pass
+        if ("هل أنت موافق" in prev_out or "موافق؟" in prev_out) and \
+                _APPROVAL.search(text):
+            self.handover.request_human(lead["lead_id"])
+            self._alert_owner(lead, mem, "customer_approved_summary — ready for official quote")
+
         qual = result.get("qualification") or {}
         missing = ", ".join(list(qual.get("missing_information", []))[:4])
         known = json.dumps({"facts": mem.get("facts", {}),
@@ -219,11 +235,21 @@ class MessageCoordinator:
             intent_note = (
                 "discovery stage. ALREADY KNOWN about this customer: " + known +
                 ". Still missing: " + (missing or "nothing critical") +
-                ". Rules: FIRST summarize briefly what the customer wants in their "
-                "own simple words. Then ask AT MOST ONE short everyday question ONLY "
-                "about missing info — never repeat anything from RECENT CHAT or "
-                "anything already answered. Customer is NOT technical: zero jargon. "
-                "If you have enough, skip questions and confirm next step.")
+                ". Follow this DISCOVERY PLAYBOOK in order — reply with exactly ONE "
+                "step, whichever comes next based on RECENT CHAT:\n"
+                "STEP 1 (understand): describe their business/activity in one warm "
+                "simple sentence from THEIR words and ask 'هل هذا صحيح؟'\n"
+                "STEP 2 (structure): propose a tailored page list for their website "
+                "(5-7 page names fitting their organization type, e.g. for a charity: "
+                "الرئيسية، من نحن، برامجنا، كيف تتبرع، احتياجات المحتاجين، الأخبار، "
+                "تواصل معنا) and ask if it fits or how many pages they prefer.\n"
+                "STEP 3 (essentials): one at a time ask simple non-technical "
+                "questions: logo? photos? ready texts? social media links? "
+                "(donation methods if charity).\n"
+                "STEP 4 (summary): give a FULL neat summary of everything agreed "
+                "(business + pages + details) and end with 'هل أنت موافق؟'\n"
+                "Never skip steps, never repeat a step already done in RECENT CHAT, "
+                "zero jargon, one step per message.")
             base = ""
         else:
             intent_note = str(result.get("next_action")
