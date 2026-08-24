@@ -82,7 +82,27 @@ def build_runtime(root: Path):
         owner_alert=send_owner_alert,
         audit=audit, dispatcher=dispatcher,
     )
-    return {"db": db, "adapter": adapter, "coordinator": coordinator}
+    return {"db": db, "adapter": adapter, "coordinator": coordinator, "inbox": build_inbox_runtime(db, coordinator)}
+
+
+def build_inbox_runtime(db, coordinator):
+    """Assemble the private owner inbox (auth + message store + send path)."""
+    from .handover import HandoverService
+    from .inbox import InboxConfig
+
+    cfg = InboxConfig()
+    if not cfg.configured:
+        return None  # inbox disabled unless fully configured in env
+    from ..crm.service import CRMService
+
+    return {
+        "config": cfg,
+        "db": db,
+        "crm": CRMService(db),
+        "handover": HandoverService(CRMService(db)),
+        "outbox": coordinator.outbox,
+        "worker": coordinator.worker,
+    }
 
 
 class WebhookRequestHandler(BaseHTTPRequestHandler):
@@ -93,8 +113,33 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
     def runtime(self) -> dict:
         return self.server.runtime
 
+    @property
+    def inbox(self):
+        return self.runtime.get("inbox")
+
+    def _inbox_route(self, path: str) -> tuple[object | None, str]:
+        """Match /{slug}/{action} -> (inbox_runtime, action)."""
+        inbox = self.inbox
+        if inbox is None:
+            return None, ""
+        slug = inbox["config"].slug
+        prefix = f"/{slug}/"
+        if path.startswith(prefix):
+            return inbox, path[len(prefix):]
+        if path == f"/{slug}":
+            return inbox, "login"
+        return None, ""
+
     def log_message(self, fmt, *args):  # noqa: A003 — redacted, no bodies/secrets
-        log.info("%s - %s", self.address_string(), fmt % args)
+        import re as _re
+
+        line = fmt % args
+        # never log tokens or signatures
+        line = _re.sub(r"(hub\.verify_token=)[^&\s]+", r"\1<redacted>", line)
+        line = _re.sub(r"(access_token=)[^&\s]+", r"\1<redacted>", line)
+        entry = f"{self.address_string()} - {line}"
+        print(entry, flush=True)
+        log.info(entry)
 
     def _send(self, status: int, body: bytes, content_type: str = "text/plain") -> None:
         self.send_response(status)
@@ -102,6 +147,19 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _send_html(self, status: int, page: str, extra_headers: dict | None = None) -> None:
+        from .inbox import security_headers
+
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(page.encode("utf-8"))))
+        for k, v in security_headers().items():
+            self.send_header(k, v)
+        for k, v in (extra_headers or {}).items():
+            self.send_header(k, v)
+        self.end_headers()
+        self.wfile.write(page.encode("utf-8"))
 
     def do_GET(self):  # noqa: N802 — stdlib naming
         from urllib.parse import parse_qs, urlparse
@@ -121,9 +179,23 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
             else:
                 self._send(403, b"verification failed")
             return
+        inbox, action = self._inbox_route(parsed.path)
+        if inbox is not None and not action.startswith("api"):
+            return self._inbox_get(inbox, action, parsed.query)
+        if inbox is not None and action.startswith("api/"):
+            if not self._inbox_session_ok(inbox):
+                self._send(403, b"forbidden", "application/json")
+                return
+            return self._inbox_api_get(inbox, action[len("api/"):], parse_qs(parsed.query))
         self._send(404, b"not found")
 
     def do_POST(self):  # noqa: N802 — stdlib naming
+        from urllib.parse import parse_qs, urlparse
+
+        parsed = urlparse(self.path)
+        inbox, action = self._inbox_route(parsed.path)
+        if inbox is not None:
+            return self._inbox_post(inbox, action)
         if self.path != "/webhook/whatsapp":
             self._send(404, b"not found")
             return
@@ -153,6 +225,198 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
             self._send(403, json.dumps(summary).encode("utf-8"), "application/json")
             return
         self._send(200, json.dumps(summary).encode("utf-8"), "application/json")
+
+    # ── private owner inbox ─────────────────────────────────────────────
+
+    def _inbox_session_ok(self, inbox) -> bool:
+        from .inbox import extract_session_cookie, verify_session_token
+
+        token = extract_session_cookie(self.headers.get("Cookie"))
+        return verify_session_token(inbox["config"].secret, token)
+
+    def _client_key(self) -> str:
+        return (self.headers.get("X-Forwarded-For") or self.client_address[0] or "?").split(",")[0].strip()
+
+    def _inbox_get(self, inbox, action: str, query: str) -> None:
+        from .inbox import render_inbox_page, render_login_page
+
+        cfg = inbox["config"]
+        if action in ("login", ""):
+            already = self._inbox_session_ok(inbox)
+            if already:
+                return self._redirect(cfg.app_path)
+            return self._send_html(200, render_login_page(cfg.login_path))
+        if action == "app":
+            if not self._inbox_session_ok(inbox):
+                return self._redirect(cfg.login_path)
+            base = f"/{cfg.slug}"
+            return self._send_html(200, render_inbox_page(base, f"{base}/logout"))
+        self._send(404, b"not found")
+
+    def _redirect(self, location: str) -> None:
+        self.send_response(303)
+        self.send_header("Location", location)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def _read_form(self) -> dict:
+        from urllib.parse import parse_qs
+
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            length = 0
+        if not 0 < length <= 10_000:
+            return {}
+        raw = self.rfile.read(length).decode("utf-8", errors="replace")
+        return {k: v[0] for k, v in parse_qs(raw).items()}
+
+    def _read_json(self) -> dict:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            length = 0
+        if not 0 < length <= 100_000:
+            return {}
+        try:
+            return json.loads(self.rfile.read(length).decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            return {}
+
+    def _inbox_post(self, inbox, action: str) -> None:
+        from .inbox import (
+            SESSION_COOKIE,
+            LoginRateLimiter,
+            make_session_token,
+            render_login_page,
+            security_headers,
+            verify_password,
+        )
+
+        cfg = inbox["config"]
+        limiter: LoginRateLimiter = self.runtime.setdefault(
+            "_login_limiter", LoginRateLimiter()
+        )
+        client = self._client_key()
+
+        if action == "logout":
+            expired = f"{SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict"
+            return self._send_html(303, "", {"Set-Cookie": expired, "Location": cfg.login_path})
+
+        if action == "login":
+            form = self._read_form()
+            password = form.get("password", "")
+            if limiter.is_locked(client):
+                return self._send_html(429, render_login_page(cfg.login_path, "محاولات كثيرة — حاول بعد 10 دقائق"))
+            if not password or not verify_password(password, cfg.password_hash):
+                limiter.record_failure(client)
+                import time as _t
+
+                _t.sleep(1.0)  # brute-force damping
+                return self._send_html(200, render_login_page(cfg.login_path, "كلمة مرور غير صحيحة"))
+            limiter.reset(client)
+            token = make_session_token(cfg.secret)
+            cookie = (
+                f"{SESSION_COOKIE}={token}; Path=/; Max-Age={12 * 60 * 60}; "
+                "HttpOnly; SameSite=Strict"
+            )
+            return self._send_html(
+                303, "", {"Set-Cookie": cookie, "Location": cfg.app_path}
+            )
+
+        if not self._inbox_session_ok(inbox):
+            return self._send(403, b"forbidden")
+
+        if action == "api/send":
+            data = self._read_json()
+            wa_id = str(data.get("wa_id") or "").strip()
+            text = str(data.get("text") or "").strip()
+            if not wa_id or not text or len(text) > 4096:
+                return self._send(400, b"bad request")
+            result = inbox_send_message(inbox, wa_id, text)
+            status = 200 if result.get("ok") else 502
+            return self._send(status, json.dumps(result).encode("utf-8"), "application/json")
+
+        self._send(404, b"not found")
+
+    def _inbox_api_get(self, inbox, resource: str, qs: dict) -> None:
+        if resource == "leads":
+            rows = inbox["db"].execute(
+                """
+                SELECT l.contact_whatsapp AS wa_id,
+                       COALESCE(l.name, '') AS name,
+                       COALESCE(c.mode, 'AI_ACTIVE') AS mode,
+                       MAX(m.created_at) AS last_at
+                  FROM leads l
+             LEFT JOIN conversations c ON c.lead_id = l.lead_id
+             LEFT JOIN channel_messages m ON m.wa_id = l.contact_whatsapp
+              GROUP BY l.contact_whatsapp
+              ORDER BY last_at DESC NULLS LAST
+                 LIMIT 200
+                """
+            ).fetchall()
+            payload = [dict(r) for r in rows]
+            return self._send(200, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json")
+        if resource == "messages":
+            wa_id = (qs.get("wa_id") or [""])[0]
+            out_rows = inbox["db"].execute(
+                """
+                SELECT direction, body, status, created_at FROM (
+                    SELECT 'in' AS direction, body, '' AS status, created_at
+                      FROM channel_messages WHERE wa_id = ?
+                    UNION ALL
+                    SELECT 'out' AS direction, COALESCE(payload, ''), status, created_at
+                      FROM message_outbox
+                     WHERE channel='whatsapp' AND recipient = ? AND message_type='text'
+                ) ORDER BY created_at ASC LIMIT 500
+                """,
+                (wa_id, wa_id),
+            ).fetchall()
+            return self._send(
+                200, json.dumps([dict(r) for r in out_rows], ensure_ascii=False).encode("utf-8"),
+                "application/json",
+            )
+        self._send(404, b"not found")
+
+
+def inbox_send_message(inbox, wa_id: str, text: str) -> dict:
+    """Owner manual reply: switch to HUMAN_ACTIVE, enqueue via policy-gated outbox."""
+    import uuid
+
+    from .handover import HandoverService
+    from ..services.audit import AuditService
+
+    crm = inbox["crm"]
+    lead = crm.find_lead_by_whatsapp(wa_id)
+    if lead is None:
+        lead_id = crm.create_lead(contact_whatsapp=wa_id, source_channel="whatsapp")
+        lead = crm.get_lead(lead_id)
+    handover = HandoverService(crm)
+    handover.set_mode(lead["lead_id"], "HUMAN_ACTIVE")
+    mid = inbox["outbox"].enqueue(
+        channel="whatsapp",
+        recipient=wa_id,
+        message_type="text",
+        payload=text,
+        idempotency_key=f"wa-inbox:{uuid.uuid4()}",
+        lead_id=lead["lead_id"],
+    )
+    results = inbox["worker"].drain(limit=5)
+    sent = any(r.get("message_id") == mid and r.get("status") == "sent" for r in results)
+    audit = AuditService(inbox["db"])
+    audit.record("channel.inbox_send", "lead", actor="owner", result="sent" if sent else "queued")
+    db = inbox["db"]
+    db.execute(
+        "INSERT INTO channel_messages (direction, wa_id, lead_id, body, status, created_at)"
+        " VALUES ('out', ?, ?, ?, ?, datetime('now'))",
+        (wa_id, lead["lead_id"], text, "sent" if sent else "queued"),
+    )
+    db.commit()
+    return {
+        "ok": True,
+        "delivered": sent,
+        "note": None if sent else "queued — production mode required for real delivery",
+    }
 
 
 class WebhookServer(ThreadingHTTPServer):

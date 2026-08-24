@@ -111,7 +111,7 @@ def resolve_transport(config: dict | None = None, env: dict | None = None) -> Al
     Telegram is preferred when configured and available; email next; log
     always as a safe fallback. Never assumes credentials exist.
     """
-    env = env or os.environ
+    env = os.environ if env is None else env
     cfg = config or {}
     channel = cfg.get("channel", "log")
 
@@ -138,7 +138,7 @@ def transport_status(config: dict | None = None, env: dict | None = None) -> str
     """'telegram (available)' | 'email (available)' | 'log (fallback)' | 'NOT_CONFIGURED'."""
     cfg = config or {}
     channel = cfg.get("channel", "log")
-    env = env or os.environ
+    env = os.environ if env is None else env
     if channel in ("telegram", "auto"):
         if env.get("TELEGRAM_BOT_TOKEN") and env.get("TELEGRAM_CHAT_ID"):
             return "telegram (available)"

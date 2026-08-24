@@ -55,6 +55,7 @@ class MessageCoordinator:
         support_agent=None,
         intent_router=None,
         support_filter=None,
+        message_recorder=None,
     ):
         self.whatsapp = whatsapp_adapter
         self.outbox = outbox
@@ -76,6 +77,7 @@ class MessageCoordinator:
         self.support_agent = support_agent
         self.intent_router = intent_router or IntentRouter()
         self.support_filter = support_filter or SupportResponseFilter()
+        self.message_recorder = message_recorder
 
     def handle_whatsapp_webhook(self, body, headers=None, raw_body: bytes | None = None) -> dict:
         if self.whatsapp.config.get("signature_required"):
@@ -120,6 +122,18 @@ class MessageCoordinator:
                 source_channel="whatsapp",
             )
             lead = self.crm.get_lead(lead_id)
+
+        if self.message_recorder is not None:
+            try:
+                self.message_recorder(
+                    direction="in",
+                    wa_id=wa_id,
+                    lead_id=lead["lead_id"],
+                    wa_message_id=payload.get("message_id"),
+                    body=text,
+                )
+            except Exception:  # noqa: BLE001 — recording must never break the pipeline
+                pass
 
         language = self.lang.detect(text)
         mem = self.memory.get_or_create(lead["lead_id"], channel="whatsapp", language=language)

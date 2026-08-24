@@ -63,7 +63,7 @@ jobs:
     cron: "0 9 * * *"
 
 alert:
-  channel: log                # log | telegram | email (availability is checked; never assumed)
+  channel: auto               # auto picks telegram/email when creds exist, else log fallback
   dedup_cooldown_minutes: 60
   dedup_window_hours: 24
   telegram_bot_token_env: TELEGRAM_BOT_TOKEN
