@@ -240,6 +240,14 @@ header form button:hover{{background:#2a3942}}
 audio{{max-width:250px;height:38px}}
 .doc{{display:flex;align-items:center;gap:.4rem;background:rgba(255,255,255,.08);padding:.4rem .6rem;border-radius:6px;font-size:.88rem}}
 #preview{{padding:.5rem .8rem;background:#202c33;display:flex;justify-content:space-between;align-items:center;color:#e9edef;font-size:.85rem}}
+#replybar{{display:none;padding:.4rem .8rem;background:#1f2c33;border-top:1px solid #2a3942;color:#8696a0;font-size:.8rem;justify-content:space-between;align-items:center}}
+#replybar .q{{color:#e9edef;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-right:.5rem}}
+#replybar button{{background:none;border:0;color:#f15c6d;cursor:pointer;font-size:.9rem}}
+.msg:hover{{filter:brightness(1.12)}}
+.acts,.reactbar{{position:absolute;top:-14px;left:6px;display:none;background:#233138;border-radius:14px;padding:.1rem .35rem;z-index:5}}
+.msg:hover .acts,.msg:hover .reactbar{{display:flex}}
+.acts button{{border:0;background:none;cursor:pointer;font-size:.85rem;padding:.1rem .3rem}}
+.reactbar button{{border:0;background:none;cursor:pointer;font-size:.95rem;padding:.05rem}}
 #preview button{{background:none;border:0;color:#f15c6d;font-size:1rem;cursor:pointer}}
 #send:hover{{background:#06cf9c}}
 @media(max-width:700px){{aside{{width:100%;display:none}} aside.open{{display:flex}}
@@ -250,6 +258,7 @@ audio{{max-width:250px;height:38px}}
 <main id="chatArea">
 <header><span id="who">AmanCore Inbox</span><form method="post" action="{logout}"><button>خروج ⏻</button></form></header>
 <div id="log"><div class="empty">اختر محادثة من القائمة لعرض الرسائل</div></div>
+<div id="replybar"><span class="q"></span><button type="button">✕</button></div>
 <form id="composer">
 <input type="file" id="file" hidden>
 <button type="button" id="attach" title="مرفق">📎</button>
@@ -306,27 +315,64 @@ async function loadMsgs(){{
  if(r.status===403)location.reload();
  const d=await r.json();LOG.innerHTML='';
  if(!d.length){{LOG.innerHTML='<div class="empty">لا رسائل في هذه المحادثة</div>';return}}
- let lastDay='';
+ let lastDay='';const unread=[];
  d.forEach(m=>{{
   const day=(m.created_at||'').slice(0,10);
   if(day&&day!==lastDay){{lastDay=day;
    const dd=document.createElement('div');dd.className='day';dd.textContent=day;LOG.appendChild(dd)}}
   const w=document.createElement('div');w.className='msg '+m.direction;
+  w.style.position='relative';
+  w.dataset.pk=(m.id||'');w.dataset.wmid=(m.wa_message_id||'');
   const mh=mediaHtml(m);
   if(mh){{const mw=document.createElement('div');mw.innerHTML=mh;w.appendChild(mw.firstChild||mw)}}
-  const cap=(m.caption||(m.media?'':''))+(m.caption&&m.media?' ':'');
-  if(cap){{const t=document.createElement('span');t.textContent=m.caption;w.appendChild(t);
-    w.insertBefore(document.createTextNode(' '),null);}}
-  else if(!mh){{w.appendChild(document.createTextNode(m.caption??m.body??''))}}
+  const cap=(m.caption||'');
+  if(cap){{const t=document.createElement('span');t.textContent=m.caption;w.appendChild(t)}}
+  else if(!mh){{w.appendChild(document.createTextNode(m.body??''))}}
+  const acts=document.createElement('div');
+  if(m.direction==='in'){{
+   acts.className='reactbar';
+   ['👍','❤️','😂','😮','😢','🙏'].forEach(em=>{{
+    const b=document.createElement('button');b.textContent=em;b.type='button';
+    b.onclick=(ev)=>{{ev.stopPropagation();doReact(m.wa_message_id,em)}};
+    acts.appendChild(b);}});
+  }} else {{
+   acts.className='acts';
+   const del=document.createElement('button');del.textContent='🗑';del.title='إخفاء لدي فقط';
+   del.onclick=(ev)=>{{ev.stopPropagation();hideMsg(+m.id)}};
+   acts.appendChild(del);}}
+  w.appendChild(acts);
+  if(m.direction==='in'&&m.wa_message_id){{
+   w.style.cursor='pointer';
+   w.onclick=()=>startReply(m);
+  }}
   const meta=document.createElement('div');meta.className='meta';
   meta.innerHTML='<span>'+esc((m.created_at||'').slice(11,16))+'</span>'+ticks(m);
   w.appendChild(meta);LOG.appendChild(w);
+  if(m.direction==='in'&&m.wa_message_id&&m.status!=='read')unread.push(m.wa_message_id);
  }});
- LOG.scrollTop=LOG.scrollHeight;}}
+ LOG.scrollTop=LOG.scrollHeight;
+ if(unread.length)fetch('{base}/api/read',{{method:'POST',headers:{{'Content-Type':'application/json'}},
+  body:JSON.stringify({{message_ids:unread}})}}).then(()=>loadMsgs()).catch(()=>{{}});}}
 async function sendPayload(payload){{
  await fetch('{base}/api/send',{{method:'POST',headers:{{'Content-Type':'application/json'}},
   body:JSON.stringify(payload)}});
  loadMsgs();loadLeads();}}
+async function doReact(wmid,emoji){{
+ if(!wmid)return;
+ await fetch('{base}/api/react',{{method:'POST',headers:{{'Content-Type':'application/json'}},
+  body:JSON.stringify({{wa_id:current,message_id:wmid,emoji}})}});
+ loadMsgs();}}
+async function hideMsg(pk){{
+ await fetch('{base}/api/hide',{{method:'POST',headers:{{'Content-Type':'application/json'}},
+  body:JSON.stringify({{id:pk}})}});
+ loadMsgs();}}
+function startReply(m){{
+ pendingReply={{message_id:m.wa_message_id,snippet:(m.caption||m.body||'').slice(0,80)}};
+ const rb=document.getElementById('replybar');
+ rb.querySelector('.q').textContent='↩ رد على: '+(pendingReply.snippet||'رسالة');
+ rb.style.display='flex';TEXT.focus();}}
+document.querySelector('#replybar button').onclick=()=>{{
+ pendingReply=null;document.getElementById('replybar').style.display='none';}};
 document.getElementById('composer').addEventListener('submit',async e=>{{
  e.preventDefault();
  if(pendingMedia){{
