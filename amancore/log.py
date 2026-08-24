@@ -10,22 +10,30 @@ _correlation_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "correlation_id", default=None
 )
 
-# never log these values
-_SECRET_KEYS = re.compile(
-    r"(api[_-]?key|token|secret|password|authorization|bearer)",
+# secret-bearing keys followed by a value: `token=abc`, `Authorization: Bearer x`
+_SECRET_PAIR = re.compile(
+    r"((?:api[_-]?key|access[_-]?token|token|secret|password|authorization|auth)"
+    r"[a-z0-9_]*)\s*[=:]\s*([\"']?[^\s,\"']+[\"']?)",
     re.IGNORECASE,
 )
+# standalone `Bearer <jwt-like value>`
+_SECRET_BEARER = re.compile(
+    r"\b(bearer)\s+([A-Za-z0-9._\-]{8,})\b", re.IGNORECASE
+)
+_REDACTED = "<redacted>"
 
 
 class SecretRedactionFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        msg = record.getMessage()
-        # replace `key=value` / `key: value` where key looks secret
-        record.msg = _SECRET_KEYS.sub(lambda m: m.group(0), msg)
-        if record.args:
-            record.args = tuple(
-                _SECRET_KEYS.sub("<redacted>", str(a)) for a in record.args
-            )
+        try:
+            msg = record.getMessage()
+        except Exception:  # noqa: BLE001 — never break logging on bad args
+            return True
+        msg = _SECRET_BEARER.sub(lambda m: f"{m.group(1)} {_REDACTED}", msg)
+        msg = _SECRET_PAIR.sub(lambda m: f"{m.group(1)}={_REDACTED}", msg)
+        # freeze the final message; drop args so % formatting can't re-inject secrets
+        record.msg = msg
+        record.args = None
         return True
 
 
@@ -44,13 +52,20 @@ def set_correlation_id(cid: str | None) -> None:
 
 
 def setup_logging(level: str = "INFO") -> None:
-    handler = logging.StreamHandler()
+    root = logging.getLogger("amancore")
+    if any(isinstance(h, StreamHandlerCompat) for h in root.handlers):
+        root.setLevel(level.upper())
+        return
+    handler = StreamHandlerCompat()
     handler.setFormatter(_CorrelationFormatter(_FORMAT))
     handler.addFilter(SecretRedactionFilter())
-    root = logging.getLogger("amancore")
     root.setLevel(level.upper())
     root.addHandler(handler)
     root.propagate = False
+
+
+class StreamHandlerCompat(logging.StreamHandler):
+    """Named marker so setup_logging is idempotent across repeated calls."""
 
 
 def get_logger(name: str) -> logging.Logger:

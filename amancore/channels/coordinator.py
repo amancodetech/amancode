@@ -139,6 +139,11 @@ class MessageCoordinator:
         text = payload.get("text", "")
         name = payload.get("name", "")
         corr = new_id()
+        from ..log import set_correlation_id
+
+        set_correlation_id(corr)
+        log.info("webhook.received wa_id=%s wamid=%s chars=%d",
+                 wa_id, payload.get("message_id"), len(text))
 
         lead = self.crm.find_lead_by_whatsapp(wa_id)
         if lead is None:
@@ -210,6 +215,8 @@ class MessageCoordinator:
         result = self.sales_agent.process_message(lead, text)
         raw_reply = result.get("reply") or ""
         history = self._recent_history(wa_id)
+        log.info("route.decision lead=%s action=%s",
+                 lead["lead_id"], result.get("next_action"))
 
         # customer approved the discovery summary → owner takes over closing
         _APPROVAL = re.compile(r"(موافق|متفق|تم\s*$|اوك|أوك|نعم\s*نعم|approved)", re.I)
@@ -361,9 +368,11 @@ class MessageCoordinator:
             ]
             r = self._quote_drafter().complete(messages)
             out = (r.text or "").strip().strip('"')[:700]
+            log.info("draft.completed provider=deepseek-v4-flash chars=%d", len(out))
             return out or self._localize(base or _SAFE_FALLBACK, language)
         except Exception as exc:  # noqa: BLE001 — deterministic fallback covers failures
             self._audit("reply.draft_failed", "lead", result=str(exc))
+            log.error("draft.failed err=%s", str(exc)[:200])
             return self._localize(base or _SAFE_FALLBACK, language)
 
     def _quote_drafter(self):
@@ -428,6 +437,8 @@ class MessageCoordinator:
             conversation_id=mem.get("conversation_id"),
             correlation_id=corr,
         )
+        log.info("outbox.enqueued mid=%s corr=%s recipient=%s",
+                 mid, corr, lead.get("contact_whatsapp"))
         self._audit("channel.reply_queued", "lead", result=mid)
         return mid
 

@@ -782,6 +782,9 @@ class WebhookServer(ThreadingHTTPServer):
 
 
 def serve(root: Path, host: str = "127.0.0.1", port: int = 8010) -> int:
+    from ..log import setup_logging
+
+    setup_logging()
     runtime = build_runtime(root)
     httpd = WebhookServer((host, port), runtime)
 

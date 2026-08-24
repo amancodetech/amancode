@@ -325,6 +325,9 @@ def _jobs(args) -> int:
             runtime = SchedulerRuntime(store, JobRunner(store, JobRegistry(db, cfg, ROOT).handlers()), cfg.scheduler)
             print(json.dumps(runtime.run_once(), ensure_ascii=False, indent=2))
         elif args.sub == "loop":
+            from .log import setup_logging
+
+            setup_logging()
             runtime = SchedulerRuntime(store, JobRunner(store, JobRegistry(db, cfg, ROOT).handlers(), worker_id="scheduler"), cfg.scheduler)
             print("amancore scheduler loop started (ctrl-c / SIGTERM for graceful stop)", flush=True)
             runtime.run_loop()
