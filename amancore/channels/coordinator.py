@@ -5,6 +5,7 @@ Channels are transport only: no sales logic, no pricing logic here.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -208,11 +209,31 @@ class MessageCoordinator:
         # sales flow — engine computes facts/state, AI speaks
         result = self.sales_agent.process_message(lead, text)
         raw_reply = result.get("reply") or ""
+        history = self._recent_history(wa_id)
+        qual = result.get("qualification") or {}
+        missing = ", ".join(list(qual.get("missing_information", []))[:4])
+        known = json.dumps({"facts": mem.get("facts", {}),
+                            "requirements": mem.get("requirements", {})},
+                           ensure_ascii=False)[:400]
+        if result.get("next_action") == "ask_next_question":
+            intent_note = (
+                "discovery stage. ALREADY KNOWN about this customer: " + known +
+                ". Still missing: " + (missing or "nothing critical") +
+                ". Rules: FIRST summarize briefly what the customer wants in their "
+                "own simple words. Then ask AT MOST ONE short everyday question ONLY "
+                "about missing info — never repeat anything from RECENT CHAT or "
+                "anything already answered. Customer is NOT technical: zero jargon. "
+                "If you have enough, skip questions and confirm next step.")
+            base = ""
+        else:
+            intent_note = str(result.get("next_action")
+                              or ("handle objection" if result.get("objection")
+                                  else "sales conversation"))
         reply = self._draft_reply(
             lead, text, language,
-            intent_note=str(result.get("next_action")
-                            or ("handle objection" if result.get("objection") else "sales conversation")),
+            intent_note=intent_note,
             base=raw_reply or _SAFE_FALLBACK,
+            history=history,
         )
         if result.get("needs_human"):
             self.handover.request_human(lead["lead_id"])
@@ -263,8 +284,24 @@ class MessageCoordinator:
         drafted = self._draft_quote_reply(lead)
         return drafted or "Our team is preparing an approved quote for you — no price will be quoted before approval."
 
+    def _recent_history(self, wa_id: str, limit: int = 8) -> str:
+        """Last exchanges as readable lines — so the drafter never repeats itself."""
+        try:
+            rows = self.crm.db.execute(
+                "SELECT direction, body FROM channel_messages"
+                " WHERE wa_id=? AND body != '' AND hidden=0"
+                " ORDER BY id DESC LIMIT ?", (wa_id, limit)).fetchall()
+            lines = []
+            for r in reversed(rows):
+                who = "العميل" if r["direction"] == "in" else "نحن"
+                lines.append(f"{who}: {str(r['body'])[:90]}")
+            return "\n".join(lines)
+        except Exception:  # noqa: BLE001
+            return ""
+
     def _draft_reply(self, lead: dict, text: str, language: str,
-                     intent_note: str = "", base: str = "") -> str:
+                     intent_note: str = "", base: str = "",
+                     history: str = "") -> str:
         """AI composes the final customer-facing reply; deterministic layer
         supplies facts via `base`/`intent_note`. Falls back to `base`."""
         try:
@@ -275,7 +312,7 @@ class MessageCoordinator:
                          + "\n" + recent_learnings_summary())
             except Exception:  # noqa: BLE001
                 facts = ""
-            r = self._quote_drafter().complete([
+            messages = [
                 {"role": "system", "content":
                  "You are AmanCode's WhatsApp assistant (websites, systems, digital solutions). "
                  "Write the customer's reply: warm, confident, human, max 55 words, "
@@ -286,11 +323,17 @@ class MessageCoordinator:
                  "If the customer talks about something unrelated to our business, "
                  "respond warmly and briefly acknowledge it, then gently steer back "
                  "to how AmanCode can serve their business. Always stay in our "
-                 "business context. Output only the message text."
+                 "business context. "
+                 "NEVER repeat a question already present in RECENT CHAT; the customer "
+                 "may be non-technical — use plain everyday words only. "
+                 "Output only the message text."
                  + facts},
                 {"role": "user", "content":
-                 f"CUSTOMER MESSAGE: {text}\n\nDRAFT CONTENT: {base}"},
-            ])
+                 f"CUSTOMER MESSAGE: {text}\n\nDRAFT CONTENT: {base}"
+                 + (("\n\nRECENT CHAT (do NOT repeat any question already asked here):\n"
+                     + history) if history else "")},
+            ]
+            r = self._quote_drafter().complete(messages)
             out = (r.text or "").strip().strip('"')[:700]
             return out or self._localize(base or _SAFE_FALLBACK, language)
         except Exception as exc:  # noqa: BLE001 — deterministic fallback covers failures
