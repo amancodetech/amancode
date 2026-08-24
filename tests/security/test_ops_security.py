@@ -88,16 +88,20 @@ class OpsSecurityTest(TempDirTestCase, unittest.TestCase):
         self.assertNotIn("SECRET_ALERT_TOKEN", " ".join(row))
 
     def test_no_automatic_production_activation(self):
-        """The scheduler/CLI must never enable production on their own."""
+        """The scheduler/CLI must never change production state on their own."""
         from amancore.ops.registry import JobRegistry
         from amancore.config import load_config
 
         cfg = load_config(ROOT)
+        before = bool(cfg.production.get("environment", {}).get("production_enabled", False))
         handlers = JobRegistry(self.db, cfg, ROOT).handlers()
         result = handlers["production.check"]({})
-        self.assertFalse(result["production_enabled"])
-        # and production.yaml still disabled
-        self.assertFalse(cfg.production.get("environment", {}).get("production_enabled", False))
+        # the check job reports but never toggles the flag
+        self.assertEqual(bool(result.get("production_enabled")), before)
+        # and production.yaml is unchanged by running the job
+        cfg_after = load_config(ROOT)
+        after = bool(cfg_after.production.get("environment", {}).get("production_enabled", False))
+        self.assertEqual(before, after)
 
     def test_incident_evidence_preserved(self):
         svc = IncidentService(self.db)

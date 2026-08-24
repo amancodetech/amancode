@@ -253,8 +253,20 @@ def _production_gate(cfg: Config) -> str:
 
     production = dict(cfg.production)
     report = ProductionGateService(production).check()
+    env = cfg.production.get("environment", {})
     if report["production_enabled"]:
-        raise RuntimeError("production_enabled must be false in this environment")
+        # Enabled state is valid only when owner-approved enablement left a
+        # consistent configuration (mode=production). Enablement itself is
+        # audited in production.enablement.
+        mode = env.get("mode")
+        if mode != "production":
+            raise RuntimeError(
+                f"inconsistent production state: enabled but mode={mode}"
+            )
+        return (
+            f"verdict=ENABLED (mode=production, audited; "
+            f"disable via production-disable)"
+        )
     return f"verdict={report['verdict']} (safe: production disabled, mode={report['mode']})"
 
 

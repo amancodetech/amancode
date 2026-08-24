@@ -331,7 +331,12 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
         return verify_session_token(inbox["config"].secret, token)
 
     def _client_key(self) -> str:
-        return (self.headers.get("X-Forwarded-For") or self.client_address[0] or "?").split(",")[0].strip()
+        # behind Cloudflare, CF-Connecting-IP is set by the edge and cannot be
+        # spoofed by the client; fall back to socket peer address
+        cf_ip = self.headers.get("CF-Connecting-IP")
+        if cf_ip:
+            return cf_ip.strip()
+        return self.client_address[0] or "?"
 
     def _inbox_get(self, inbox, action: str, query: str) -> None:
         from .inbox import render_inbox_page, render_login_page
@@ -396,7 +401,7 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
         client = self._client_key()
 
         if action == "logout":
-            expired = f"{SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict"
+            expired = f"{SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict; Secure"
             return self._send_html(303, "", {"Set-Cookie": expired, "Location": cfg.login_path})
 
         if action == "login":
@@ -414,7 +419,7 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
             token = make_session_token(cfg.secret)
             cookie = (
                 f"{SESSION_COOKIE}={token}; Path=/; Max-Age={12 * 60 * 60}; "
-                "HttpOnly; SameSite=Strict"
+                "HttpOnly; SameSite=Strict; Secure"
             )
             return self._send_html(
                 303, "", {"Set-Cookie": cookie, "Location": cfg.app_path}
@@ -437,6 +442,8 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
                 return self._send(400, json.dumps({"ok": False, "error": "bad media"}).encode(), "application/json")
             if (not wa_id) or (not text and not media):
                 return self._send(400, b"bad request")
+            if len(text) > 4096:
+                return self._send(400, json.dumps({"ok": False, "error": "text too long"}).encode(), "application/json")
             result = inbox_send_message(inbox, wa_id, text, media=media)
             status = 200 if result.get("ok") else 502
             return self._send(status, json.dumps(result).encode("utf-8"), "application/json")
