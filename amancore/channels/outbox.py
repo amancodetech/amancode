@@ -138,12 +138,32 @@ class MessageOutbox:
         )
         self.db.commit()
 
-    def mark_failed(self, message_id: str, reason: str) -> str:
-        """Returns the final status ('dead' or 'queued') so callers can alert."""
+    def mark_failed(self, message_id: str, reason: str, *,
+                    retry_in_seconds: int | None = None,
+                    dead_now: bool = False) -> str:
+        """Returns the final status ('dead' or 'queued') so callers can alert.
+
+        WA-302/W1: dead_now short-circuits pointless retries for permanent
+        failures (auth/bad_recipient); retry_in_seconds honors provider
+        Retry-After instead of fixed linear backoff.
+        """
         msg = self.get(message_id) or {}
         attempts = msg.get("attempts", 0) + 1
         reason = (reason or "")[:200]  # OUT-205: bounded forensic field
-        if attempts >= self.max_attempts:
+        if dead_now or attempts >= self.max_attempts:
+            self.db.execute(
+                "UPDATE message_outbox SET status = 'dead', attempts = ?, failure_reason = ? WHERE message_id = ?",
+                (attempts, reason, message_id),
+            )
+            return "dead"
+        if retry_in_seconds is not None and retry_in_seconds > 0:
+            next_at = (datetime.now(timezone.utc) + timedelta(seconds=retry_in_seconds)).isoformat()
+            self.db.execute(
+                "UPDATE message_outbox SET status = 'queued', attempts = ?, next_attempt_at = ?, failure_reason = ? "
+                "WHERE message_id = ?",
+                (attempts, next_at, reason, message_id),
+            )
+            return "queued"
             self.db.execute(
                 "UPDATE message_outbox SET status = 'dead', attempts = ?, failure_reason = ? WHERE message_id = ?",
                 (attempts, reason, message_id),
@@ -211,7 +231,17 @@ class OutboxWorker:
             self._audit("channel.sent", channel, result=str(result))
             return {"message_id": message["message_id"], "status": "sent", "provider_message_id": result.get("provider_message_id")}
         except Exception as exc:  # noqa: BLE001
-            final = self.outbox.mark_failed(message["message_id"], str(exc))
+            from .wa_errors import FAST_DEAD_CATEGORIES, RETRYABLE_CATEGORIES, WhatsAppSendError
+
+            retry_in = None
+            dead_now = False
+            if isinstance(exc, WhatsAppSendError):
+                if exc.category in FAST_DEAD_CATEGORIES:   # auth / bad_recipient
+                    dead_now = True
+                elif exc.category in RETRYABLE_CATEGORIES:
+                    retry_in = exc.retry_after_seconds     # None → default backoff
+            final = self.outbox.mark_failed(message["message_id"], f"[{getattr(exc, 'category', 'generic')}] {exc}",
+                                            retry_in_seconds=retry_in, dead_now=dead_now)
             if final == "dead" and self.owner_alert is not None:  # OUT-205: dead is never silent
                 self.owner_alert(
                     "HIGH",

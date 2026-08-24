@@ -116,11 +116,16 @@ class GraphWhatsAppProvider:
                     section[k] = payload[k]
             body[message_type] = section
         else:
+            text_body = payload if isinstance(payload, str) else payload.get("body", "")
+            # W4: hard WhatsApp cap — clamp at the single choke point
             body["type"] = "text"
-            body["text"] = {"body": payload if isinstance(payload, str) else payload.get("body", "")}
+            body["text"] = {"body": str(text_body)[:4096]}
         resp = requests.post(url, json=body, headers=headers, timeout=30)
         if resp.status_code != 200:
-            raise RuntimeError(f"whatsapp send failed: {resp.status_code} {resp.text[:200]}")
+            from .wa_errors import classify_graph_error
+
+            raise classify_graph_error(resp.status_code, resp.text[:500],
+                                       resp.headers.get("Retry-After"))
         data = resp.json()
         return {"provider_message_id": data.get("messages", [{}])[0].get("id"), "status": "sent"}
 
@@ -133,7 +138,10 @@ class GraphWhatsAppProvider:
         headers = {"Authorization": f"Bearer {self.access_token}", "Content-Type": "application/json"}
         resp = requests.post(url, json=body, headers=headers, timeout=30)
         if resp.status_code != 200:
-            raise RuntimeError(f"whatsapp raw send failed: {resp.status_code} {resp.text[:200]}")
+            from .wa_errors import classify_graph_error
+
+            raise classify_graph_error(resp.status_code, resp.text[:500],
+                                       resp.headers.get("Retry-After"))
         return {"delivered": True}
 
 

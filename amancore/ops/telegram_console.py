@@ -33,9 +33,10 @@ def _env(key: str) -> str:
 
 
 def normalize_number(raw: str) -> str:
-    """Keep digits only; drop leading zeros/+ (Graph API wants digits)."""
-    digits = re.sub(r"\D", "", raw or "")
-    return digits.lstrip("0")
+    """WA-302/W2: delegate to the central normalizer — no per-module drift."""
+    from ..channels.wa_errors import normalize_e164_digits
+
+    return normalize_e164_digits(raw)
 
 
 def parse_slash(text: str):

@@ -419,6 +419,12 @@ class MessageCoordinator:
             self._drafter = build_providers(cfg)["deepseek-v4-flash"]
         return self._drafter
 
+    @staticmethod
+    def _normalize_recipient(raw) -> str:
+        from .wa_errors import normalize_e164_digits
+
+        return normalize_e164_digits(str(raw or ""))
+
     def _draft_quote_reply(self, lead: dict) -> str:
         """AI-drafted price-safe reply in the customer's own language."""
         if self.cost_governor is not None and not self.cost_governor.allow(
@@ -467,7 +473,7 @@ class MessageCoordinator:
             return ""
         mid = self.outbox.enqueue(
             channel="whatsapp",
-            recipient=lead.get("contact_whatsapp"),
+            recipient=self._normalize_recipient(lead.get("contact_whatsapp")),
             message_type="text",
             payload=text,
             idempotency_key=f"wa-reply:{idem_salt}",
