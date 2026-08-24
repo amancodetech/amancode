@@ -546,7 +546,11 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
                 SELECT l.contact_whatsapp AS wa_id,
                        COALESCE(l.name, '') AS name,
                        COALESCE(c.mode, 'AI_ACTIVE') AS mode,
-                       MAX(m.created_at) AS last_at
+                       MAX(m.created_at) AS last_at,
+                       (SELECT COUNT(*) FROM channel_messages u
+                         WHERE u.wa_id = l.contact_whatsapp AND u.direction='in'
+                           AND u.status IS NOT 'read' AND u.hidden = 0
+                           AND u.wa_message_id LIKE 'wamid.%') AS unread
                   FROM leads l
              LEFT JOIN conversations c ON c.lead_id = l.lead_id
              LEFT JOIN channel_messages m ON m.wa_id = l.contact_whatsapp

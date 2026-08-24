@@ -262,6 +262,7 @@ audio{{max-width:250px;height:38px}}
 .qreact:hover{{transform:scale(1.15)}}
 .quotebox{{background:#2a3942;border-right:3px solid #06cf9c;border-radius:6px;padding:.25rem .5rem;margin-bottom:.25rem;color:#8696a0;font-size:.75rem;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
 .rx{{position:absolute;bottom:-10px;left:-4px;background:#233138;border:1px solid #374248;border-radius:50%;padding:.1rem .25rem;font-size:.7rem;z-index:4}}
+.unread{{background:#25d366;color:#111b21;font-size:.7rem;font-weight:700;border-radius:50%;min-width:18px;height:18px;display:flex;align-items:center;justify-content:center;padding:0 4px;margin-left:auto;flex-shrink:0}}
 .msg.in{{cursor:pointer}}
 .acts button{{border:0;background:none;cursor:pointer;font-size:.85rem;padding:.1rem .3rem}}
 .reactbar button{{border:0;background:none;cursor:pointer;font-size:.95rem;padding:.05rem}}
@@ -310,10 +311,11 @@ async function loadLeads(){{
   const el=document.createElement('div');el.className='lead'+(l.wa_id===current?' sel':'');
   const initial=esc((l.name||l.wa_id||'?').trim()[0]||'?').toUpperCase();
   const human=(l.mode==='HUMAN_ACTIVE'||l.mode==='HUMAN_REQUESTED');
+  const ub=(l.unread>0)?'<span class="unread">'+(l.unread>99?'99+':l.unread)+'</span>':'';
   el.innerHTML='<div class="avatar">'+initial+'</div>'+
    '<div class="lead-info"><div class="lead-name">'+esc(l.name||'عميل')+
    '<span class="mode-chip'+(human?' human':'')+'">'+(human?'👤 بشري':'🤖 AI')+'</span></div>'+
-   '<div class="lead-sub">'+esc(l.wa_id)+(l.last_at?' · '+esc(l.last_at.slice(5,16)):'')+'</div></div>';
+   '<div class="lead-sub">'+esc(l.wa_id)+(l.last_at?' · '+esc(l.last_at.slice(5,16)):'')+'</div></div>'+ub;
   el.onclick=()=>{{
    current=l.wa_id;WHO.textContent=(l.name||'')+' · '+l.wa_id;
    document.querySelectorAll('.lead').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');
