@@ -24,7 +24,7 @@ _OPT_OUT = re.compile(
     re.IGNORECASE,
 )
 _PRICE_INTENT = re.compile(
-    r"(price|cost|berapa|harga|سعر|كم |quote|proposal|offer|عرض|تسعير|estimate)",
+    r"(price|cost|berapa|harga|سعر|بكم|كم تسوى|كم تكلف|كم ثمن|كم سعر|quote|proposal|تسعير|estimate)",
     re.IGNORECASE,
 )
 _HUMAN_INTENT = re.compile(
@@ -181,7 +181,11 @@ class MessageCoordinator:
             mode = self.handover.request_human(lead["lead_id"])
             self._alert_owner(lead, mem, "human_requested")
             self._emit("sales.handoff_requested", {"lead_id": lead["lead_id"]}, corr)
-            reply = self._localize("I'll connect you with our team right away.", language)
+            reply = self._draft_reply(
+                lead, text, language,
+                intent_note="customer asked for a human; confirm warmly that a "
+                            "specialist is being connected right away",
+                base="I'll connect you with our team right away.")
             self._queue_reply(lead, mem, reply, corr, f"handoff:{wa_id}:{text[:40]}")
             return {"lead_id": lead["lead_id"], "handoff": True, "mode": mode, "reply_sent": True}
 
@@ -201,23 +205,31 @@ class MessageCoordinator:
             self._queue_reply(lead, mem, reply, corr, f"price:{wa_id}:{text[:40]}")
             return {"lead_id": lead["lead_id"], "reply_sent": True, "price_reply": True}
 
-        # sales flow
+        # sales flow — engine computes facts/state, AI speaks
         result = self.sales_agent.process_message(lead, text)
-        reply = result.get("reply") or "Thank you — our team will follow up with you."
+        raw_reply = result.get("reply") or ""
+        reply = self._draft_reply(
+            lead, text, language,
+            intent_note=str(result.get("next_action")
+                            or ("handle objection" if result.get("objection") else "sales conversation")),
+            base=raw_reply or _SAFE_FALLBACK,
+        )
         if result.get("needs_human"):
             self.handover.request_human(lead["lead_id"])
             self._alert_owner(lead, mem, "sales_handoff")
             self._emit("sales.handoff_requested", {"lead_id": lead["lead_id"]}, corr)
             return {"lead_id": lead["lead_id"], "handoff": True, "reply_sent": True}
 
-        reply = self._localize(reply, language)
         self._queue_reply(lead, mem, reply, corr, f"reply:{wa_id}:{text[:40]}")
         return {"lead_id": lead["lead_id"], "reply_sent": True}
 
     def _support_flow(self, lead: dict, mem: dict, text: str, language: str, corr: str, customer, intent: str) -> dict:
         if self.support_agent is None:
-            # no support agent wired — fall back to safe acknowledgment
-            self._queue_reply(lead, mem, _SAFE_FALLBACK, corr, f"support-fallback:{lead['lead_id']}:{text[:40]}")
+            # no support agent wired — AI acknowledgment instead of canned text
+            ack = self._draft_reply(lead, text, language,
+                                    intent_note="support request received; reassure and ask for details",
+                                    base=_SAFE_FALLBACK)
+            self._queue_reply(lead, mem, ack, corr, f"support-fallback:{lead['lead_id']}:{text[:40]}")
             return {"lead_id": lead["lead_id"], "reply_sent": True, "support": True, "intent": intent}
         result = self.support_agent.process_message(lead, text, customer)
         reply = result.get("reply") or _SAFE_FALLBACK
@@ -228,7 +240,9 @@ class MessageCoordinator:
         check = self.support_filter.check(reply)
         if not check["allowed"]:
             self._audit("support.leak_blocked", "lead", result=str(check["found"]))
-            reply = _SAFE_FALLBACK
+            reply = self._draft_reply(lead, "", "en",
+                                      intent_note="safe support acknowledgment",
+                                      base=_SAFE_FALLBACK)
         reply = self._localize(reply, language)
         self._queue_reply(lead, mem, reply, corr, f"support:{lead['lead_id']}:{text[:40]}")
         return {
@@ -249,6 +263,29 @@ class MessageCoordinator:
         drafted = self._draft_quote_reply(lead)
         return drafted or "Our team is preparing an approved quote for you — no price will be quoted before approval."
 
+    def _draft_reply(self, lead: dict, text: str, language: str,
+                     intent_note: str = "", base: str = "") -> str:
+        """AI composes the final customer-facing reply; deterministic layer
+        supplies facts via `base`/`intent_note`. Falls back to `base`."""
+        try:
+            r = self._quote_drafter().complete([
+                {"role": "system", "content":
+                 "You are AmanCode's WhatsApp assistant (websites, systems, digital solutions). "
+                 "Write the customer's reply: warm, confident, human, max 55 words, "
+                 "in the SAME language/dialect as their message. "
+                 "Convey exactly the facts in DRAFT CONTENT (translate if needed); "
+                 "NEVER invent prices, discounts, deadlines, or approvals beyond it. "
+                 f"Purpose: {intent_note or 'move the conversation forward'}. "
+                 "Output only the message text."},
+                {"role": "user", "content":
+                 f"CUSTOMER MESSAGE: {text}\n\nDRAFT CONTENT: {base}"},
+            ])
+            out = (r.text or "").strip().strip('"')[:700]
+            return out or self._localize(base or _SAFE_FALLBACK, language)
+        except Exception as exc:  # noqa: BLE001 — deterministic fallback covers failures
+            self._audit("reply.draft_failed", "lead", result=str(exc))
+            return self._localize(base or _SAFE_FALLBACK, language)
+
     def _quote_drafter(self):
         """Lazy small-model drafter for price-safe replies (cached)."""
         if getattr(self, "_drafter", None) is None:
@@ -257,7 +294,8 @@ class MessageCoordinator:
             root = Path(__file__).resolve().parents[2]
             from ..routing.providers import build_providers
 
-            cfg = yaml.safe_load(open(root / "configs" / "models.yaml"))
+            with open(root / "configs" / "models.yaml") as fh:
+                cfg = yaml.safe_load(fh)
             self._drafter = build_providers(cfg)["deepseek-v4-flash"]
         return self._drafter
 
@@ -286,7 +324,9 @@ class MessageCoordinator:
         if not check["allowed"]:
             self._audit("channel.leak_blocked", "lead", result=str(check["found"]))
             self.owner_alert("high", f"Internal data leak blocked for lead {lead['lead_id']}: {check['found']}", corr)
-            text = "Thank you — our team will follow up with you shortly."
+            text = self._draft_reply(lead, "", "en",
+                                     intent_note="polite follow-up-later acknowledgment",
+                                     base=_SAFE_FALLBACK)
         decision = self.channel_policy.evaluate_send("whatsapp", "text", "low")
         if decision != "allow":
             self._audit("channel.policy_blocked", "lead", result=decision)

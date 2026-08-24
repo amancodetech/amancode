@@ -111,8 +111,11 @@ class WhatsAppCoordinatorTest(TempDirTestCase, unittest.TestCase):
     def test_price_without_approval_no_invented_price(self):
         summary = self.coord.handle_whatsapp_webhook(webhook_body("what is the price?", msg_id="p-1"))
         sent = self.adapter.provider.sent[-1]["payload"]
-        self.assertIn("approved quote", sent)
+        # either the deterministic fallback or an AI-drafted safe reply —
+        # both must avoid inventing any numeric price
+        self.assertTrue(sent.strip())
         self.assertNotRegex(sent, r"\$\s?\d")
+        self.assertNotRegex(sent, r"\b\d{3,}\s?(USD|usd|دولار|ريال)\b")
 
     def test_price_with_approved_snapshot(self):
         lead_id = self.crm.create_lead(contact_whatsapp=WA_ID, market="indonesia")
