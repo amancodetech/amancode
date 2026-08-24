@@ -674,17 +674,30 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
         if resource == "messages":
             sync_channel_messages(inbox["db"])
             wa_id = (qs.get("wa_id") or [""])[0]
-            rows = inbox["db"].execute(
-                """
+            before_id = (qs.get("before_id") or [""])[0]
+            base_sql = """
                 SELECT m.id, m.direction, m.body, m.status, m.created_at,
                        m.media_kind, m.media_ref, m.wa_message_id, m.reaction,
                        (SELECT substr(q.body, 1, 80) FROM channel_messages q
                          WHERE q.wa_message_id = m.quoted_wamid) AS quoted
                   FROM channel_messages m WHERE m.wa_id = ? AND m.hidden = 0
-                 ORDER BY m.created_at ASC, m.id ASC LIMIT 500
-                """,
-                (wa_id,),
-            ).fetchall()
+                """
+            if before_id:  # U3: older-page fetch (client paginates past 500)
+                rows = inbox["db"].execute(
+                    base_sql + " AND m.id < ?"
+                    " ORDER BY m.created_at DESC, m.id DESC LIMIT 200",
+                    (wa_id, int(before_id)),
+                ).fetchall()
+                rows.reverse()
+            else:
+                # U3 fix: the DEFAULT page must be the NEWEST 500 (rendered
+                # ascending) — the old ASC-LIMIT showed only ancient history
+                # once a chat passed 500 messages.
+                rows = inbox["db"].execute(
+                    base_sql + " ORDER BY m.created_at DESC, m.id DESC LIMIT 500",
+                    (wa_id,),
+                ).fetchall()
+                rows.reverse()
             payload = []
             for r in rows:
                 d = dict(r)

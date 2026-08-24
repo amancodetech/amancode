@@ -88,3 +88,54 @@ class S4Hardening(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UI403ServerPagination(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+
+        self.tmp = Path(tempfile.mkdtemp(dir=str(ROOT / "storage")))
+        from amancore.storage.db import Database, ensure_columns, ensure_unique_indexes
+        from amancore.storage.db import _split_schema
+
+        self.db = Database(self.tmp / "u.db")
+        schema = (ROOT / "amancore" / "storage" / "schema.sql").read_text()
+        tables_sql, _ = _split_schema(schema)
+        self.db.apply_schema(tables_sql)
+        ensure_columns(self.db)
+        ensure_unique_indexes(self.db)
+        now = "2026-08-24T12:00:00"
+        for i in range(600):
+            self.db.execute(
+                "INSERT INTO channel_messages (direction, wa_id, body, status,"
+                " created_at) VALUES ('in', 'W-UI', ?, '', ?)",
+                (f"m{i:04d}", f"2026-08-24T12:{i//60:02d}:{i%60:02d}"))
+        self.db.commit()
+
+    def tearDown(self):
+        self.db.close()
+        for f in self.tmp.iterdir():
+            f.unlink()
+        self.tmp.rmdir()
+
+    def _rows(self, before_id=None):
+        base = ("SELECT m.id, m.body FROM channel_messages m"
+                " WHERE m.wa_id=? AND m.hidden=0")
+        if before_id:
+            rows = self.db.execute(
+                base + " AND m.id < ? ORDER BY m.created_at DESC, m.id DESC LIMIT 200",
+                ("W-UI", before_id)).fetchall()
+            rows.reverse()
+        else:
+            rows = self.db.execute(
+                base + " ORDER BY m.created_at DESC, m.id DESC LIMIT 500",
+                ("W-UI",)).fetchall()
+            rows.reverse()          # newest 500, ascending (fixed contract)
+        return rows
+
+    def test_first_page_500_then_older_200(self):
+        first = self._rows()
+        self.assertEqual(len(first), 500)
+        older = self._rows(before_id=first[0]["id"])
+        self.assertEqual(len(older), 100)          # remaining history
+        self.assertLess(older[0]["id"], first[0]["id"])

@@ -296,11 +296,15 @@ audio{{max-width:250px;height:38px}}
 #attach:hover,#mic:hover,#emojibtn:hover{{background:#374248}}
 @media(max-width:700px){{aside{{width:100%;display:none}} aside.open{{display:flex}}
  body.chatting aside{{display:none}} main{{display:none}} body.chatting main{{display:flex}}}}
+#back{{display:none;background:none;border:0;color:#aebac1;font-size:1.4rem;cursor:pointer;margin-left:.3rem}}
+@media(max-width:900px){{body.chatting #back{{display:inline-block}}}}
+#sendStatus{{position:fixed;bottom:84px;right:50%;transform:translateX(50%);background:#233138;color:#e9edef;padding:.45rem .9rem;border-radius:18px;font-size:.85rem;z-index:80;box-shadow:0 4px 14px rgba(0,0,0,.4)}}
+.loadOlder{{margin:.5rem auto;display:block;background:#202c33;border:1px solid #2a3942;color:#8696a0;border-radius:14px;padding:.35rem .9rem;cursor:pointer}}
 ::-webkit-scrollbar{{width:6px}} ::-webkit-scrollbar-thumb{{background:#374248;border-radius:3px}}
 </style></head><body>
 <aside id="leadsPanel"><div class="panel-head">💬 المحادثات</div><div id="leads"><div class="empty">لا محادثات بعد</div></div></aside>
 <main id="chatArea">
-<header><span id="who">AmanCore Inbox</span><form method="post" action="{logout}"><button>خروج ⏻</button></form></header>
+<header><button id="back" type="button" title="عودة">←</button><span id="who">AmanCore Inbox</span><form method="post" action="{logout}"><button>خروج ⏻</button></form></header>
 <div id="log"><div class="empty">اختر محادثة من القائمة لعرض الرسائل</div></div>
 <div id="replybar"><span class="q"></span><button type="button">✕</button></div>
 <form id="composer">
@@ -313,12 +317,19 @@ audio{{max-width:250px;height:38px}}
 <div id="emojiPanel"><div class="ep-tabs" id="epTabs"></div><div class="ep-grid" id="epGrid"></div></div>
 </form>
 <div id="preview" hidden><span id="preview-info"></span><button id="preview-cancel">✕</button></div>
+<div id="sendStatus" hidden></div>
 </main>
 <script>
 const LEADS=document.getElementById('leads'),LOG=document.getElementById('log'),
 WHO=document.getElementById('who'),TEXT=document.getElementById('text'),
 FILE=document.getElementById('file'),PREVIEW=document.getElementById('preview');
 let current=null,timer=null,pendingMedia=null,pendingReply=null,recorder=null,chunks=[];
+let msgToken=0,lastMsgsHash=null,oldestId=null,toastTimer=null;
+function showToast(t){{const el=document.getElementById('sendStatus');el.textContent=t;el.hidden=false;
+ clearTimeout(toastTimer);toastTimer=setTimeout(()=>{{el.hidden=true}},4000)}}
+function hideToast(){{const el=document.getElementById('sendStatus');clearTimeout(toastTimer);el.hidden=true}}
+document.getElementById('back').onclick=()=>{{document.body.classList.remove('chatting');current=null;
+ lastMsgsHash=null;oldestId=null;syncComposer();}};
 function esc(s){{const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML}}
 function fmtSize(n){{return n>1048576?(n/1048576).toFixed(1)+' MB':Math.ceil(n/1024)+' KB'}}
 function syncComposer(){{
@@ -362,11 +373,25 @@ function mediaHtml(m){{
  if(kind==='video'&&ref)return '<video controls preload="none" src="{base}/api/media?ref='+encodeURIComponent(ref)+'" class="media-vid"></video>';
  if(kind==='document')return '<div class="doc">📄 '+(md.filename?esc(md.filename):'ملف')+'</div>';
  return '';}}
-async function loadMsgs(){{
+async function loadMsgs(force=false){{
  if(!current)return;
- const r=await fetch('{base}/api/messages?wa_id='+encodeURIComponent(current));
+ const tok=++msgToken,wa=current;
+ const r=await fetch('{base}/api/messages?wa_id='+encodeURIComponent(wa));
  if(r.status===403)location.reload();
- const d=await r.json();LOG.innerHTML='';
+ if(tok!==msgToken||wa!==current)return;               // U2: stale-response discard
+ if(!r.ok){{showToast('✗ فشل تحميل الرسائل');return}}
+ const d=await r.json();
+ const sig=d.length+'|'+(d.length?d[0].id+'..'+d[d.length-1].id+':'+d[d.length-1].status:'');
+ if(!force&&sig===lastMsgsHash&&LOG.dataset.wa===wa)return;   // U2: skip identical rebuild
+ lastMsgsHash=sig;LOG.dataset.wa=wa;
+ const atBottom=LOG.scrollHeight-LOG.scrollTop-LOG.clientHeight<120;
+ const prevWa=LOG.dataset.prevWa,prevTop=LOG.scrollTop,prevH=LOG.scrollHeight;
+ LOG.innerHTML='';
+ if(d.length>=500&&!oldestId&&!document.getElementById('olderBtn')){{
+  const ob=document.createElement('button');ob.id='olderBtn';ob.className='loadOlder';
+  ob.textContent='↑ تحميل الأقدم';ob.onclick=()=>loadOlder(d[0].id);LOG.appendChild(ob);}}
+ else if(oldestId&&d.length<200){{const ob=document.getElementById('olderBtn');if(ob)ob.remove()}}
+ if(d.length)oldestId=d[0].id;
  if(!d.length){{LOG.innerHTML='<div class="empty">لا رسائل في هذه المحادثة</div>';return}}
  let lastDay='';const unread=[];
  d.forEach(m=>{{
@@ -417,13 +442,48 @@ async function loadMsgs(){{
    w.appendChild(rx);}}
   if(m.direction==='in'&&m.wa_message_id&&m.status!=='read')unread.push(m.wa_message_id);
  }});
- LOG.scrollTop=LOG.scrollHeight;
+ // U2: snap only when already at bottom (or switching chats) — never yank a reader
+ if(atBottom||prevWa!==wa){{LOG.scrollTop=LOG.scrollHeight}}
+ else{{LOG.scrollTop=prevTop+(LOG.scrollHeight-prevH)}}
+ LOG.dataset.prevWa=wa;
  if(unread.length)fetch('{base}/api/read',{{method:'POST',headers:{{'Content-Type':'application/json'}},
   body:JSON.stringify({{message_ids:unread}})}}).then(()=>loadMsgs()).catch(()=>{{}});}}
+async function loadOlder(beforeId){{
+ if(!current)return;
+ const tok=++msgToken,wa=current;
+ const r=await fetch('{base}/api/messages?wa_id='+encodeURIComponent(wa)+'&before_id='+beforeId);
+ if(r.status===403)location.reload();
+ if(tok!==msgToken||wa!==current)return;
+ if(!r.ok){{showToast('✗ فشل تحميل الأقدم');return}}
+ const d=await r.json();
+ const ob=document.getElementById('olderBtn');
+ if(!d.length){{if(ob)ob.remove();showToast('بداية المحادثة');return}}
+ oldestId=d[0].id;
+ const anchor=LOG.scrollHeight;
+ d.forEach(m=>{{
+  const w=document.createElement('div');w.className='msg '+m.direction;
+  w.style.position='relative';
+  w.appendChild(document.createTextNode(m.body??''));
+  if(m.quoted){{const qb=document.createElement('div');qb.className='quotebox';
+   qb.textContent='↩ '+m.quoted;w.appendChild(qb)}}
+  if(ob){{LOG.insertBefore(w,ob)}}else{{LOG.appendChild(w)}}
+ }});
+ LOG.scrollTop=LOG.scrollHeight-anchor;   // keep viewport anchored
+ if(d.length<200&&ob)ob.remove();         // exhausted history
+}}
 async function sendPayload(payload){{
- await fetch('{base}/api/send',{{method:'POST',headers:{{'Content-Type':'application/json'}},
-  body:JSON.stringify(payload)}});
- loadMsgs();loadLeads();}}
+ const SEND=document.getElementById('send');SEND.disabled=true;
+ showToast('⏳ جارٍ الإرسال…');
+ try{{
+  const r=await fetch('{base}/api/send',{{method:'POST',headers:{{'Content-Type':'application/json'}},
+   body:JSON.stringify(payload)}});
+  if(r.status===403)location.reload();
+  if(!r.ok)throw new Error('http '+r.status);
+  hideToast();
+  loadMsgs(true);loadLeads();
+  return true;
+ }}catch(e){{showToast('✗ فشل الإرسال — لم تُفقد نصّك، حاول مجدداً');return false}}
+ finally{{SEND.disabled=false}}}}
 const EP_CATS=[
  ['😀','وجوه','😀 😃 😄 😁 😆 😅 😂 🤣 🥲 ☺️ 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😗 😙 😚 😋 😛 😝 😜 🤪 🤨 🧐 🤓 😎 🥸 🤩 🥳 😏 😒 😞 😔 😟 😕 🙁 ☹️ 😣 😖 😫 😩 🥺 😢 😭 😤 😠 😡 🤬 🤯 😳 🥵 🥶 😨 😰 😥 😓 🫡 🤗 🫢 🤭 🫣 🤫 🤥 😶 😐 😑 😬 🙄 😯 😦 😧 😮 😲 🥱 😴 🤤 😪 😵 🤐 🥴 🤢 🤮 🤧 😷 🤒 🤕'],
  ['👍','إشارات','👍 👎 👌 🤌 🤏 ✌️ 🤞 🫰 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ 👋 🤚 🖐️ ✋ 🖖 👏 🙌 🤲 🤝 🙏 ✍️ 💅 🤳 💪 🦾 🦵 🦶 👂 👃 🧠 🫀 👀 👁️ 👅 👄 💋 🩸'],
@@ -492,16 +552,18 @@ document.getElementById('composer').addEventListener('submit',async e=>{{
   const p={{wa_id:current,text:TEXT.value.trim(),
    media:{{kind:pendingMedia.kind,filename:pendingMedia.filename,mime:pendingMedia.mime,
           data_base64:pendingMedia.data_base64}}}};
-  TEXT.value='';clearPending();
- if(pendingReply){{p.reply_to=pendingReply.message_id;pendingReply=null;
-  document.getElementById('replybar').style.display='none'}}
- sendPayload(p);return}}
+  if(pendingReply){{p.reply_to=pendingReply.message_id}}
+ const ok=await sendPayload(p);
+ if(ok){{TEXT.value='';clearPending();
+  pendingReply=null;document.getElementById('replybar').style.display='none'}}
+ return}}
  if(!current||!TEXT.value.trim())return;
- const t=TEXT.value.trim();TEXT.value='';
+ const t=TEXT.value.trim();
  const pt={{wa_id:current,text:t}};
- if(pendingReply){{pt.reply_to=pendingReply.message_id;pendingReply=null;
-  document.getElementById('replybar').style.display='none'}}
- sendPayload(pt);}});
+ if(pendingReply){{pt.reply_to=pendingReply.message_id}}
+ const ok=await sendPayload(pt);
+ if(ok){{TEXT.value='';
+  pendingReply=null;document.getElementById('replybar').style.display='none'}}}});
 /* attachments */
 document.getElementById('attach').onclick=()=>FILE.click();
 FILE.addEventListener('change',()=>{{
