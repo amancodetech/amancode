@@ -504,5 +504,13 @@ CREATE INDEX IF NOT EXISTS idx_intake_email ON intake_events(email);
 CREATE INDEX IF NOT EXISTS idx_outbox_ready
   ON message_outbox (status, next_attempt_at, created_at);
 
+-- DB-301 (D3): hot-path indexes — previously manual-only in prod; a fresh
+-- deploy silently lost them and every inbound message did a full SCAN.
+CREATE INDEX IF NOT EXISTS idx_channel_messages_wa ON channel_messages(wa_id);
+CREATE INDEX IF NOT EXISTS idx_channel_messages_dir ON channel_messages(direction);
+CREATE INDEX IF NOT EXISTS idx_channel_messages_lead ON channel_messages(lead_id);
+CREATE INDEX IF NOT EXISTS idx_leads_whatsapp ON leads(contact_whatsapp);
+CREATE INDEX IF NOT EXISTS idx_conversations_last_msg ON conversations(last_message_at);
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_channel_messages_wamid
   ON channel_messages (wa_message_id) WHERE wa_message_id IS NOT NULL;
