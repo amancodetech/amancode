@@ -20,6 +20,10 @@ class WhatsAppProvider:
     def send(self, recipient: str, message_type: str, payload) -> dict:
         raise NotImplementedError
 
+    def send_raw(self, body: dict) -> dict:
+        """Send a pre-built official payload verbatim. Default: unsupported."""
+        raise NotImplementedError
+
 
 class MockWhatsAppProvider:
     """Deterministic provider for mock/test mode — no external network."""
@@ -29,6 +33,10 @@ class MockWhatsAppProvider:
 
     def send(self, recipient: str, message_type: str, payload) -> dict:
         self.sent.append({"to": recipient, "type": message_type, "payload": payload})
+        return {"provider_message_id": f"mock-{new_id()}", "status": "sent"}
+
+    def send_raw(self, body: dict) -> dict:
+        self.sent.append({"to": body.get("to"), "type": body.get("type", "raw"), "payload": body})
         return {"provider_message_id": f"mock-{new_id()}", "status": "sent"}
 
 
@@ -88,6 +96,8 @@ class GraphWhatsAppProvider:
         url = f"{self.base_url}/{self.version}/{self.phone_number_id}/messages"
         headers = {"Authorization": f"Bearer {self.access_token}", "Content-Type": "application/json"}
         body = {"messaging_product": "whatsapp", "to": recipient}
+        if isinstance(payload, dict) and payload.get("_reply_to"):
+            body["context"] = {"message_id": payload.pop("_reply_to")}
         if message_type == "template":
             body["type"] = "template"
             body["template"] = payload  # {name, language:{code}, components:[]}
@@ -113,6 +123,18 @@ class GraphWhatsAppProvider:
             raise RuntimeError(f"whatsapp send failed: {resp.status_code} {resp.text[:200]}")
         data = resp.json()
         return {"provider_message_id": data.get("messages", [{}])[0].get("id"), "status": "sent"}
+
+    def send_raw(self, body: dict) -> dict:
+        """Reactions / read receipts / any official pre-built payload."""
+        block_unless_production_enabled(self.config)
+        if not (self.phone_number_id and self.access_token):
+            raise RuntimeError("whatsapp provider not configured (phone_number_id/access_token)")
+        url = f"{self.base_url}/{self.version}/{self.phone_number_id}/messages"
+        headers = {"Authorization": f"Bearer {self.access_token}", "Content-Type": "application/json"}
+        resp = requests.post(url, json=body, headers=headers, timeout=30)
+        if resp.status_code != 200:
+            raise RuntimeError(f"whatsapp raw send failed: {resp.status_code} {resp.text[:200]}")
+        return {"delivered": True}
 
 
 class WhatsAppAdapter(ChannelAdapter):
@@ -197,3 +219,23 @@ class WhatsAppAdapter(ChannelAdapter):
     # ---- send ---------------------------------------------------------
     def send(self, recipient: str, message_type: str, payload) -> dict:
         return self.provider.send(recipient, message_type, payload)
+
+    def react(self, recipient: str, message_id: str, emoji: str) -> dict:
+        """Official reaction payload; empty emoji removes the reaction."""
+        body = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": recipient,
+            "type": "reaction",
+            "reaction": {"message_id": message_id, "emoji": emoji},
+        }
+        return self.provider.send_raw(body)
+
+    def mark_read(self, message_id: str) -> dict:
+        """Send read receipt for an inbound customer message."""
+        body = {
+            "messaging_product": "whatsapp",
+            "status": "read",
+            "message_id": message_id,
+        }
+        return self.provider.send_raw(body)

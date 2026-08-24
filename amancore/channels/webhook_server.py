@@ -61,10 +61,32 @@ def build_runtime(root: Path):
 
     cfg = load_config(root)
     db = open_database(cfg.database_path, root / "amancore" / "storage" / "schema.sql")
+
+    # Overlay owner-approved production state onto the whatsapp channel config.
+    # channels.yaml keeps mode=mock by default; only a genuine audited
+    # production enablement (production.yaml) switches the live provider.
+    wa_cfg = dict(cfg.channels.get("whatsapp", {}))
+    prod_env = (cfg.production.get("environment") or {})
+    if prod_env.get("production_enabled") and prod_env.get("mode") == "production":
+        wa_cfg["mode"] = "production"
+        wa_cfg["environment"] = {
+            "production_enabled": True,
+            "mode": "production",
+        }
+        # credentials/identity come from env (never hardcoded in yaml)
+        wa_cfg.setdefault("phone_number_id",
+                          os.environ.get("WHATSAPP_PHONE_NUMBER_ID", ""))
+        # api_version verified end-to-end live on 2026-08-24
+        wa_cfg.setdefault("api_version",
+                          os.environ.get("WHATSAPP_API_VERSION", "v21.0"))
+    else:
+        wa_cfg.setdefault("environment", {"production_enabled": False,
+                                          "mode": prod_env.get("mode", "mock")})
+
     brain = BrainStore(root / "amancore" / "business_brain")
     audit = AuditService(db)
     dispatcher = EventDispatcher()
-    adapter = WhatsAppAdapter(dict(cfg.channels.get("whatsapp", {})))
+    adapter = WhatsAppAdapter(wa_cfg)
     outbox = MessageOutbox(db)
     policy = ChannelPolicyEngine(brain)
     worker = OutboxWorker(outbox, {"whatsapp": adapter}, policy, audit=audit, dispatcher=dispatcher)
@@ -428,6 +450,48 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
         if not self._inbox_session_ok(inbox):
             return self._send(403, b"forbidden")
 
+        if action == "api/react":
+            data = self._read_json()
+            wa_id = str(data.get("wa_id") or "").strip()
+            wamid = str(data.get("message_id") or "").strip()
+            emoji = str(data.get("emoji") or "").strip()
+            if not wa_id or not wamid:
+                return self._send(400, b"bad request")
+            try:
+                self.runtime["adapter"].react(wa_id, wamid, emoji)
+                return self._send(200, json.dumps({"ok": True}).encode(), "application/json")
+            except Exception as exc:  # noqa: BLE001
+                log.error("reaction failed: %s", exc)
+                return self._send(502, json.dumps({"ok": False, "error": str(exc)[:150]}).encode(), "application/json")
+
+        if action == "api/read":
+            data = self._read_json()
+            wamids = data.get("message_ids") or []
+            if not isinstance(wamids, list):
+                return self._send(400, b"bad request")
+            adapter = self.runtime["adapter"]
+            ok_count = 0
+            for wmid in wamids[:50]:
+                if not isinstance(wmid, str) or not wmid.startswith("wamid."):
+                    continue
+                try:
+                    adapter.mark_read(wmid)
+                    ok_count += 1
+                except Exception:  # noqa: BLE001 — best effort receipts
+                    pass
+            return self._send(200, json.dumps({"ok": True, "marked": ok_count}).encode(), "application/json")
+
+        if action == "api/hide":
+            data = self._read_json()
+            msg_pk = data.get("id")
+            if not isinstance(msg_pk, int):
+                return self._send(400, b"bad request")
+            inbox["db"].execute(
+                "UPDATE channel_messages SET hidden = 1 WHERE id = ? AND direction='out'", (msg_pk,)
+            )
+            inbox["db"].commit()
+            return self._send(200, json.dumps({"ok": True}).encode(), "application/json")
+
         if action == "api/send":
             data = self._read_json()
             wa_id = str(data.get("wa_id") or "").strip()
@@ -444,7 +508,10 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
                 return self._send(400, b"bad request")
             if len(text) > 4096:
                 return self._send(400, json.dumps({"ok": False, "error": "text too long"}).encode(), "application/json")
-            result = inbox_send_message(inbox, wa_id, text, media=media)
+            reply_to = str(data.get("reply_to") or "").strip() or None
+            if reply_to and not reply_to.startswith("wamid."):
+                return self._send(400, b"bad reply_to")
+            result = inbox_send_message(inbox, wa_id, text, media=media, reply_to=reply_to)
             status = 200 if result.get("ok") else 502
             return self._send(status, json.dumps(result).encode("utf-8"), "application/json")
 
@@ -473,8 +540,8 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
             wa_id = (qs.get("wa_id") or [""])[0]
             rows = inbox["db"].execute(
                 """
-                SELECT direction, body, status, created_at, media_kind, media_ref, wa_message_id
-                  FROM channel_messages WHERE wa_id = ?
+                SELECT id, direction, body, status, created_at, media_kind, media_ref, wa_message_id
+                  FROM channel_messages WHERE wa_id = ? AND hidden = 0
                  ORDER BY created_at ASC, id ASC LIMIT 500
                 """,
                 (wa_id,),
@@ -518,7 +585,8 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
         self._send(404, b"not found")
 
 
-def inbox_send_message(inbox, wa_id: str, text: str, media: dict | None = None) -> dict:
+def inbox_send_message(inbox, wa_id: str, text: str, media: dict | None = None,
+                       reply_to: str | None = None) -> dict:
     """Owner manual reply: switch to HUMAN_ACTIVE, enqueue via policy-gated outbox."""
     import base64
     import tempfile
@@ -593,6 +661,12 @@ def inbox_send_message(inbox, wa_id: str, text: str, media: dict | None = None) 
                 payload["filename"] = filename
             media_kind, media_ref = kind, media_id
         stored_body = text
+
+    if reply_to:
+        if isinstance(payload, str):
+            payload = {"_reply_to": reply_to, "body": payload}
+        else:
+            payload["_reply_to"] = reply_to
 
     mid = inbox["outbox"].enqueue(
         channel="whatsapp",

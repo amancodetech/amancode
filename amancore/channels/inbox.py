@@ -333,9 +333,16 @@ document.getElementById('composer').addEventListener('submit',async e=>{{
   const p={{wa_id:current,text:TEXT.value.trim(),
    media:{{kind:pendingMedia.kind,filename:pendingMedia.filename,mime:pendingMedia.mime,
           data_base64:pendingMedia.data_base64}}}};
-  TEXT.value='';clearPending();sendPayload(p);return}}
+  TEXT.value='';clearPending();
+ if(pendingReply){{p.reply_to=pendingReply.message_id;pendingReply=null;
+  document.getElementById('replybar').style.display='none'}}
+ sendPayload(p);return}}
  if(!current||!TEXT.value.trim())return;
- const t=TEXT.value.trim();TEXT.value='';sendPayload({{wa_id:current,text:t}});}});
+ const t=TEXT.value.trim();TEXT.value='';
+ const pt={{wa_id:current,text:t}};
+ if(pendingReply){{pt.reply_to=pendingReply.message_id;pendingReply=null;
+  document.getElementById('replybar').style.display='none'}}
+ sendPayload(pt);}});
 /* attachments */
 document.getElementById('attach').onclick=()=>FILE.click();
 FILE.addEventListener('change',()=>{{
