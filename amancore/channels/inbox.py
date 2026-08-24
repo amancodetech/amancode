@@ -260,6 +260,8 @@ audio{{max-width:250px;height:38px}}
 .ep-grid button:hover{{background:#2a3942}}
 .qreact{{position:absolute;top:-11px;left:4px;display:flex;align-items:center;justify-content:center;border:1px solid #374248;background:#233138;border-radius:50%;width:24px;height:24px;font-size:.72rem;cursor:pointer;opacity:.9;z-index:4}}
 .qreact:hover{{transform:scale(1.15)}}
+.quotebox{{background:#2a3942;border-right:3px solid #06cf9c;border-radius:6px;padding:.25rem .5rem;margin-bottom:.25rem;color:#8696a0;font-size:.75rem;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+.rx{{position:absolute;bottom:-10px;left:-4px;background:#233138;border:1px solid #374248;border-radius:50%;padding:.1rem .25rem;font-size:.7rem;z-index:4}}
 .msg.in{{cursor:pointer}}
 .acts button{{border:0;background:none;cursor:pointer;font-size:.85rem;padding:.1rem .3rem}}
 .reactbar button{{border:0;background:none;cursor:pointer;font-size:.95rem;padding:.05rem}}
@@ -376,9 +378,16 @@ async function loadMsgs(){{
    document.querySelectorAll('.msg.open').forEach(x=>{{if(x!==w)x.classList.remove('open')}});
    w.classList.toggle('open');
   }};
+  if(m.quoted){{
+   const qb=document.createElement('div');qb.className='quotebox';
+   qb.textContent='↩ '+m.quoted;
+   w.insertBefore(qb,w.firstChild);}}
   const meta=document.createElement('div');meta.className='meta';
   meta.innerHTML='<span>'+esc((m.created_at||'').slice(11,16))+'</span>'+ticks(m);
   w.appendChild(meta);LOG.appendChild(w);
+  if(m.reaction){{
+   const rx=document.createElement('span');rx.className='rx';rx.textContent=m.reaction;
+   w.appendChild(rx);}}
   if(m.direction==='in'&&m.wa_message_id&&m.status!=='read')unread.push(m.wa_message_id);
  }});
  LOG.scrollTop=LOG.scrollHeight;

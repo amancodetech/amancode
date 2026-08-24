@@ -382,8 +382,11 @@ CREATE TABLE IF NOT EXISTS channel_messages (
     created_at TEXT NOT NULL,
     media_kind TEXT,
     media_ref TEXT,
-    outbox_message_id TEXT
-);;
+    outbox_message_id TEXT,
+    hidden INTEGER NOT NULL DEFAULT 0,
+    reaction TEXT,
+    quoted_wamid TEXT
+);
 
 
 CREATE INDEX IF NOT EXISTS idx_leads_stage ON leads(lead_stage);

@@ -105,6 +105,8 @@ _COLUMN_MIGRATIONS = [
     ("channel_messages", "wa_message_id", "TEXT"),
     ("channel_messages", "lead_id", "TEXT"),
     ("channel_messages", "hidden", "INTEGER NOT NULL DEFAULT 0"),
+    ("channel_messages", "reaction", "TEXT"),
+    ("channel_messages", "quoted_wamid", "TEXT"),
 ]
 
 

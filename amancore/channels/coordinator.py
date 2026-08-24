@@ -57,6 +57,7 @@ class MessageCoordinator:
         support_filter=None,
         message_recorder=None,
         status_recorder=None,
+        reaction_recorder=None,
     ):
         self.whatsapp = whatsapp_adapter
         self.outbox = outbox
@@ -79,6 +80,7 @@ class MessageCoordinator:
         self.intent_router = intent_router or IntentRouter()
         self.support_filter = support_filter or SupportResponseFilter()
         self.message_recorder = message_recorder
+        self.reaction_recorder = reaction_recorder
         self.status_recorder = status_recorder
 
     def handle_whatsapp_webhook(self, body, headers=None, raw_body: bytes | None = None) -> dict:
@@ -94,6 +96,14 @@ class MessageCoordinator:
         events = self.whatsapp.receive_webhook(body, headers)
         summary = {"received": len(events), "processed": 0, "duplicates": 0, "replies": 0, "handoffs": 0, "optouts": 0, "support": 0}
         for event in events:
+            if event.event_type == "whatsapp.message.reaction":
+                if self.reaction_recorder is not None:
+                    try:
+                        self.reaction_recorder(event.payload)
+                        summary["processed"] += 1
+                    except Exception:  # noqa: BLE001 — reactions never break intake
+                        pass
+                continue
             if event.event_type != "whatsapp.message.received":
                 if (
                     event.event_type in ("whatsapp.message.delivered", "whatsapp.message.read", "whatsapp.message.sent", "whatsapp.message.failed")
@@ -145,6 +155,7 @@ class MessageCoordinator:
                     lead_id=lead["lead_id"],
                     wa_message_id=payload.get("message_id"),
                     body=text,
+                    quoted_wamid=payload.get("quoted_wamid"),
                 )
             except Exception:  # noqa: BLE001 — recording must never break the pipeline
                 pass

@@ -108,18 +108,39 @@ def build_runtime(root: Path):
     inbox = build_inbox_runtime(db, coordinator)
 
     if inbox is not None:
-        def _record_inbound(direction, wa_id, lead_id, wa_message_id=None, body="", **_):
+        def _record_inbound(direction, wa_id, lead_id, wa_message_id=None, body="",
+                            quoted_wamid=None, **_):
             from ..ids import utcnow
 
             db.execute(
                 "INSERT INTO channel_messages"
-                " (direction, wa_id, lead_id, wa_message_id, body, status, created_at)"
-                " VALUES (?, ?, ?, ?, ?, '', ?)",
-                (direction, wa_id, lead_id, wa_message_id, body, utcnow()),
+                " (direction, wa_id, lead_id, wa_message_id, body, status, created_at, quoted_wamid)"
+                " VALUES (?, ?, ?, ?, ?, '', ?, ?)",
+                (direction, wa_id, lead_id, wa_message_id, body, utcnow(), quoted_wamid or None),
             )
             db.commit()
 
         coordinator.message_recorder = _record_inbound
+
+        def _record_reaction(payload):
+            """Customer reaction on our message: set/clear emoji chip in place."""
+            wmid = payload.get("message_id")
+            if not wmid:
+                return
+            emoji = payload.get("emoji") or None  # empty emoji == reaction removed
+            cur = db.execute(
+                "UPDATE channel_messages SET reaction=? WHERE wa_message_id=?",
+                (emoji, wmid),
+            )
+            if cur.rowcount == 0 and emoji:
+                # reaction on a message we have no row for — record as standalone note
+                db.execute(
+                    "INSERT INTO channel_messages"
+                    " (direction, wa_id, lead_id, wa_message_id, body, status, created_at, reaction)"
+                    " VALUES ('in', ?, NULL, ?, '', '', datetime('now'), ?)",
+                    (payload.get("wa_id") or "", wmid, emoji),
+                )
+            db.commit()
 
         def _record_status(provider_message_id, status, recipient_id=None):
             """Meta delivery receipts -> keep outbox + inbox rows truthful."""
@@ -156,6 +177,7 @@ def build_runtime(root: Path):
             db.commit()
 
         coordinator.status_recorder = _record_status
+        coordinator.reaction_recorder = _record_reaction
         runtime_inbox_sync = lambda: sync_channel_messages(db)  # noqa: E731
     else:
         runtime_inbox_sync = lambda: None  # noqa: E731
@@ -540,9 +562,12 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
             wa_id = (qs.get("wa_id") or [""])[0]
             rows = inbox["db"].execute(
                 """
-                SELECT id, direction, body, status, created_at, media_kind, media_ref, wa_message_id
-                  FROM channel_messages WHERE wa_id = ? AND hidden = 0
-                 ORDER BY created_at ASC, id ASC LIMIT 500
+                SELECT m.id, m.direction, m.body, m.status, m.created_at,
+                       m.media_kind, m.media_ref, m.wa_message_id, m.reaction,
+                       (SELECT substr(q.body, 1, 80) FROM channel_messages q
+                         WHERE q.wa_message_id = m.quoted_wamid) AS quoted
+                  FROM channel_messages m WHERE m.wa_id = ? AND m.hidden = 0
+                 ORDER BY m.created_at ASC, m.id ASC LIMIT 500
                 """,
                 (wa_id,),
             ).fetchall()

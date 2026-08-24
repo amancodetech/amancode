@@ -176,6 +176,25 @@ class WhatsAppAdapter(ChannelAdapter):
         wa_id = msg.get("from", "")
         msg_id = msg.get("id", new_id())
         msg_type = msg.get("type", "text")
+        if msg_type == "reaction":
+            r = msg.get("reaction", {})
+            return CanonicalEvent(
+                event_id=new_id(),
+                event_type="whatsapp.message.reaction",
+                timestamp=utcnow(),
+                source="whatsapp",
+                channel="whatsapp",
+                actor_type="external",
+                actor_id=wa_id,
+                idempotency_key=f"wa-react:{msg_id}",
+                risk_level="low",
+                payload={
+                    "wa_id": wa_id,
+                    "message_id": r.get("message_id", ""),
+                    "emoji": r.get("emoji", ""),
+                },
+                metadata={"provider_message_id": msg_id},
+            )
         text = ""
         if msg_type == "text":
             text = msg.get("text", {}).get("body", "")
@@ -197,6 +216,7 @@ class WhatsAppAdapter(ChannelAdapter):
                 "message_type": msg_type,
                 "text": text,
                 "timestamp": msg.get("timestamp"),
+                "quoted_wamid": (msg.get("context") or {}).get("id", ""),
             },
             metadata={"provider_message_id": msg_id},
         )
