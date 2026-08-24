@@ -68,7 +68,15 @@ class MessageOutbox:
             "ORDER BY created_at LIMIT ?",
             (now, limit),
         ).fetchall()
-        return [dict(r) for r in rows]
+        out = []
+        for r in rows:
+            d = dict(r)
+            try:
+                d["payload"] = json.loads(d.get("payload") or "{}")
+            except (ValueError, TypeError):
+                pass
+            out.append(d)
+        return out
 
     def mark_processing(self, message_id: str) -> None:
         self.db.execute("UPDATE message_outbox SET status = 'processing' WHERE message_id = ?", (message_id,))

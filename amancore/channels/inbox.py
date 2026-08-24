@@ -235,7 +235,7 @@ header form button:hover{{background:#2a3942}}
 #composer.on{{display:flex}}
 #text{{flex:1;padding:.7rem 1rem;border:0;border-radius:10px;background:#2a3942;color:#e9edef;font-size:1rem;outline:none}}
 #send{{width:44px;height:44px;border-radius:50%;border:0;background:#00a884;color:#fff;font-size:1.2rem;cursor:pointer;flex-shrink:0}}
-#attach,#mic{{width:40px;height:40px;border-radius:50%;border:0;background:#2a3942;font-size:1rem;cursor:pointer;flex-shrink:0}}
+#attach,#mic,#emojibtn{{width:40px;height:40px;border-radius:50%;border:0;background:#2a3942;font-size:1rem;cursor:pointer;flex-shrink:0}}
 #mic.recording{{background:#dc3545;animation:pulse 1s infinite}}
 @keyframes pulse{{50%{{opacity:.6}}}}
 .media-img{{max-width:260px;border-radius:8px;display:block}}
@@ -265,6 +265,7 @@ audio{{max-width:250px;height:38px}}
 .reactbar button{{border:0;background:none;cursor:pointer;font-size:.95rem;padding:.05rem}}
 #preview button{{background:none;border:0;color:#f15c6d;font-size:1rem;cursor:pointer}}
 #send:hover{{background:#06cf9c}}
+#attach:hover,#mic:hover,#emojibtn:hover{{background:#374248}}
 @media(max-width:700px){{aside{{width:100%;display:none}} aside.open{{display:flex}}
  body.chatting aside{{display:none}} main{{display:none}} body.chatting main{{display:flex}}}}
 ::-webkit-scrollbar{{width:6px}} ::-webkit-scrollbar-thumb{{background:#374248;border-radius:3px}}
