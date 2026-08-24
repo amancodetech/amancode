@@ -310,6 +310,17 @@ def build_inbox_runtime(db, coordinator):
     }
 
 
+
+def resolve_client_key(headers, peer_addr: str | None, trust_proxy: bool) -> str:
+    """S2: proxy IP headers are trusted ONLY when the deployment flag says we
+    actually sit behind that proxy — otherwise a client can spoof
+    CF-Connecting-IP and rotate free brute-force buckets."""
+    if trust_proxy:
+        cf_ip = headers.get("CF-Connecting-IP")
+        if cf_ip:
+            return cf_ip.strip()
+    return peer_addr or "?"
+
 class WebhookRequestHandler(BaseHTTPRequestHandler):
     server_version = "AmanCoreWebhook/1.0"
 
@@ -469,12 +480,9 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
         return verify_session_token(inbox["config"].secret, token)
 
     def _client_key(self) -> str:
-        # behind Cloudflare, CF-Connecting-IP is set by the edge and cannot be
-        # spoofed by the client; fall back to socket peer address
-        cf_ip = self.headers.get("CF-Connecting-IP")
-        if cf_ip:
-            return cf_ip.strip()
-        return self.client_address[0] or "?"
+        inbox_cfg = self.runtime.get("inbox", {}).get("config") if self.runtime else None
+        trust_proxy = getattr(inbox_cfg, "trust_proxy_ip", False)
+        return resolve_client_key(self.headers, self.client_address[0], trust_proxy)
 
     def _inbox_get(self, inbox, action: str, query: str) -> None:
         from .inbox import render_inbox_page, render_login_page
@@ -510,12 +518,14 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
         raw = self.rfile.read(length).decode("utf-8", errors="replace")
         return {k: v[0] for k, v in parse_qs(raw).items()}
 
-    def _read_json(self) -> dict:
+    def _read_json(self, max_bytes: int = 1_000_000) -> dict:
+        """S4: tight default cap for JSON APIs; only the media-upload action
+        opts into the larger bound (base64 ≈ 30MB binary needs ~40MB text)."""
         try:
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             length = 0
-        if not 0 < length <= 45_000_000:  # media uploads (base64) up to ~30MB binary
+        if not 0 < length <= max_bytes:
             return {}
         try:
             return json.loads(self.rfile.read(length).decode("utf-8"))
@@ -539,7 +549,12 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
         client = self._client_key()
 
         if action == "logout":
-            expired = f"{SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict; Secure"
+            # S4: unauthenticated force-logout was a one-click DoS on owners
+            if not self._inbox_session_ok(inbox):
+                return self._send(403, b"forbidden")
+            secure_attr = "; Secure" if getattr(cfg, "secure_cookie", False) else ""
+            expired = (f"{SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; "
+                       f"SameSite=Strict{secure_attr}")
             return self._send_html(303, "", {"Set-Cookie": expired, "Location": cfg.login_path})
 
         if action == "login":
@@ -555,9 +570,10 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
                 return self._send_html(200, render_login_page(cfg.login_path, "كلمة مرور غير صحيحة"))
             limiter.reset(client)
             token = make_session_token(cfg.secret)
+            secure_attr = "; Secure" if getattr(cfg, "secure_cookie", False) else ""
             cookie = (
                 f"{SESSION_COOKIE}={token}; Path=/; Max-Age={12 * 60 * 60}; "
-                "HttpOnly; SameSite=Strict; Secure"
+                f"HttpOnly; SameSite=Strict{secure_attr}"
             )
             return self._send_html(
                 303, "", {"Set-Cookie": cookie, "Location": cfg.app_path}
@@ -835,6 +851,17 @@ class WebhookServer(ThreadingHTTPServer):
 
 
 def serve(root: Path, host: str = "127.0.0.1", port: int = 8010) -> int:
+    """S3: refuse to boot with missing secrets for enabled integrations."""
+    from ..config import validate_required_env
+
+    from ..config import load_config as _lc
+
+    _missing = validate_required_env(_lc(root))
+    if _missing:
+        for item in _missing:
+            log.critical("MISSING SECRET: %s", item)
+        raise SystemExit(f"refusing to start — {len(_missing)} required secret(s) missing")
+
     from ..log import setup_logging
 
     setup_logging()

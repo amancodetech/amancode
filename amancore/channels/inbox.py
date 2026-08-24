@@ -108,9 +108,23 @@ class LoginRateLimiter:
         self._failures: dict[str, list[float]] = {}
         self._lock = threading.Lock()
 
+    MAX_TRACKED_KEYS = 10_000   # S2: bound attacker-controlled key growth
+
+    def _prune(self, current: float) -> None:
+        stale = [k for k, v in self._failures.items()
+                 if not v or current - v[-1] >= self.window_seconds]
+        for k in stale:
+            del self._failures[k]
+        if len(self._failures) > self.MAX_TRACKED_KEYS:   # flood guard
+            keep = sorted(self._failures.items(),
+                          key=lambda kv: kv[1][-1], reverse=True)[:self.MAX_TRACKED_KEYS]
+            self._failures.clear()
+            self._failures.update(keep)
+
     def is_locked(self, key: str, now: float | None = None) -> bool:
         current = now if now is not None else time.time()
         with self._lock:
+            self._prune(current)
             stamps = [t for t in self._failures.get(key, []) if current - t < self.window_seconds]
             self._failures[key] = stamps
             return len(stamps) >= self.max_failures
@@ -140,6 +154,10 @@ class InboxConfig:
         self.slug = e.get("INBOX_PATH_SLUG", "").strip()
         self.password_hash = e.get("INBOX_PASSWORD_HASH", "").strip()
         self.secret = e.get("INBOX_SECRET", "").strip()
+        # S2: trust proxy IP headers ONLY when explicitly deployed behind one;
+        # Secure cookie only when served over HTTPS (public) — LAN http needs it off
+        self.trust_proxy_ip = e.get("INBOX_TRUST_PROXY_IP", "").strip().lower() in {"1", "true", "yes"}
+        self.secure_cookie = e.get("INBOX_SECURE_COOKIE", "").strip().lower() in {"1", "true", "yes"}
 
     @property
     def configured(self) -> bool:
@@ -162,6 +180,13 @@ _SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
     "Cache-Control": "no-store",
+    # S4: lock page capabilities down; inline style kept for the legacy UI
+    # until UI-403, script-src 'self' only.
+    "Content-Security-Policy": (
+        "default-src 'self'; img-src 'self' data:; "
+        "style-src 'self' 'unsafe-inline'; script-src 'self'; "
+        "form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+    ),
 }
 
 

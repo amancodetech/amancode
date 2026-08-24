@@ -92,3 +92,39 @@ def load_config(root: Path) -> Config:
         scheduler=_load_yaml(root / "configs" / "scheduler.yaml"),
     )
     return cfg
+
+# ── SRV-401/S3: fail-fast on missing secrets for ENABLED integrations ────────
+# A deleted env var used to boot green and fail every send silently.
+REQUIRED_ENV_BY_FEATURE = {
+    "production_whatsapp": [
+        "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_ACCESS_TOKEN",
+        "WHATSAPP_APP_SECRET", "WHATSAPP_VERIFY_TOKEN",
+    ],
+    "owner_alerts_telegram": ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"],
+}
+
+
+def _feature_active(feature: str, cfg: "Config", environ) -> bool:
+    if feature == "production_whatsapp":
+        try:
+            return bool(cfg.production.get("environment", {}).get("production_enabled", False))
+        except Exception:  # noqa: BLE001
+            return False
+    if feature == "owner_alerts_telegram":
+        return environ.get("OWNER_ALERT_CHANNEL", "").strip().lower() == "telegram"
+    return False
+
+
+def validate_required_env(cfg: "Config", environ=None) -> list[str]:
+    """Return human-readable list of missing REQUIRED secrets (empty = OK)."""
+    import os as _os
+
+    environ = environ if environ is not None else _os.environ
+    missing = []
+    for feature, keys in REQUIRED_ENV_BY_FEATURE.items():
+        if not _feature_active(feature, cfg, environ):
+            continue
+        for key in keys:
+            if not str(environ.get(key, "")).strip():
+                missing.append(f"{key} (required by {feature})")
+    return missing
