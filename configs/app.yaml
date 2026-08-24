@@ -11,3 +11,10 @@ cost:
   global_daily_calls: 5000        # circuit breaker for the whole business day
   daily_token_budget: 400000      # ~chars/4 estimate across prompts+outputs
   trusted_wa_ids: []              # owner numbers exempt from limits
+
+# Compliance kit (post-2026-08-24 WABA-ban guardrails)
+compliance:
+  warmup_tiers: [50, 250, 1000]   # daily ALL-outbound ceilings; advance manually
+  warmup_tier: 0                  # current tier index — raise only after clean weeks
+  auto_send_cap: 50               # business-initiated/day before manual approval
+  approved_templates: {}          # name → {language, body}; EMPTY ⇒ no initiations

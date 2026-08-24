@@ -68,30 +68,64 @@ class JobRegistry:
             from ..channels.outbox import MessageOutbox
             from ..channels.wa_errors import normalize_e164_digits
 
+            # Compliance kit: consent + valve + template — safe defaults.
+            from ..compliance.guard import ConsentGate, SendValve, TemplateLock
+
+            tpl_cfg = {}
+            try:
+                tpl_cfg = dict((cfg.app.get("compliance") or {}).get(
+                    "approved_templates") or {})
+            except Exception:  # noqa: BLE001
+                pass
+            tlock = TemplateLock(tpl_cfg)
+            tmpl = tlock.resolve("followup")
+            if tmpl is None:
+                return {"due_followups": 0, "enqueued": 0,
+                        "note": "no approved followup template configured"}
+
             due = self.db.execute(
                 "SELECT l.lead_id, l.name, l.contact_whatsapp, l.language, "
-                "       l.next_followup_at, c.mode "
+                "       l.next_followup_at, l.opt_out, l.consent_at, c.mode "
                 "FROM leads l LEFT JOIN conversations c ON c.lead_id = l.lead_id "
                 "WHERE l.next_followup_at IS NOT NULL AND l.next_followup_at <= ? "
                 "AND l.opt_out = 0 AND COALESCE(c.mode, 'AI_ACTIVE') = 'AI_ACTIVE'",
                 (utcnow(),),
             ).fetchall()
+
             outbox = MessageOutbox(self.db)
+            valve = SendValve(
+                self.db,
+                tiers=(cfg.app.get("compliance") or {}).get("warmup_tiers"),
+                tier_index=int((cfg.app.get("compliance") or {}).get(
+                    "warmup_tier", 0)),
+                auto_cap=int((cfg.app.get("compliance") or {}).get(
+                    "auto_send_cap", 50)))
             today = utcnow()[:10]
-            enqueued = []
+            enqueued, skipped_consent, blocked_valve = [], 0, 0
             for r in due:
+                lead_row = dict(r)
+                ok, why = ConsentGate.can_initiate(lead_row)
+                if not ok:
+                    skipped_consent += 1
+                    continue
+                granted, _ = valve.reserve_initiations(1)
+                if not granted:
+                    blocked_valve += 1
+                    break   # cap reached — leave the rest for tomorrow
                 recipient = normalize_e164_digits(r["contact_whatsapp"] or "")
                 if not recipient:
                     continue
-                text = ("نود المتابعة معك بخصوص مشروع موقعكم — هل الوقت مناسب للحديث؟"
-                        if (r["language"] or "ar").startswith("ar") else
-                        "Following up on your website project — is now a good time to talk?")
                 mid = outbox.enqueue(
-                    channel="whatsapp", recipient=recipient, message_type="text",
-                    payload={"body": text},
+                    channel="whatsapp", recipient=recipient,
+                    message_type="template",
+                    payload={"name": tmpl["name"], "language":
+                             {"code": tmpl.get("language", "ar")}},
                     idempotency_key=f"followup:{r['lead_id']}:{today}",
                     lead_id=r["lead_id"], correlation_id=new_id(),
                 )
+                self.db.execute(
+                    "UPDATE message_outbox SET initiation='yes' WHERE message_id=?",
+                    (mid,))
                 nxt = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
                 self.db.execute(
                     "UPDATE leads SET next_followup_at = ? WHERE lead_id = ?",
@@ -99,7 +133,8 @@ class JobRegistry:
                 enqueued.append(mid)
             self.db.commit()
             return {"due_followups": len(due), "enqueued": len(enqueued),
-                    "message_ids": enqueued}
+                    "skipped_no_consent": skipped_consent,
+                    "blocked_by_valve": blocked_valve}
 
         def _retention():
             from ..ops.retention import RetentionService

@@ -168,6 +168,9 @@ _COLUMN_MIGRATIONS = [
     ("channel_messages", "quoted_wamid", "TEXT"),
     ("message_outbox", "claimed_at", "TEXT"),      # OUT-202 atomic claims
     ("message_outbox", "claim_token", "TEXT"),
+    ("leads", "consent_at", "TEXT"),               # compliance kit: opt-in
+    ("leads", "consent_source", "TEXT"),
+    ("message_outbox", "initiation", "TEXT"),      # 'yes' = business-initiated
 ]
 
 

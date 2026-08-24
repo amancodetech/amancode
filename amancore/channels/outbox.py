@@ -202,6 +202,7 @@ class OutboxWorker:
         self.audit = audit
         self.dispatcher = dispatcher
         self.owner_alert = owner_alert
+        self.send_valve = None  # SendValve — set by build_runtime
         if claim_mode not in {"legacy", "atomic"}:
             raise ValueError(f"unknown claim_mode: {claim_mode}")
         self.claim_mode = claim_mode
@@ -224,6 +225,20 @@ class OutboxWorker:
 
         if not already_claimed:
             self.outbox.mark_processing(message["message_id"])
+        if self.send_valve is not None:   # reputation guard: global tier ceiling
+            ok, why = self.send_valve.check_all_outbound(1)
+            if not ok:
+                from datetime import datetime as _dt, timezone as _tz
+
+                retry_at = (_dt.now(_tz.utc) + _dt.timedelta(minutes=30)).isoformat()
+                self.outbox.db.execute(
+                    "UPDATE message_outbox SET status='queued', next_attempt_at=?, "
+                    "failure_reason=? WHERE message_id=?",
+                    (retry_at, f"held: {why}"[:200], message["message_id"]))
+                self.outbox.db.commit()
+                log.warning("valve.hold mid=%s reason=%s", message["message_id"], why)
+                return {"message_id": message["message_id"], "status": "held",
+                        "reason": why}
         try:
             result = adapter.send(message["recipient"], message["message_type"], message["payload"])
             self.outbox.mark_sent(message["message_id"], result.get("provider_message_id"))

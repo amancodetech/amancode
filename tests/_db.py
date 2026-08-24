@@ -31,6 +31,7 @@ _SCHEMA_READY = False
 #: wipe order respects FK dependencies; audit/business_brain are permanent
 TABLES_TO_WIPE = (
     "channel_messages", "message_outbox", "jobs", "alerts", "incidents",
+    "compliance_overrides",
     "idempotency_keys", "events", "conversations", "opportunities",
     "support_cases", "leads", "content_items", "proposals", "pricing_snapshots",
 )

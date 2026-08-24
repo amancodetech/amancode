@@ -159,11 +159,21 @@ def build_runtime(root: Path):
         outbox_cfg = dict(cfg.channels.get("outbox") or {})
     except Exception:  # noqa: BLE001 — config drift must never kill startup
         outbox_cfg = {}
+    from ..compliance.guard import SendValve
+
+    try:
+        _comp = dict(cfg.app.get("compliance") or {})
+    except Exception:  # noqa: BLE001
+        _comp = {}
+    valve = SendValve(db, tiers=_comp.get("warmup_tiers"),
+                      tier_index=int(_comp.get("warmup_tier", 0)),
+                      auto_cap=int(_comp.get("auto_send_cap", 50)))
     worker = OutboxWorker(
         outbox, {"whatsapp": adapter}, policy, audit=audit, dispatcher=dispatcher,
         claim_mode=str(outbox_cfg.get("claim_mode", "legacy")),
         stale_after_seconds=int(outbox_cfg.get("stale_after_seconds", 300)),
         owner_alert=send_owner_alert,
+        send_valve=valve,
     )
     crm = CRMService(db)
     memory = ConversationMemory(crm)

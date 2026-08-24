@@ -86,19 +86,21 @@ class CC2RealFollowups(Harness):
     def _registry_followups(self):
         from amancore.ops.registry import JobRegistry
 
-        reg = JobRegistry(self.db, config=type("C", (), {"retention": {}, "database_path": "x"})(),
-                          root=ROOT)
-        handlers = reg.handlers()
-        # config object lacks .get — registry uses cfg.retention only elsewhere
-        return handlers["followups.check"]
+        cfg = type("C", (), {"retention": {}, "database_path": "x",
+                             "app": {"compliance": {"approved_templates":
+                                     {"followup": {"name": "f1", "language": "ar"}}}}})()
+        return JobRegistry(self.db, config=cfg, root=ROOT).handlers()["followups.check"]
 
-    def _seed_lead(self, lead_id="L1", due=True, wa="+905321112233", opt_out=0):
+    def _seed_lead(self, lead_id="L1", due=True, wa="+905321112233", opt_out=0,
+                   consent=True):
         now = datetime.now(tz.utc)
         nxt = (now - timedelta(days=1)).isoformat() if due else (now + timedelta(days=9)).isoformat()
         self.db.execute(
             "INSERT INTO leads (lead_id, lead_stage, name, contact_whatsapp, opt_out,"
-            " next_followup_at, created_at, updated_at) VALUES (?, 'nurture', 'Test', ?, ?, ?, ?, ?)",
-            (lead_id, wa, opt_out, nxt, now.isoformat(), now.isoformat()))
+            " next_followup_at, consent_at, created_at, updated_at)"
+            " VALUES (?, 'nurture', 'Test', ?, ?, ?, ?, ?, ?)",
+            (lead_id, wa, opt_out, nxt,
+             now.isoformat() if consent else None, now.isoformat(), now.isoformat()))
         self.db.execute(
             "INSERT INTO conversations (conversation_id, lead_id, mode, created_at, updated_at)"
             " VALUES (?, ?, 'AI_ACTIVE', ?, ?)",

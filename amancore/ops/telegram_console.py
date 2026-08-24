@@ -189,9 +189,29 @@ class TelegramOwnerConsole:
             return self._act_customer(args)
         if cmd == "send":
             return self._act_send(args)
+        if cmd == "approve":
+            return self._act_approve(args)
         if cmd == "mode":
             return self._act_mode(args)
         return f"أمر غير معروف: {cmd}\n\n" + HELP_TEXT
+
+    def _act_approve(self, args: str) -> str:
+        """Compliance kit: owner tops-up today's business-initiated cap."""
+        try:
+            extra = int((args or "").split()[0])
+            assert extra > 0
+        except (ValueError, IndexError, AssertionError):
+            return ("استخدام: /approve <عدد> — يرفع سقف الإرسالات المبدئية اليوم "
+                    "بهذا العدد الإضافي")
+        from ..compliance.guard import SendValve
+
+        valve = SendValve(
+            self.runtime["db"],
+            tiers=[50, 250, 1000],   # tiers only affect global ceiling display
+        )
+        total = valve.approve_today(extra)
+        return (f"✅ أُضيف {extra} للسقف المبدئي اليوم. "
+                f"إجمالي المعتمد الإضافي اليوم: {total}")
 
     # ── free-form NL interpretation ──
     INTERPRET_PROMPT = (
