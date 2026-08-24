@@ -26,11 +26,76 @@ import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from ..ids import utcnow
 from ..log import get_logger
 
 log = get_logger("channels.webhook_server")
 
 MAX_BODY_BYTES = 1_000_000
+
+
+_STATUS_RANK = {"processing": 1, "sent": 2, "delivered": 3, "read": 4}
+
+
+def make_status_recorder(db):
+    """OUT-204 (C3): delivery receipts keep outbox + inbox rows truthful.
+
+    Status moves FORWARD only (monotonic rank) so an out-of-order webhook
+    can never downgrade a message (e.g. 'read' back to 'delivered', or a
+    stale receipt resurrecting a dead row). Unknown provider ids are
+    reported instead of silently dropped.
+    """
+
+    def _record_status(provider_message_id, status, recipient_id=None):
+        if not provider_message_id:
+            return {"updated": False, "reason": "empty id"}
+        cur = db.execute(
+            "SELECT id FROM channel_messages WHERE wa_message_id = ? AND direction='out'",
+            (provider_message_id,),
+        ).fetchone()
+        row = db.execute(
+            "SELECT message_id, status FROM message_outbox WHERE provider_message_id = ?",
+            (provider_message_id,),
+        ).fetchone()
+        if row is None:
+            log.warning("status.unknown_provider_id pmid=%s status=%s",
+                        provider_message_id[:24], status)
+            return {"updated": False, "reason": "unknown id"}
+
+        current = row["status"]
+        if current in ("failed", "dead", "cancelled"):
+            return {"updated": False, "reason": f"terminal {current}"}
+        new_rank = _STATUS_RANK.get(status)
+        if new_rank is not None and new_rank <= _STATUS_RANK.get(current, 0):
+            return {"updated": False, "reason": "stale/out-of-order"}
+        db.execute(
+            "UPDATE message_outbox SET status = ? WHERE provider_message_id = ?",
+            (status, provider_message_id),
+        )
+        if cur is None:
+            src = db.execute(
+                "SELECT recipient, lead_id, payload FROM message_outbox WHERE provider_message_id = ?",
+                (provider_message_id,),
+            ).fetchone()
+            if src is not None:
+                db.execute(
+                    "INSERT INTO channel_messages"
+                    " (direction, wa_id, lead_id, wa_message_id, body, status, created_at)"
+                    " VALUES ('out', ?, ?, ?, ?, ?, ?)",
+                    (src["recipient"], src["lead_id"], provider_message_id,
+                     src["payload"] or "", status, utcnow()),
+                )
+                db.commit()
+                return {"updated": True}
+            # unknown id (e.g. AI auto-reply recorded via sync) — nothing to do
+            return {"updated": False, "reason": "no inbox row"}
+        db.execute(
+            "UPDATE channel_messages SET status = ? WHERE id = ?", (status, cur["id"])
+        )
+        db.commit()
+        return {"updated": True}
+
+    return _record_status
 
 
 def build_runtime(root: Path):
@@ -98,6 +163,7 @@ def build_runtime(root: Path):
         outbox, {"whatsapp": adapter}, policy, audit=audit, dispatcher=dispatcher,
         claim_mode=str(outbox_cfg.get("claim_mode", "legacy")),
         stale_after_seconds=int(outbox_cfg.get("stale_after_seconds", 300)),
+        owner_alert=send_owner_alert,
     )
     crm = CRMService(db)
     memory = ConversationMemory(crm)
@@ -161,41 +227,7 @@ def build_runtime(root: Path):
                 )
             db.commit()
 
-        def _record_status(provider_message_id, status, recipient_id=None):
-            """Meta delivery receipts -> keep outbox + inbox rows truthful."""
-            if not provider_message_id:
-                return
-            cur = db.execute(
-                "SELECT id FROM channel_messages WHERE wa_message_id = ? AND direction='out'",
-                (provider_message_id,),
-            ).fetchone()
-            db.execute(
-                "UPDATE message_outbox SET status = ? WHERE provider_message_id = ?",
-                (status, provider_message_id),
-            )
-            if cur is None:
-                row = db.execute(
-                    "SELECT recipient, lead_id, payload FROM message_outbox WHERE provider_message_id = ?",
-                    (provider_message_id,),
-                ).fetchone()
-                if row is not None:
-                    db.execute(
-                        "INSERT INTO channel_messages"
-                        " (direction, wa_id, lead_id, wa_message_id, body, status, created_at)"
-                        " VALUES ('out', ?, ?, ?, ?, ?, ?)",
-                        (row["recipient"], row["lead_id"], provider_message_id,
-                         row["payload"] or "", status, utcnow()),
-                    )
-                    db.commit()
-                    return
-                # unknown id (e.g. AI auto-reply recorded via sync) — nothing to do
-                return
-            db.execute(
-                "UPDATE channel_messages SET status = ? WHERE id = ?", (status, cur["id"])
-            )
-            db.commit()
-
-        coordinator.status_recorder = _record_status
+        coordinator.status_recorder = make_status_recorder(db)
         coordinator.reaction_recorder = _record_reaction
         runtime_inbox_sync = lambda: sync_channel_messages(db)  # noqa: E731
     else:

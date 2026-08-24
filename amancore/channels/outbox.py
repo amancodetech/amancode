@@ -138,14 +138,17 @@ class MessageOutbox:
         )
         self.db.commit()
 
-    def mark_failed(self, message_id: str, reason: str) -> None:
+    def mark_failed(self, message_id: str, reason: str) -> str:
+        """Returns the final status ('dead' or 'queued') so callers can alert."""
         msg = self.get(message_id) or {}
         attempts = msg.get("attempts", 0) + 1
+        reason = (reason or "")[:200]  # OUT-205: bounded forensic field
         if attempts >= self.max_attempts:
             self.db.execute(
                 "UPDATE message_outbox SET status = 'dead', attempts = ?, failure_reason = ? WHERE message_id = ?",
                 (attempts, reason, message_id),
             )
+            return "dead"
         else:
             backoff = timedelta(seconds=self.retry_backoff_seconds * attempts)
             next_at = (datetime.now(timezone.utc) + backoff).isoformat()
@@ -154,7 +157,7 @@ class MessageOutbox:
                 "WHERE message_id = ?",
                 (attempts, next_at, reason, message_id),
             )
-        self.db.commit()
+            return "queued"
 
     def cancel(self, message_id: str) -> None:
         self.db.execute("UPDATE message_outbox SET status = 'cancelled' WHERE message_id = ?", (message_id,))
@@ -171,12 +174,14 @@ class OutboxWorker:
     """Processes queued messages through channel adapters (mock-safe)."""
 
     def __init__(self, outbox: MessageOutbox, adapters: dict, policy, audit=None, dispatcher=None,
-                 claim_mode: str = "legacy", stale_after_seconds: int = 300):
+                 claim_mode: str = "legacy", stale_after_seconds: int = 300,
+                 owner_alert=None):
         self.outbox = outbox
         self.adapters = adapters
         self.policy = policy
         self.audit = audit
         self.dispatcher = dispatcher
+        self.owner_alert = owner_alert
         if claim_mode not in {"legacy", "atomic"}:
             raise ValueError(f"unknown claim_mode: {claim_mode}")
         self.claim_mode = claim_mode
@@ -206,7 +211,14 @@ class OutboxWorker:
             self._audit("channel.sent", channel, result=str(result))
             return {"message_id": message["message_id"], "status": "sent", "provider_message_id": result.get("provider_message_id")}
         except Exception as exc:  # noqa: BLE001
-            self.outbox.mark_failed(message["message_id"], str(exc))
+            final = self.outbox.mark_failed(message["message_id"], str(exc))
+            if final == "dead" and self.owner_alert is not None:  # OUT-205: dead is never silent
+                self.owner_alert(
+                    "HIGH",
+                    f"[AmanCore] outbox DEAD after {self.outbox.max_attempts} attempts: "
+                    f"{message['message_id']} ({str(exc)[:120]})",
+                    event_type="outbox.dead", resource=message["message_id"],
+                )
             self._emit("message.failed", message)
             self._audit("channel.failed", channel, result=str(exc))
             return {"message_id": message["message_id"], "status": "failed", "reason": str(exc)}

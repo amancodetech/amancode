@@ -130,6 +130,35 @@ _COLUMN_MIGRATIONS = [
 ]
 
 
+def ensure_unique_indexes(db: Database) -> None:
+    """OUT-203 (C2): enforce wa_message_id uniqueness on existing databases.
+
+    Removes duplicate rows first (keeps lowest rowid = original delivery),
+    then creates the partial unique index. Safe to run repeatedly.
+    """
+    dupes = db.execute(
+        "SELECT wa_message_id FROM channel_messages WHERE wa_message_id IS NOT NULL "
+        "GROUP BY wa_message_id HAVING COUNT(*) > 1"
+    ).fetchall()
+    for r in dupes:
+        cur = db.execute(
+            "DELETE FROM channel_messages WHERE wa_message_id = ? AND rowid NOT IN "
+            "(SELECT MIN(rowid) FROM channel_messages WHERE wa_message_id = ?)",
+            (r["wa_message_id"], r["wa_message_id"]),
+        )
+        db.commit()
+        import logging
+
+        logging.getLogger("amancore.storage").warning(
+            "out203.dedupe wamid=%s removed=%d", r["wa_message_id"], cur.rowcount
+        )
+    db.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_channel_messages_wamid "
+        "ON channel_messages (wa_message_id) WHERE wa_message_id IS NOT NULL"
+    )
+    db.commit()
+
+
 def ensure_columns(db: Database) -> None:
     """Add missing columns (idempotent) for additive schema evolution."""
     for table, col, typ in _COLUMN_MIGRATIONS:
@@ -159,6 +188,7 @@ def open_database(path: Path, schema_file: Path | None = None) -> Database:
         tables_sql, index_sql = _split_schema(schema_file.read_text(encoding="utf-8"))
         db.apply_schema(tables_sql)
         ensure_columns(db)
+        ensure_unique_indexes(db)
         if index_sql.strip():
             db.apply_schema(index_sql)
     return db

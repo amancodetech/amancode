@@ -125,8 +125,14 @@ class MessageCoordinator:
             if event.idempotency_key and self.idem.check(event.idempotency_key) is not None:
                 summary["duplicates"] += 1
                 continue
-            self.idem.store(event.idempotency_key, "inbound_whatsapp", "processed")
+            # OUT-203: key is stored AFTER successful processing — a crash
+            # mid-pipeline must not permanently swallow the customer message.
             result = self._process_inbound(event.payload)
+            if event.idempotency_key:
+                try:
+                    self.idem.store(event.idempotency_key, "inbound_whatsapp", "processed")
+                except Exception:  # noqa: BLE001 — dedup best-effort, DB index is the hard gate
+                    pass
             summary["processed"] += 1
             summary["replies"] += 1 if result.get("reply_sent") else 0
             summary["handoffs"] += 1 if result.get("handoff") else 0

@@ -503,3 +503,6 @@ CREATE INDEX IF NOT EXISTS idx_intake_email ON intake_events(email);
 
 CREATE INDEX IF NOT EXISTS idx_outbox_ready
   ON message_outbox (status, next_attempt_at, created_at);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_channel_messages_wamid
+  ON channel_messages (wa_message_id) WHERE wa_message_id IS NOT NULL;

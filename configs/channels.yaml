@@ -19,5 +19,5 @@ website:
 outbox:
   max_attempts: 3
   retry_backoff_seconds: 10
-  claim_mode: legacy          # OUT-202: legacy | atomic — flip during window
+  claim_mode: atomic          # OUT-202: ACTIVE since 2026-08-24 (kills C1+C4)
   stale_after_seconds: 300    # processing rows older than this get reclaimed
