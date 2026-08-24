@@ -219,7 +219,9 @@ class MessageCoordinator:
                  lead["lead_id"], result.get("next_action"))
 
         # customer approved the discovery summary → owner takes over closing
-        _APPROVAL = re.compile(r"(موافق|متفق|تم\s*$|اوك|أوك|نعم\s*نعم|approved)", re.I)
+        # AI-104: structured classification — negations can never approve (C6)
+        from .intent_rules import (AFFIRMATIVE, classify_approval,
+                                   summary_question_pending)
         prev_out = ""
         try:
             row = self.crm.db.execute(
@@ -228,8 +230,9 @@ class MessageCoordinator:
             prev_out = str(row["body"]) if row else ""
         except Exception:  # noqa: BLE001
             pass
-        if ("هل أنت موافق" in prev_out or "موافق؟" in prev_out) and \
-                _APPROVAL.search(text):
+        intent = classify_approval(text, prev_out)
+        log.info("approval.classified lead=%s intent=%s", lead["lead_id"], intent)
+        if summary_question_pending(prev_out) and intent == AFFIRMATIVE:
             self.handover.request_human(lead["lead_id"])
             self._alert_owner(lead, mem, "customer_approved_summary — ready for official quote")
 
