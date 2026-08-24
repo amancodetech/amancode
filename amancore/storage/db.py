@@ -36,6 +36,7 @@ class Database:
             conn = sqlite3.connect(str(self.path), check_same_thread=False)
             conn.row_factory = sqlite3.Row
             conn.execute("PRAGMA foreign_keys = ON")
+            conn.execute("PRAGMA busy_timeout = 5000")
             self._local.conn = conn
         return conn
 
@@ -124,6 +125,8 @@ _COLUMN_MIGRATIONS = [
     ("channel_messages", "hidden", "INTEGER NOT NULL DEFAULT 0"),
     ("channel_messages", "reaction", "TEXT"),
     ("channel_messages", "quoted_wamid", "TEXT"),
+    ("message_outbox", "claimed_at", "TEXT"),      # OUT-202 atomic claims
+    ("message_outbox", "claim_token", "TEXT"),
 ]
 
 

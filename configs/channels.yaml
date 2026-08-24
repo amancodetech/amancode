@@ -19,3 +19,5 @@ website:
 outbox:
   max_attempts: 3
   retry_backoff_seconds: 10
+  claim_mode: legacy          # OUT-202: legacy | atomic — flip during window
+  stale_after_seconds: 300    # processing rows older than this get reclaimed

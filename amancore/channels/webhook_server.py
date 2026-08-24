@@ -90,7 +90,15 @@ def build_runtime(root: Path):
     adapter = WhatsAppAdapter(wa_cfg)
     outbox = MessageOutbox(db)
     policy = ChannelPolicyEngine(brain)
-    worker = OutboxWorker(outbox, {"whatsapp": adapter}, policy, audit=audit, dispatcher=dispatcher)
+    try:
+        outbox_cfg = dict(cfg.channels.get("outbox") or {})
+    except Exception:  # noqa: BLE001 — config drift must never kill startup
+        outbox_cfg = {}
+    worker = OutboxWorker(
+        outbox, {"whatsapp": adapter}, policy, audit=audit, dispatcher=dispatcher,
+        claim_mode=str(outbox_cfg.get("claim_mode", "legacy")),
+        stale_after_seconds=int(outbox_cfg.get("stale_after_seconds", 300)),
+    )
     crm = CRMService(db)
     memory = ConversationMemory(crm)
     sales = SalesAgent(

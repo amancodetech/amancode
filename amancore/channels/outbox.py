@@ -61,6 +61,55 @@ class MessageOutbox:
         ).fetchone()
         return row is not None
 
+    def claim_batch(self, limit: int = 10, stale_after_seconds: int = 300) -> list[dict]:
+        """OUT-202 (C1/C4): atomically claim queued rows for exactly one owner.
+
+        Single guarded UPDATE per row (status='queued' predicate) — a losing
+        racer's rowcount is 0 and it never sees the message. Stale
+        `processing` rows older than stale_after_seconds are revived first,
+        so a crash mid-send can never strand a message forever.
+        """
+        now_dt = datetime.now(timezone.utc)
+        cutoff = (now_dt - timedelta(seconds=stale_after_seconds)).isoformat()
+        self.db.execute(
+            "UPDATE message_outbox SET status = 'queued', "
+            "failure_reason = COALESCE(failure_reason, '') || ' [stale-reclaimed]' "
+            "WHERE status = 'processing' AND claimed_at IS NOT NULL AND claimed_at < ?",
+            (cutoff,),
+        )
+        self.db.commit()
+
+        candidates = self.db.execute(
+            "SELECT message_id FROM message_outbox WHERE status = 'queued' "
+            "AND next_attempt_at <= ? ORDER BY created_at LIMIT ?",
+            (utcnow(), limit),
+        ).fetchall()
+        token, stamp = new_id(), utcnow()
+        claimed_ids: list[str] = []
+        for r in candidates:
+            cur = self.db.execute(
+                "UPDATE message_outbox SET status = 'processing', claimed_at = ?, claim_token = ? "
+                "WHERE message_id = ? AND status = 'queued'",
+                (stamp, token, r["message_id"]),
+            )
+            if cur.rowcount == 1:
+                claimed_ids.append(r["message_id"])
+        self.db.commit()
+        if not claimed_ids:
+            return []
+        marks = ",".join("?" * len(claimed_ids))
+        out = []
+        for row in self.db.execute(
+            f"SELECT * FROM message_outbox WHERE message_id IN ({marks})", tuple(claimed_ids)
+        ).fetchall():
+            d = dict(row)
+            try:
+                d["payload"] = json.loads(d.get("payload") or "{}")
+            except (ValueError, TypeError):
+                pass
+            out.append(d)
+        return sorted(out, key=lambda d: d.get("created_at") or "")
+
     def next_ready(self, limit: int = 10) -> list[dict]:
         now = utcnow()
         rows = self.db.execute(
@@ -121,14 +170,19 @@ class MessageOutbox:
 class OutboxWorker:
     """Processes queued messages through channel adapters (mock-safe)."""
 
-    def __init__(self, outbox: MessageOutbox, adapters: dict, policy, audit=None, dispatcher=None):
+    def __init__(self, outbox: MessageOutbox, adapters: dict, policy, audit=None, dispatcher=None,
+                 claim_mode: str = "legacy", stale_after_seconds: int = 300):
         self.outbox = outbox
         self.adapters = adapters
         self.policy = policy
         self.audit = audit
         self.dispatcher = dispatcher
+        if claim_mode not in {"legacy", "atomic"}:
+            raise ValueError(f"unknown claim_mode: {claim_mode}")
+        self.claim_mode = claim_mode
+        self.stale_after_seconds = stale_after_seconds
 
-    def process_one(self, message: dict) -> dict:
+    def process_one(self, message: dict, already_claimed: bool = False) -> dict:
         channel = message["channel"]
         adapter = self.adapters.get(channel)
         if adapter is None:
@@ -143,7 +197,8 @@ class OutboxWorker:
         if decision == "approval_required":
             return {"message_id": message["message_id"], "status": "queued", "reason": "approval required"}
 
-        self.outbox.mark_processing(message["message_id"])
+        if not already_claimed:
+            self.outbox.mark_processing(message["message_id"])
         try:
             result = adapter.send(message["recipient"], message["message_type"], message["payload"])
             self.outbox.mark_sent(message["message_id"], result.get("provider_message_id"))
@@ -158,7 +213,11 @@ class OutboxWorker:
 
     def drain(self, limit: int = 10) -> list[dict]:
         results = []
-        for msg in self.outbox.next_ready(limit):
+        if self.claim_mode == "atomic":
+            for msg in self.outbox.claim_batch(limit, self.stale_after_seconds):
+                results.append(self.process_one(msg, already_claimed=True))
+            return results
+        for msg in self.outbox.next_ready(limit):   # legacy: pre-atomic behavior
             results.append(self.process_one(msg))
         return results
 

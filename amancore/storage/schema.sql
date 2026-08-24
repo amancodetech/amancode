@@ -500,3 +500,6 @@ CREATE INDEX IF NOT EXISTS idx_outbox_status ON message_outbox(status);
 CREATE INDEX IF NOT EXISTS idx_outbox_idem ON message_outbox(idempotency_key);
 CREATE INDEX IF NOT EXISTS idx_intake_ip ON intake_events(ip);
 CREATE INDEX IF NOT EXISTS idx_intake_email ON intake_events(email);
+
+CREATE INDEX IF NOT EXISTS idx_outbox_ready
+  ON message_outbox (status, next_attempt_at, created_at);
