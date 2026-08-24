@@ -349,17 +349,21 @@ def _backup(args) -> int:
     cfg = load_config(ROOT)
     db = open_database(cfg.database_path, ROOT / "amancore" / "storage" / "schema.sql")
     try:
-        svc = BackupService(db, ROOT)
-        if args.sub == "create":
-            print(json.dumps(svc.create_backup(), ensure_ascii=False, indent=2))
-        elif args.sub == "verify":
-            result = svc.verify_latest("database")
-            print(json.dumps(result, ensure_ascii=False, indent=2) if result else "NO BACKUP TO VERIFY")
-        elif args.sub == "list":
-            print(json.dumps(svc.list_backups(kind=args.kind), ensure_ascii=False, indent=2))
-        else:
+        svc = BackupService(db, ROOT, database_path=ROOT / cfg.database_path)
+        try:
+            if args.sub == "create":
+                print(json.dumps(svc.create_backup(), ensure_ascii=False, indent=2))
+            elif args.sub == "verify":
+                result = svc.verify_latest("database")
+                print(json.dumps(result, ensure_ascii=False, indent=2) if result else "NO BACKUP TO VERIFY")
+            elif args.sub == "list":
+                print(json.dumps(svc.list_backups(kind=args.kind), ensure_ascii=False, indent=2))
+            else:
+                return 1
+            return 0
+        except Exception as exc:  # BAK-103: failure is a first-class outcome
+            print(f"BACKUP FAILED: {exc}", flush=True)
             return 1
-        return 0
     finally:
         db.close()
 

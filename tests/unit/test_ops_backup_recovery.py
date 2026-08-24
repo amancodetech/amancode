@@ -72,10 +72,11 @@ class BackupServiceTest(TempDirTestCase, unittest.TestCase):
         self.assertEqual(rows[0]["kind"], "database")
 
     def test_latest_verified_database(self):
+        # BAK-103: backups are now auto-verified inline — verified immediately after create
         self.svc.create_backup("database")
-        self.assertIsNone(self.svc.latest_verified_database())
-        self.svc.verify_latest("database")
-        self.assertIsNotNone(self.svc.latest_verified_database())
+        latest = self.svc.latest_verified_database()
+        self.assertIsNotNone(latest)
+        self.assertEqual(latest["status"], "verified")
 
     def test_restore_to_temp_never_touches_production(self):
         result = self.svc.create_backup("database")

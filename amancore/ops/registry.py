@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from ..log import get_logger
+from ..storage.db import Database
 
 log = get_logger("ops.registry")
 
@@ -17,7 +18,7 @@ JOB_TYPES = (
     "research.daily", "followups.check",
     "analytics.daily", "analytics.weekly", "analytics.monthly",
     "insights.daily", "insights.weekly", "insights.monthly",
-    "retention.cleanup", "database.backup", "backup.verify",
+    "retention.cleanup", "database.backup", "backup.verify", "backup.restore_test",
     "health.check", "production.check",
 )
 
@@ -88,12 +89,37 @@ class JobRegistry:
         def _backup():
             from ..ops.backup import BackupService
 
-            return BackupService(self.db, self.root).create_backup(kind="all")
+            return BackupService(self.db, self.root,
+                                 database_path=root / cfg.database_path).create_backup(kind="all")
 
         def _backup_verify():
             from ..ops.backup import BackupService
 
-            return BackupService(self.db, self.root).verify_latest()
+            return BackupService(self.db, self.root,
+                                 database_path=root / cfg.database_path).verify_latest()
+
+        def _restore_test():
+            """BAK-103: monthly proof that the latest backup actually restores.
+            Restore to temp + integrity + row-count sanity. Never touches prod."""
+            from ..ops.backup import BackupService
+
+            svc = BackupService(self.db, self.root,
+                                 database_path=self.root / cfg.database_path)
+            latest = svc.latest_verified_database()
+            if latest is None:
+                raise RuntimeError("no verified database backup exists — restore test impossible")
+            restored = svc.restore_to_temp(latest["backup_id"])
+            rdb = Database(restored)
+            try:
+                tables = {r["name"] for r in rdb.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+                counts = {t: rdb.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+                          for t in ("leads", "conversations", "channel_messages",
+                                    "message_outbox") if t in tables}
+            finally:
+                rdb.close()
+            return {"status": "ok", "restored_from": latest["path"],
+                    "row_counts": counts, "restored_at": _today()}
 
         def _health():
             from ..health import run_health_checks
@@ -122,6 +148,7 @@ class JobRegistry:
             "retention.cleanup": lambda p: _retention(),
             "database.backup": lambda p: _backup(),
             "backup.verify": lambda p: _backup_verify(),
+            "backup.restore_test": lambda p: _restore_test(),
             "health.check": lambda p: _health(),
             "production.check": lambda p: _production_check(),
         }

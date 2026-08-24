@@ -30,9 +30,13 @@ def sha256_of(path: Path) -> str:
 
 
 class BackupService:
-    def __init__(self, db: Database, root: Path):
+    def __init__(self, db: Database, root: Path, database_path: Path | None = None):
         self.db = db
         self.root = Path(root)
+        # BAK-103: source of truth is the configured runtime path — never a
+        # hard-coded guess that can silently diverge (audit R4).
+        self.database_path = Path(database_path) if database_path else (
+            self.root / "storage" / "aman_core.db")
         self.backup_dir = self.root / "backup"
         self.secondary_dir = self.backup_dir / "secondary"
         self.backup_dir.mkdir(parents=True, exist_ok=True)
@@ -40,42 +44,45 @@ class BackupService:
 
     # ---- create ---------------------------------------------------------
     def create_backup(self, kind: str = "all") -> dict:
+        """Any kind failure RAISES — JobRunner must see failure as failure
+        (BAK-103/C8). A backup job that reports success on partial failure is
+        the silent-data-loss bug this fixes."""
         kinds = ("database", "business_brain", "configs", "audit")
         targets = kinds if kind == "all" else (kind,)
         results = {}
         for k in targets:
-            results[k] = self._backup_kind(k)
+            results[k] = self._backup_kind(k)  # raises on failure
         return {"status": "created", "kinds": results, "created_at": utcnow()}
 
     def _backup_kind(self, kind: str) -> dict:
         ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         dest_dir = self.backup_dir / f"{kind}-{ts}"
         dest_dir.mkdir(parents=True, exist_ok=True)
-        artifacts: list[dict] = []
-        try:
-            if kind == "database":
-                artifacts = [self._backup_database(dest_dir / "aman_core.db")]
-            elif kind == "business_brain":
-                artifacts = self._copy_tree(self.root / "amancore" / "business_brain", dest_dir)
-            elif kind == "configs":
-                artifacts = self._copy_tree(self.root / "configs", dest_dir)
-            elif kind == "audit":
-                artifacts = [self._backup_audit(dest_dir / "audit.json")]
-            else:
-                raise ValueError(f"unknown backup kind: {kind}")
-        except Exception as exc:  # noqa: BLE001
-            log.error("backup %s failed: %s", kind, exc)
-            return {"kind": kind, "status": "failed", "error": str(exc)}
-        # secondary copy + registry
+        if kind == "database":
+            artifacts = [self._backup_database(dest_dir / "aman_core.db")]
+        elif kind == "business_brain":
+            artifacts = self._copy_tree(self.root / "amancore" / "business_brain", dest_dir)
+        elif kind == "configs":
+            artifacts = self._copy_tree(self.root / "configs", dest_dir)
+        elif kind == "audit":
+            artifacts = [self._backup_audit(dest_dir / "audit.json")]
+        else:
+            raise ValueError(f"unknown backup kind: {kind}")
+        # secondary copy + registry — INSIDE the raise-domain now
         for art in artifacts:
-            self._register(kind, art)
+            backup_id = self._register(kind, art)
             secondary = self.secondary_dir / Path(art["path"]).name
             shutil.copy2(Path(art["path"]), secondary)
             art["secondary"] = str(secondary)
+            if kind == "database":
+                # inline verification persisted — a backup isn't done until verified
+                verdict = self.verify_backup(backup_id)
+                if verdict["status"] != "verified":
+                    raise RuntimeError(f"backup verification failed: {verdict['checks']}")
         return {"kind": kind, "status": "created", "artifacts": artifacts}
 
     def _backup_database(self, dst: Path) -> dict:
-        src = self.root / "storage" / "aman_core.db"
+        src = self.database_path
         if not src.exists():
             raise FileNotFoundError(f"database not found: {src}")
         src_db = Database(src)
@@ -83,8 +90,17 @@ class BackupService:
             src_db.backup_to(dst)
         finally:
             src_db.close()
-        return {"path": str(dst), "sha256": sha256_of(dst), "size_bytes": dst.stat().st_size,
-                "kind": "database"}
+        size = dst.stat().st_size
+        if size < 4096:  # empty/stale snapshot guard — never trust a hollow copy
+            raise RuntimeError(f"backed-up database suspiciously small ({size} bytes): {dst}")
+        chk = Database(dst)
+        try:
+            if not chk.integrity_ok():
+                raise RuntimeError(f"backed-up database failed integrity check: {dst}")
+        finally:
+            chk.close()
+        return {"path": str(dst), "sha256": sha256_of(dst), "size_bytes": size,
+                "kind": "database", "integrity": "ok"}
 
     def _backup_audit(self, dst: Path) -> dict:
         rows = self.db.execute(

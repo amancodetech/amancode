@@ -53,6 +53,8 @@ class OpsSecurityTest(TempDirTestCase, unittest.TestCase):
         conn.close()
         (proj / "configs").mkdir(parents=True)
         (proj / "configs" / "app.yaml").write_text("env: development\n")
+        # BAK-103: backups now fail loudly on missing sources — seed full tree
+        (proj / "amancore" / "business_brain").mkdir(parents=True)
         os.environ["WHATSAPP_ACCESS_TOKEN"] = "BACKUP_SECRET_TOKEN_XYZ"
         try:
             svc = BackupService(self.db, proj)
