@@ -163,18 +163,20 @@ class TelegramOwnerConsole:
     INTERPRET_PROMPT = (
         "You are the command parser of AmanCore business system. "
         "Convert the user request into ONE JSON action, no prose. "
+        "If the user asks to send/share/give OFFERS, PACKAGES, PRODUCTS or SERVICES "
+        "to someone -> action \"offers\" (compose real offers from company context). "
+        "Only use \"send\" when they provide the EXACT literal text to deliver. "
         "For the target person: if the user gives digits use \"number\", "
         "if they give a saved customer name use \"who\" (keep the name exactly as written). "
         "Allowed actions:\n"
-        '{{"action":"status"}}\n'
-        '{{"action":"leads","limit":<int optional>}}\n'
-        '{{"action":"customer","number":"<full digits>","name":"<person name>"}}\n'
-        '{{"action":"send","number":"","who":"<saved customer name>","text":"..."}}\n'
-        '{{"action":"chat","number":"","who":"<saved customer name>","topic":"..."}}\n'
-        '{{"action":"mode","number":"","who":"<saved customer name>","mode":"ai|human"}}\n'
-        '{{"action":"send","number":"<digits>","text":"<exact message body>"}}\n'
-        '{{"action":"mode","number":"<digits>","mode":"ai|human"}}\n'
-        'If the request does not map to these, output {{"action":"unknown"}}.\n'
+        '{"action":"status"}\n'
+        '{"action":"leads","limit":<int optional>}\n'
+        '{"action":"customer","number":"<full digits>","name":"<person name>"}\n'
+        '{"action":"send","number":"","who":"<saved customer name>","text":"..."}\n'
+        '{"action":"chat","number":"","who":"<saved customer name>","topic":"..."}\n'
+        '{"action":"offers","number":"","who":"<saved customer name or digits>"}\n'
+        '{"action":"mode","number":"","who":"<saved customer name>","mode":"ai|human"}\n'
+        'If the request does not map to these, output {"action":"unknown"}.\n'
         "User request: "
     )
 
@@ -185,7 +187,8 @@ class TelegramOwnerConsole:
                 {"role": "system", "content": self.INTERPRET_PROMPT},
                 {"role": "user", "content": text},
             ])
-            action = json.loads(re.search(r"\{.*\}", result.text, re.S).group(0))
+            raw_json = re.search(r"\{.*\}", result.text, re.S).group(0)
+            action = json.loads(raw_json.replace("{{", "{").replace("}}", "}"))
         except Exception as exc:  # noqa: BLE001
             log.error("interpretation failed: %s", exc)
             return ("تعذر تفسير الطلب الآن 😅\n"
@@ -214,13 +217,13 @@ class TelegramOwnerConsole:
         if act == "send":
             who = action.get("who") or action.get("number") or ""
             return self._act_send(f"{who} {action.get('text', '')}".strip())
+        if act == "offers":
+            who = action.get("who") or action.get("number") or ""
+            return self._act_offers(who)
         if act == "chat":
             who = action.get("who") or action.get("number") or ""
             topic = action.get("topic") or ""
             return self._act_chat(f"{who} {topic}".strip())
-        if act == "chat":
-            args = f"{action.get('number', '')} {action.get('topic') or ''}".strip()
-            return self._act_chat(args)
         if act == "mode":
             mode = action.get("mode", "")
             mode = {"ai": "ai", "auto": "ai", "human": "human"}.get(mode.lower(), mode)
@@ -282,6 +285,33 @@ class TelegramOwnerConsole:
                        f" — {r['wa_id']}"
                        f"{(' · ' + r['last_at'][:16]) if r['last_at'] else ''}")
         return "\n".join(out)
+
+    _BIZ_CACHE: list = []
+
+    @classmethod
+    def _business_context(cls) -> str:
+        """Compact factual brief of AmanCode services/offers from the brain."""
+        if cls._BIZ_CACHE:
+            return cls._BIZ_CACHE[0]
+        try:
+            import yaml
+
+            root = __import__("pathlib").Path(__file__).resolve().parents[2]
+            brain = yaml.safe_load(open(root / "amancore" / "business_brain" / "data" / "v1.yaml"))
+            lines = [f"Company: {brain['company']['name']} — {brain['company']['positioning']}"]
+            lines.append("Packages we offer:")
+            for o in brain.get("offers", []):
+                lines.append(f"- {o['name']} ({o['tier']})")
+            lines.append("Services:")
+            for sv in brain.get("services", [])[:6]:
+                lines.append(f"- {sv['name']} [{sv.get('delivery_model','')}]")
+            icp = brain.get("icp", {})
+            lines.append(f"Ideal customers: {icp.get('primary','')}")
+            out = NL.join(lines)
+        except Exception as exc:  # noqa: BLE001
+            out = "AmanCode: digital solutions — websites, web apps, mini-ERP systems, mobile apps."
+        cls._BIZ_CACHE.append(out)
+        return out
 
     def _resolve_who(self, value: str):
         """Accepts full number, partial digits, or a saved customer name.
@@ -385,7 +415,7 @@ class TelegramOwnerConsole:
         if not m:
             return "الصيغة: /send <رقم> <نص>"
         number, text = m.group(1), m.group(2).strip()
-        resolved, err = self._resolve_number(number)
+        resolved, err = self._resolve_who(number)
         if err:
             return err
         number = resolved
@@ -401,6 +431,54 @@ class TelegramOwnerConsole:
                     f"«{text[:120]}»\nالحالة: {result.get('status', 'sent')}")
         return f"❌ فشل الإرسال: {result.get('error', 'غير معروف')}"
 
+    def _act_offers(self, target: str) -> str:
+        """Compose REAL offers from the business brain and send them."""
+        resolved, err = self._resolve_who(target)
+        if err:
+            return err
+        wa_id = resolved
+        self._remember(wa_id)
+        lang_hint = ("Indonesian" if wa_id.startswith("62")
+                     else "Turkish" if wa_id.startswith("90")
+                     else "Arabic")
+        lead = self._find_or_create(wa_id, None)
+        cname = (lead or {}).get("name") or ""
+        try:
+            flash = self._build_flash()
+            r = flash.complete([
+                {"role": "system", "content":
+                 f"You are AmanCode's sales assistant on WhatsApp. Write ONE short "
+                 f"attractive message (max 70 words) in {lang_hint} presenting our "
+                 f"packages/services"
+                 + (f" to {cname}" if cname else "")
+                 + ". Be concrete and warm, end by asking which one fits their needs. "
+                 f"NEVER mention any prices or numbers. Output only the message text."
+                 + "\n\nCOMPANY FACTS:\n" + self._business_context()},
+                {"role": "user", "content": "أرسل العروض المتاحة"},
+            ])
+            msg = (r.text or "").strip().strip('"')[:800]
+        except Exception as exc:  # noqa: BLE001
+            return f"❌ تعذر توليد العرض: {exc}"
+        if not msg:
+            return "❌ لم يُنتج الموديل نصاً — حاول مجدداً."
+
+        from ..channels.handover import HandoverService
+        if lead is not None:
+            HandoverService(self.runtime["coordinator"].crm).set_mode(lead["lead_id"], "AI_ACTIVE")
+
+        from ..channels.webhook_server import inbox_send_message
+        result = inbox_send_message(self.runtime["inbox"], wa_id, msg)
+        if not result.get("ok"):
+            return f"❌ فشل الإرسال: {result.get('error', 'غير معروف')}"
+        return (
+            f"🎁 أرسلت العروض إلى {cname or '+' + wa_id}:\n"
+            f"«{msg[:250]}»\n"
+            f"• الوضع: 🤖 ذكاء آلي — أي رد منه سأجيب عليه وأبلغك."
+        )
+
+    def _remember(self, wa_id: str) -> None:
+        pass
+
     def _act_chat(self, args: str) -> str:
         """Proactive AI outreach: compose + send opener, switch to AI mode."""
         parts = args.split(None, 1)
@@ -408,10 +486,9 @@ class TelegramOwnerConsole:
             return "الصيغة: /chat <رقم> [موضوع]"
         number = parts[0]
         topic = parts[1].strip() if len(parts) > 1 else ""
-        resolved, err = self._resolve_number(number)
+        resolved, err = self._resolve_who(number)
         if err:
             return err
-        lead = self._find_or_create(resolved, None)
         if lead is None:
             return "رقم غير صالح."
         wa_id = resolved
@@ -458,7 +535,7 @@ class TelegramOwnerConsole:
         if len(parts) != 2 or parts[1].lower() not in ("ai", "human"):
             return "الصيغة: /mode <رقم> ai|human"
         number, want = parts[0], parts[1].lower()
-        resolved, err = self._resolve_number(number)
+        resolved, err = self._resolve_who(number)
         if err:
             return err
         number = resolved
