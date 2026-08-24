@@ -390,6 +390,16 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
                     last = (row["body"][:300] if row else "")
                     notify_owner_console(
                         self.runtime, "🤖 ردّيتُ على +{frm}:\n«{last}»".format(frm=frm, last=last))
+                in_row = self.runtime["db"].execute(
+                    "SELECT body FROM channel_messages WHERE direction='in'"
+                    " AND wa_id=? AND body != '' ORDER BY id DESC LIMIT 1", (frm,)).fetchone()
+                if in_row:
+                    import threading as _th
+                    from ..ops.learning import record_learning
+
+                    _th.Thread(target=record_learning,
+                               args=(frm, in_row["body"], last),
+                               daemon=True).start()
             except Exception:  # noqa: BLE001
                 pass
         if summary.get("status") == "rejected":

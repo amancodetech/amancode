@@ -178,6 +178,10 @@ class TelegramOwnerConsole:
             return HELP_TEXT
         if cmd == "status":
             return self._act_status()
+        if cmd == "learned":
+            from ..ops.learning import stats as learn_stats
+
+            return learn_stats()
         if cmd == "leads":
             return self._act_leads(args)
         if cmd == "customer":

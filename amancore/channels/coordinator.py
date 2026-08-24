@@ -270,7 +270,9 @@ class MessageCoordinator:
         try:
             try:
                 from ..ops.telegram_console import business_context
-                facts = "\nCOMPANY FACTS:\n" + business_context()
+                from ..ops.learning import recent_learnings_summary
+                facts = ("\nCOMPANY FACTS:\n" + business_context()
+                         + "\n" + recent_learnings_summary())
             except Exception:  # noqa: BLE001
                 facts = ""
             r = self._quote_drafter().complete([
@@ -313,7 +315,9 @@ class MessageCoordinator:
         try:
             try:
                 from ..ops.telegram_console import business_context
-                facts = "\nCOMPANY FACTS:\n" + business_context()
+                from ..ops.learning import recent_learnings_summary
+                facts = ("\nCOMPANY FACTS:\n" + business_context()
+                         + "\n" + recent_learnings_summary())
             except Exception:  # noqa: BLE001
                 facts = ""
             r = self._quote_drafter().complete([
