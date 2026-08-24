@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import urllib.request
 import os
 import signal
 import sys
@@ -185,6 +186,23 @@ def build_runtime(root: Path):
     runtime = {"db": db, "adapter": adapter, "coordinator": coordinator,
                "inbox": inbox, "sync": runtime_inbox_sync}
     return runtime
+
+
+def notify_owner_console(runtime, text: str) -> None:
+    """Push a short report to the owner's Telegram chat (fire-and-forget)."""
+    try:
+        token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+        chat = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+        if not token or not chat:
+            return
+        payload = json.dumps({"chat_id": chat, "text": text[:3500],
+                              "disable_web_page_preview": True}).encode()
+        req = urllib.request.Request(
+            "https://api.telegram.org/bot" + token + "/sendMessage",
+            data=payload, headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=15)
+    except Exception as exc:  # noqa: BLE001 — reporting must never break serving
+        log.error("owner console notify failed: %s", exc)
 
 
 def sync_channel_messages(db) -> None:
@@ -361,6 +379,19 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
         sync = self.runtime.get("sync")
         if sync:
             sync()
+        if summary.get("replies"):
+            try:
+                frm = (body.get("entry", [{}])[0].get("changes", [{}])[0]
+                       .get("value", {}).get("messages", [{}])[0].get("from", ""))
+                if frm:
+                    row = self.runtime["db"].execute(
+                        "SELECT body FROM channel_messages WHERE direction='out'"
+                        " AND wa_id=? ORDER BY id DESC LIMIT 1", (frm,)).fetchone()
+                    last = (row["body"][:300] if row else "")
+                    notify_owner_console(
+                        self.runtime, "🤖 ردّيتُ على +{frm}:\n«{last}»".format(frm=frm, last=last))
+            except Exception:  # noqa: BLE001
+                pass
         if summary.get("status") == "rejected":
             self._send(403, json.dumps(summary).encode("utf-8"), "application/json")
             return

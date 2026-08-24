@@ -50,9 +50,11 @@ HELP_TEXT = (
     "/customer <رقم> [اسم] — تسجيل عميل جديد\n"
     "/send <رقم> <نص> — إرسال واتساب فوري\n"
     "/mode <رقم> ai|human — تبديل وضع الرد\n"
+    "/chat <رقم> [موضوع] — ابدأ محادثة ذكية استباقية مع الرقم\n"
     "\nأو اكتب بأي لغة طلباً حراً، مثال:\n"
     "\"راسل 905342422565 وقل له عرضنا الجديد جاهز\"\n"
-    "\"سجل الرقم 62812345 باسم أحمد كعميل\""
+    "\"سجل الرقم 62812345 باسم أحمد كعميل\"\n"
+    "\"تحدث مع 905342422565 واعرض عليه خدماتنا\""
 )
 
 
@@ -95,7 +97,7 @@ class TelegramOwnerConsole:
                     except Exception as exc:  # noqa: BLE001 — one bad update must not kill polling
                         log.error("update handling failed: %s", exc)
             except Exception as exc:  # noqa: BLE001
-                log.error("telegram poll failed: %s", exc)
+                print(f"telegram poll failed: {exc}", flush=True)
                 time.sleep(5)
 
     def _poll(self) -> list:
@@ -163,7 +165,8 @@ class TelegramOwnerConsole:
         '{{"action":"status"}}\n'
         '{{"action":"leads","limit":<int optional>}}\n'
         '{{"action":"customer","number":"<digits>","name":"<optional>"}}\n'
-        '{{"action":"send","number":"<digits>","text":"<message body>"}}\n'
+        '{{"action":"send","number":"<digits>","text":"<exact message body>"}}\n'
+'{{"action":"chat","number":"<digits>","topic":"<optional topic>"}}\n'
         '{{"action":"mode","number":"<digits>","mode":"ai|human"}}\n'
         'If the request does not map to these, output {{"action":"unknown"}}.\n'
         "User request: "
@@ -205,6 +208,9 @@ class TelegramOwnerConsole:
         if act == "send":
             return self._act_send(
                 f"{action.get('number', '')} {action.get('text', '')}".strip())
+        if act == "chat":
+            args = f"{action.get('number', '')} {action.get('topic') or ''}".strip()
+            return self._act_chat(args)
         if act == "mode":
             mode = action.get("mode", "")
             mode = {"ai": "ai", "auto": "ai", "human": "human"}.get(mode.lower(), mode)
@@ -314,6 +320,55 @@ class TelegramOwnerConsole:
             return (f"📨 أُرسلت للعميل +{normalize_number(number)}:\n"
                     f"«{text[:120]}»\nالحالة: {result.get('status', 'sent')}")
         return f"❌ فشل الإرسال: {result.get('error', 'غير معروف')}"
+
+    def _act_chat(self, args: str) -> str:
+        """Proactive AI outreach: compose + send opener, switch to AI mode."""
+        parts = args.split(None, 1)
+        if not parts:
+            return "الصيغة: /chat <رقم> [موضوع]"
+        number = parts[0]
+        topic = parts[1].strip() if len(parts) > 1 else ""
+        lead = self._find_or_create(number, None)
+        if lead is None:
+            return "رقم غير صالح."
+        wa_id = normalize_number(number)
+
+        # compose opener in the customer's likely language
+        lang_hint = ("Indonesian" if wa_id.startswith("62")
+                     else "Turkish" if wa_id.startswith("90")
+                     else "Arabic")
+        try:
+            flash = self._build_flash()
+            r = flash.complete([
+                {"role": "system", "content":
+                 f"You are AmanCode's WhatsApp sales assistant. Write ONE very short "
+                 f"(max 35 words) friendly opening message in {lang_hint}. Introduce "
+                 f"AmanCode briefly and ask how we can help"
+                 + (f", mentioning this context: {topic}" if topic else "")
+                 + ". Never mention prices. Output only the message text."},
+                {"role": "user", "content": "ابدأ المحادثة"},
+            ])
+            opener = (r.text or "").strip().strip('"')[:500]
+        except Exception as exc:  # noqa: BLE001
+            return f"❌ تعذر توليد الافتتاحية: {exc}"
+        if not opener:
+            return "❌ لم يُنتج الموديل نصاً — حاول مجدداً."
+
+        from ..channels.handover import HandoverService
+        HandoverService(self.runtime["coordinator"].crm).set_mode(lead["lead_id"], "AI_ACTIVE")
+
+        from ..channels.webhook_server import inbox_send_message
+        result = inbox_send_message(self.runtime["inbox"], wa_id, opener)
+        if not result.get("ok"):
+            return f"❌ فشل الإرسال: {result.get('error', 'غير معروف')}"
+
+        report = (
+            f"🤖 بدأتُ محادثة استباقية:\n"
+            f"• العميل: +{wa_id}\n"
+            f"• الافتتاحية: «{opener[:200]}»\n"
+            f"• الوضع: 🤖 ذكاء آلي — سأرد على رده تلقائياً وستصلك تقارير هنا."
+        )
+        return report
 
     def _act_mode(self, args: str) -> str:
         parts = args.split()

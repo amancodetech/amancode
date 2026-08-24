@@ -6,6 +6,7 @@ Channels are transport only: no sales logic, no pricing logic here.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from ..ids import new_id, utcnow
 from ..log import get_logger
@@ -196,7 +197,7 @@ class MessageCoordinator:
 
         # price / proposal intent
         if _PRICE_INTENT.search(text):
-            reply = self._price_or_proposal_reply(lead, corr)
+            reply = self._localize(self._price_or_proposal_reply(lead, corr), language)
             self._queue_reply(lead, mem, reply, corr, f"price:{wa_id}:{text[:40]}")
             return {"lead_id": lead["lead_id"], "reply_sent": True, "price_reply": True}
 
@@ -245,7 +246,38 @@ class MessageCoordinator:
             if prop:
                 return "Your approved proposal is ready — our team will share the details."
         self._emit("pricing.approval_requested", {"lead_id": lead["lead_id"]}, corr)
-        return "Our team is preparing an approved quote for you — no price will be quoted before approval."
+        drafted = self._draft_quote_reply(lead)
+        return drafted or "Our team is preparing an approved quote for you — no price will be quoted before approval."
+
+    def _quote_drafter(self):
+        """Lazy small-model drafter for price-safe replies (cached)."""
+        if getattr(self, "_drafter", None) is None:
+            import yaml
+
+            root = Path(__file__).resolve().parents[2]
+            from ..routing.providers import build_providers
+
+            cfg = yaml.safe_load(open(root / "configs" / "models.yaml"))
+            self._drafter = build_providers(cfg)["deepseek-v4-flash"]
+        return self._drafter
+
+    def _draft_quote_reply(self, lead: dict) -> str:
+        """AI-drafted price-safe reply in the customer's own language."""
+        try:
+            r = self._quote_drafter().complete([
+                {"role": "system", "content":
+                 "You are AmanCode's WhatsApp sales assistant. Draft ONE short warm reply "
+                 "(max 40 words) in the SAME language/dialect the customer used. "
+                 "NEVER mention any price or commitment. Thank them, say our team will "
+                 "send a personalized official quote shortly, and ask ONE useful "
+                 "qualifying question about their project needs. Output the message "
+                 "text only."},
+                {"role": "user", "content": str(lead.get("notes_summary") or "")},
+            ])
+            return (r.text or "").strip().strip('"')[:600]
+        except Exception as exc:  # noqa: BLE001 — canned fallback covers failures
+            self._audit("pricing.draft_failed", "lead", result=str(exc))
+            return 
 
     def _queue_reply(self, lead: dict, mem: dict, text: str, corr: str, idem_salt: str) -> str:
         if not text.strip():
