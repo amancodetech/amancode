@@ -289,7 +289,7 @@ audio{{max-width:250px;height:38px}}
 const LEADS=document.getElementById('leads'),LOG=document.getElementById('log'),
 WHO=document.getElementById('who'),TEXT=document.getElementById('text'),
 FILE=document.getElementById('file'),PREVIEW=document.getElementById('preview');
-let current=null,timer=null,pendingMedia=null,recorder=null,chunks=[];
+let current=null,timer=null,pendingMedia=null,pendingReply=null,recorder=null,chunks=[];
 function esc(s){{const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML}}
 function fmtSize(n){{return n>1048576?(n/1048576).toFixed(1)+' MB':Math.ceil(n/1024)+' KB'}}
 function syncComposer(){{
