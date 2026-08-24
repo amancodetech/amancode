@@ -78,7 +78,7 @@ class BackupHarness(unittest.TestCase):
         svc.create_backup("database")
         latest = svc.latest_verified_database()
         self.assertIsNotNone(latest)
-        # NOTE: deliberately NO load_config(ROOT) here — it would inject the
+        # NOTE: deliberately NO load_config(ROOT, mutate_environ=False) here — it would inject the
         # real .env into os.environ (config.load_env uses setdefault) and
         # pollute every later test (discovered during BAK-103; see report).
         cfg = SimpleNamespace(database_path=str(self.db_path))

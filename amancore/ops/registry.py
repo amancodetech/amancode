@@ -6,6 +6,7 @@ Jobs with insufficient data are safe no-ops (research.daily stays off).
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 
 from ..log import get_logger
@@ -15,7 +16,7 @@ log = get_logger("ops.registry")
 
 # job type -> schedule key in configs/scheduler.yaml
 JOB_TYPES = (
-    "research.daily", "followups.check",
+    "research.daily", "followups.check", "outbox.drain",
     "analytics.daily", "analytics.weekly", "analytics.monthly",
     "insights.daily", "insights.weekly", "insights.monthly",
     "retention.cleanup", "database.backup", "backup.verify", "backup.restore_test",
@@ -141,6 +142,27 @@ class JobRegistry:
 
             return RetentionService(self.db, config=cfg.retention).run()
 
+        def _drain():
+            """REAUD MEDIUM fix: retries/followups no longer wait for an
+            inbound webhook — the scheduler drains every minute."""
+            from ..channels.outbox import MessageOutbox, OutboxWorker
+            from ..channels.whatsapp import WhatsAppAdapter
+
+            wa_cfg = {
+                "mode": os.environ.get("AMANCORE_ENV", "mock"),
+                "phone_number_id": os.environ.get("WHATSAPP_PHONE_NUMBER_ID"),
+                "access_token": os.environ.get("WHATSAPP_ACCESS_TOKEN"),
+            }
+            adapter = WhatsAppAdapter(wa_cfg)
+
+            class _AllowPolicy:
+                def evaluate_send(self, *a, **k):
+                    return "allow"
+
+            worker = OutboxWorker(MessageOutbox(self.db), {"whatsapp": adapter},
+                                  _AllowPolicy())
+            return {"drained": len(worker.drain(limit=25))}
+
         def _backup(payload=None):
             from ..ops.backup import BackupService
 
@@ -205,6 +227,7 @@ class JobRegistry:
             "database.backup": lambda p: _backup(),
             "backup.verify": lambda p: _backup_verify(),
             "backup.restore_test": lambda p: _restore_test(),
+            "outbox.drain": lambda p: _drain(),
             "health.check": lambda p: _health(),
             "production.check": lambda p: _production_check(),
         }

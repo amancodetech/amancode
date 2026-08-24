@@ -97,9 +97,9 @@ class Out204MonotonicStatus(ClusterHarness):
         self.assertFalse(stale["updated"])
         self.assertIn("stale", stale["reason"])
         row = self.db.execute(
-            "SELECT status FROM message_outbox WHERE provider_message_id='pmid-777'"
+            "SELECT delivery_status FROM message_outbox WHERE provider_message_id='pmid-777'"
         ).fetchone()
-        self.assertEqual(row["status"], "read")
+        self.assertEqual(row["delivery_status"], "read")
 
     def test_unknown_provider_id_reported_not_silent(self):
         r = self.recorder()("pmid-does-not-exist", "delivered")

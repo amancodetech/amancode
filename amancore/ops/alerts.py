@@ -267,8 +267,11 @@ class AlertDispatcher:
                         break
                     last_exc = RuntimeError(f"transport returned delivered=false (attempt {attempt})")
                 except Exception as exc:  # noqa: BLE001 — alert must never crash the caller
-                    last_exc = exc
-                    log.error("alert transport failed (attempt %d/3): %s", attempt, exc)
+                    # REAUD HIGH fix: str(exc) embeds /bot<TOKEN>/ URLs —
+                    # never log or propagate raw transport exceptions.
+                    last_exc = f"{type(exc).__name__} (details suppressed)"
+                    log.error("alert transport failed (attempt %d/3): %s",
+                              attempt, last_exc)
             if not delivered and last_exc is not None:
                 alert["action_required"] = (
                     f"{action_required} (delivery failed after 3 attempts: {last_exc})")

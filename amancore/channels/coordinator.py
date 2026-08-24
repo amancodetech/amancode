@@ -146,6 +146,10 @@ class MessageCoordinator:
         wa_id = payload.get("wa_id")
         text = payload.get("text", "")
         name = payload.get("name", "")
+        # REAUD CRITICAL fix: reply idempotency keys anchor to the INBOUND
+        # wamid — Meta webhook retries during the sync draft can no longer
+        # mint a second outbox row for the same customer message.
+        inbound_wamid = str(payload.get("message_id") or "")[:64]
         corr = new_id()
         from ..log import set_correlation_id
 
@@ -200,7 +204,7 @@ class MessageCoordinator:
                 intent_note="customer asked for a human; confirm warmly that a "
                             "specialist is being connected right away",
                 base="I'll connect you with our team right away.")
-            self._queue_reply(lead, mem, reply, corr, f"handoff:{wa_id}:{text[:40]}")
+            self._queue_reply(lead, mem, reply, corr, f"out:handoff:{lead['lead_id']}:{inbound_wamid}")
             return {"lead_id": lead["lead_id"], "handoff": True, "mode": mode, "reply_sent": True}
 
         # intent routing (Phase 3F) — legal/billing/complaint always to owner;
@@ -211,12 +215,12 @@ class MessageCoordinator:
         if intent in ("legal", "billing", "complaint") or (
             customer is not None and intent in ("support", "general")
         ):
-            return self._support_flow(lead, mem, text, language, corr, customer, intent)
+            return self._support_flow(lead, mem, text, language, corr, customer, intent, inbound_wamid)
 
         # price / proposal intent
         if _PRICE_INTENT.search(text):
             reply = self._localize(self._price_or_proposal_reply(lead, corr), language)
-            self._queue_reply(lead, mem, reply, corr, f"price:{wa_id}:{text[:40]}")
+            self._queue_reply(lead, mem, reply, corr, f"out:price:{lead['lead_id']}:{inbound_wamid}")
             return {"lead_id": lead["lead_id"], "reply_sent": True, "price_reply": True}
 
         # sales flow — engine computes facts/state, AI speaks
@@ -285,16 +289,18 @@ class MessageCoordinator:
             self._emit("sales.handoff_requested", {"lead_id": lead["lead_id"]}, corr)
             return {"lead_id": lead["lead_id"], "handoff": True, "reply_sent": True}
 
-        self._queue_reply(lead, mem, reply, corr, f"reply:{wa_id}:{text[:40]}")
+        self._queue_reply(lead, mem, reply, corr, f"out:reply:{lead['lead_id']}:{inbound_wamid}")
         return {"lead_id": lead["lead_id"], "reply_sent": True}
 
-    def _support_flow(self, lead: dict, mem: dict, text: str, language: str, corr: str, customer, intent: str) -> dict:
+    def _support_flow(self, lead: dict, mem: dict, text: str, language: str,
+                      corr: str, customer, intent: str,
+                      inbound_wamid: str = "") -> dict:
         if self.support_agent is None:
             # no support agent wired — AI acknowledgment instead of canned text
             ack = self._draft_reply(lead, text, language,
                                     intent_note="support request received; reassure and ask for details",
                                     base=_SAFE_FALLBACK)
-            self._queue_reply(lead, mem, ack, corr, f"support-fallback:{lead['lead_id']}:{text[:40]}")
+            self._queue_reply(lead, mem, ack, corr, f"out:support-fallback:{lead['lead_id']}:{inbound_wamid}")
             return {"lead_id": lead["lead_id"], "reply_sent": True, "support": True, "intent": intent}
         result = self.support_agent.process_message(lead, text, customer)
         reply = result.get("reply") or _SAFE_FALLBACK
@@ -309,7 +315,7 @@ class MessageCoordinator:
                                       intent_note="safe support acknowledgment",
                                       base=_SAFE_FALLBACK)
         reply = self._localize(reply, language)
-        self._queue_reply(lead, mem, reply, corr, f"support:{lead['lead_id']}:{text[:40]}")
+        self._queue_reply(lead, mem, reply, corr, f"out:support:{lead['lead_id']}:{inbound_wamid}")
         return {
             "lead_id": lead["lead_id"], "reply_sent": True, "support": True,
             "intent": intent, "handoff": escalated, "case_id": result.get("case_id"),
@@ -426,7 +432,15 @@ class MessageCoordinator:
         return normalize_e164_digits(str(raw or ""))
 
     def _draft_quote_reply(self, lead: dict) -> str:
-        """AI-drafted price-safe reply in the customer's own language."""
+        """AI-drafted price-safe reply in the customer's own language.
+        REAUD HIGH fix: this path CHARGES the governor like every other."""
+        if self.cost_governor is None:
+            return ""
+        ok, why = self.cost_governor.allow(str(lead.get("contact_whatsapp") or ""))
+        if not ok:
+            log.info("cost.blocked quote-path wa=%s reason=%s",
+                     lead.get("contact_whatsapp"), why)
+            return ""
         if self.cost_governor is not None and not self.cost_governor.allow(
                 str(lead.get("contact_whatsapp") or ""))[0]:
             return None  # caller falls back to the approved canned line

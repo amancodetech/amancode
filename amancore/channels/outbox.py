@@ -6,9 +6,13 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from ..ids import new_id, utcnow
+from ..log import get_logger
 from ..storage.db import Database
 
-STATUSES = {"queued", "processing", "sent", "failed", "dead", "cancelled"}
+log = get_logger("channels.outbox")
+
+STATUSES = {"queued", "processing", "sent", "delivered", "read",
+            "failed", "dead", "cancelled", "uncertain"}
 
 
 class MessageOutbox:
@@ -30,7 +34,13 @@ class MessageOutbox:
     ) -> str:
         message_id = new_id()
         now = utcnow()
-        self.db.execute(
+        cur = self.db.execute(
+            "INSERT INTO message_outbox "
+            "(message_id, channel, recipient, message_type, payload, idempotency_key, "
+            " status, attempts, next_attempt_at, lead_id, conversation_id, correlation_id, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(idempotency_key) WHERE idempotency_key IS NOT NULL "
+            "DO NOTHING" if idempotency_key else
             "INSERT INTO message_outbox "
             "(message_id, channel, recipient, message_type, payload, idempotency_key, "
             " status, attempts, next_attempt_at, lead_id, conversation_id, correlation_id, created_at) "
@@ -39,8 +49,20 @@ class MessageOutbox:
                 message_id, channel, recipient, message_type,
                 json.dumps(payload, ensure_ascii=False), idempotency_key,
                 now, lead_id, conversation_id, correlation_id, now,
+            ) if idempotency_key else (
+                message_id, channel, recipient, message_type,
+                json.dumps(payload, ensure_ascii=False), idempotency_key,
+                now, lead_id, conversation_id, correlation_id, now,
             ),
         )
+        if idempotency_key and cur.rowcount == 0:
+            # REAUD CRITICAL fix: insert-or-return-existing under the partial
+            # unique index — concurrent duplicates collapse to one row.
+            existing = self.db.execute(
+                "SELECT message_id FROM message_outbox WHERE idempotency_key = ?",
+                (idempotency_key,)).fetchone()
+            self.db.commit()
+            return existing["message_id"]
         self.db.commit()
         return message_id
 
@@ -52,15 +74,6 @@ class MessageOutbox:
         d["payload"] = json.loads(d.get("payload") or "{}")
         return d
 
-    def has_success_for(self, idempotency_key: str) -> bool:
-        if not idempotency_key:
-            return False
-        row = self.db.execute(
-            "SELECT 1 FROM message_outbox WHERE idempotency_key = ? AND status = 'sent'",
-            (idempotency_key,),
-        ).fetchone()
-        return row is not None
-
     def claim_batch(self, limit: int = 10, stale_after_seconds: int = 300) -> list[dict]:
         """OUT-202 (C1/C4): atomically claim queued rows for exactly one owner.
 
@@ -71,12 +84,30 @@ class MessageOutbox:
         """
         now_dt = datetime.now(timezone.utc)
         cutoff = (now_dt - timedelta(seconds=stale_after_seconds)).isoformat()
+        # REAUD MEDIUM fix: rows whose provider ACCEPTED (pmid present) are
+        # safe to retry; rows without pmid died inside the send window —
+        # blind requeue risks duplicates. They go to `uncertain` and wait
+        # for human reconciliation (plan §9 MANUAL_ONLY).
+        self.db.execute(
+            "UPDATE message_outbox SET status = 'uncertain', claimed_at = NULL, "
+            "claim_token = NULL, "
+            "failure_reason = 'crash window: provider acceptance unknown — "
+            "manual reconciliation required' "
+            "WHERE status = 'processing' AND claimed_at IS NOT NULL AND claimed_at < ? "
+            "AND (provider_message_id IS NULL OR provider_message_id = '')",
+            (cutoff,),
+        )
         self.db.execute(
             "UPDATE message_outbox SET status = 'queued', "
             "failure_reason = COALESCE(failure_reason, '') || ' [stale-reclaimed]' "
             "WHERE status = 'processing' AND claimed_at IS NOT NULL AND claimed_at < ?",
             (cutoff,),
         )
+        unc = self.db.execute(
+            "SELECT COUNT(*) c FROM message_outbox WHERE status='uncertain'"
+        ).fetchone()["c"]
+        if unc:
+            log.warning("outbox.uncertain count=%d — owner reconciliation needed", unc)
         self.db.commit()
 
         candidates = self.db.execute(

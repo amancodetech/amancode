@@ -92,18 +92,37 @@ class OutboxAtomicTests(Harness):
         self.assertEqual(len([x for x in r1 if x["status"] == "sent"]), 7)
         self.assertEqual(r2, [])
 
-    def test_stale_processing_reclaimed(self):
+    def test_stale_with_pmid_reclaimed_and_delivered(self):
         outbox = self.make(2)
         mid = outbox.next_ready(1)[0]["message_id"]
         outbox.mark_processing(mid)
+        self.db.execute("UPDATE message_outbox SET provider_message_id='pmid-x' "
+                        "WHERE message_id=?", (mid,))
         old = "2000-01-01T00:00:00+00:00"
         self.db.execute("UPDATE message_outbox SET claimed_at=? WHERE message_id=?", (old, mid))
         self.db.commit()
         got = self.worker(RecordingAdapter(), "atomic").drain(limit=10)
         self.assertEqual(len(got), 2)
         row = outbox.get(mid)
-        self.assertEqual(row["status"], "sent")          # revived and delivered
+        self.assertEqual(row["status"], "sent")          # provider had accepted → safe retry
         self.assertIn("stale-reclaimed", row["failure_reason"])
+
+    def test_stale_without_pmid_goes_uncertain_not_requeued(self):
+        """REAUD MEDIUM fix: crash inside the send window (no pmid) must NOT
+        blind-requeue — the row waits in `uncertain` for human reconciliation."""
+        outbox = self.make(1)
+        mid = outbox.next_ready(1)[0]["message_id"]
+        outbox.mark_processing(mid)                      # no pmid set
+        self.db.execute("UPDATE message_outbox SET claimed_at=? WHERE message_id=?",
+                        ("2000-01-01T00:00:00+00:00", mid))
+        self.db.commit()
+        got = self.worker(RecordingAdapter(), "atomic").drain(limit=10)
+        self.assertEqual(got, [])                        # excluded from claims
+        row = outbox.get(mid)
+        self.assertEqual(row["status"], "uncertain")
+        self.assertIn("manual reconciliation", row["failure_reason"])
+        # second drain stays empty — no auto-retry loop
+        self.assertEqual(self.worker(RecordingAdapter(), "atomic").drain(limit=10), [])
 
     def test_fresh_processing_not_stolen(self):
         outbox = self.make(2)

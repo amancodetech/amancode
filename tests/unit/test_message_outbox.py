@@ -10,7 +10,10 @@ from tests.common import TempDirTestCase, make_brain, make_db
 class MessageOutboxTest(TempDirTestCase, unittest.TestCase):
     def setUp(self):
         super().setUp()
-        self.db = make_db(self.tmp / "t.db")
+        from tests._db import ensure_unique_indexes, fresh_db, wipe
+
+        self.db = fresh_db()          # shared fixture: has ux_outbox_idem
+        wipe(self.db)
         self.brain = make_brain(self.tmp)
         self.outbox = MessageOutbox(self.db, max_attempts=2, retry_backoff_seconds=1)
         self.adapter = WhatsAppAdapter({"mode": "mock"})
@@ -29,10 +32,15 @@ class MessageOutboxTest(TempDirTestCase, unittest.TestCase):
         self.assertEqual(results[0]["status"], "sent")
         self.assertEqual(self.outbox.get(mid)["status"], "sent")
 
-    def test_idempotency_prevents_resend(self):
-        self.outbox.enqueue("whatsapp", "5511", "text", "hi", idempotency_key="dup")
-        self.worker.drain()
-        self.assertTrue(self.outbox.has_success_for("dup"))
+    def test_idempotency_insert_or_return_existing(self):
+        """REAUD CRITICAL: same key collapses to ONE row — second enqueue
+        returns the original message_id instead of minting a duplicate."""
+        m1 = self.outbox.enqueue("whatsapp", "5511", "text", "hi", idempotency_key="dup")
+        m2 = self.outbox.enqueue("whatsapp", "5511", "text", "hi", idempotency_key="dup")
+        self.assertEqual(m1, m2)
+        n = self.db.execute("SELECT COUNT(*) c FROM message_outbox"
+                            " WHERE idempotency_key='dup'").fetchone()[0]
+        self.assertEqual(n, 1)
 
     def test_retry_then_dead(self):
         class FailingAdapter(WhatsAppAdapter):

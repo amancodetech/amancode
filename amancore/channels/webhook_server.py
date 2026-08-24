@@ -54,7 +54,8 @@ def make_status_recorder(db):
             (provider_message_id,),
         ).fetchone()
         row = db.execute(
-            "SELECT message_id, status FROM message_outbox WHERE provider_message_id = ?",
+            "SELECT message_id, status, COALESCE(delivery_status, status) AS ds "
+            "FROM message_outbox WHERE provider_message_id = ?",
             (provider_message_id,),
         ).fetchone()
         if row is None:
@@ -62,14 +63,16 @@ def make_status_recorder(db):
                         provider_message_id[:24], status)
             return {"updated": False, "reason": "unknown id"}
 
-        current = row["status"]
+        current = row["ds"]
         if current in ("failed", "dead", "cancelled"):
             return {"updated": False, "reason": f"terminal {current}"}
         new_rank = _STATUS_RANK.get(status)
         if new_rank is not None and new_rank <= _STATUS_RANK.get(current, 0):
             return {"updated": False, "reason": "stale/out-of-order"}
+        # C3 closure: provider receipts live in delivery_status — the LOCAL
+        # send state machine stays inside its legal STATUSES set.
         db.execute(
-            "UPDATE message_outbox SET status = ? WHERE provider_message_id = ?",
+            "UPDATE message_outbox SET delivery_status = ? WHERE provider_message_id = ?",
             (status, provider_message_id),
         )
         if cur is None:
@@ -244,7 +247,8 @@ def build_runtime(root: Path):
         runtime_inbox_sync = lambda: None  # noqa: E731
 
     runtime = {"db": db, "adapter": adapter, "coordinator": coordinator,
-               "inbox": inbox, "sync": runtime_inbox_sync}
+               "inbox": inbox, "sync": runtime_inbox_sync,
+               "cost_governor": governor}
     return runtime
 
 
@@ -469,12 +473,16 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
                     import threading as _th
                     from ..ops.learning import record_learning
 
-                    if governor.allow(wa_id)[0]:
-                        pass  # learning shares the customer's budget slot
+                    gov = self.runtime.get("cost_governor")
 
-                    _th.Thread(target=record_learning,
-                               args=(frm, in_row["body"], last),
-                               daemon=True).start()
+                    def _governed_learn(_frm=frm, _in=in_row["body"], _out=last):
+                        if gov is not None and not gov.allow(_frm)[0]:
+                            return
+                        record_learning(_frm, _in, _out)
+                        if gov is not None:
+                            gov.record(_frm, len(_in) + len(_out), 200)
+
+                    _th.Thread(target=_governed_learn, daemon=True).start()
             except Exception:  # noqa: BLE001
                 pass
         if summary.get("status") == "rejected":
@@ -749,8 +757,41 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
 
 
 def inbox_send_message(inbox, wa_id: str, text: str, media: dict | None = None,
-                       reply_to: str | None = None) -> dict:
-    """Owner manual reply: switch to HUMAN_ACTIVE, enqueue via policy-gated outbox."""
+                       reply_to: str | None = None, *,
+                       initiation: bool = False) -> dict:
+    """Owner manual reply (initiation=False) or business-initiated outreach
+    (initiation=True — REAUD HIGH: gated by ConsentGate + 24h window +
+    SendValve reservation, and tagged initiation='yes' for cap accounting)."""
+    if initiation:
+        from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+
+        from ..compliance.guard import ConsentGate, SendValve
+
+        db0 = inbox["db"]
+        lrow = db0.execute(
+            "SELECT opt_out, consent_at FROM leads WHERE contact_whatsapp=?"
+            " ORDER BY created_at DESC LIMIT 1", (wa_id,)).fetchone()
+        lead_dict = dict(lrow) if lrow else {}
+        ok, why = ConsentGate.can_initiate(lead_dict)
+        if not ok:
+            return {"ok": False, "error": f"consent gate: {why}"}
+        last_in = db0.execute(
+            "SELECT MAX(created_at) m FROM channel_messages WHERE wa_id=?"
+            " AND direction='in'", (wa_id,)).fetchone()["m"]
+        window = None
+        if last_in:
+            window = (_dt.now(_tz.utc)
+                      - _dt.fromisoformat(last_in)).total_seconds() < 86400
+        has_tpl = bool((inbox.get("config") and getattr(
+            inbox["config"], "approved_templates", None)))
+        if not window and not has_tpl:
+            return {"ok": False, "error":
+                    "outside 24h customer window — use an approved template "
+                    "(compliance kit blocks free-text initiation)"}
+        valve = SendValve(db0)
+        granted, why = valve.reserve_initiations(1)
+        if not granted:
+            return {"ok": False, "error": f"send valve: {why}"}
     import base64
     import tempfile
     import uuid
@@ -839,6 +880,11 @@ def inbox_send_message(inbox, wa_id: str, text: str, media: dict | None = None,
         idempotency_key=f"wa-inbox:{uuid.uuid4()}",
         lead_id=lead["lead_id"],
     )
+    if initiation:
+        inbox["db"].execute(
+            "UPDATE message_outbox SET initiation='yes' WHERE message_id=?",
+            (mid,))
+        inbox["db"].commit()
     results = inbox["worker"].drain(limit=5)
     sent = any(r.get("message_id") == mid and r.get("status") == "sent" for r in results)
 

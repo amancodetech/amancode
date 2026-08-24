@@ -26,6 +26,9 @@ jobs:
   research.daily:
     enabled: false            # requires live router/network; stays off in mock
     cron: "0 6 * * *"
+  outbox.drain:
+    enabled: true
+    cron: "* * * * *"          # REAUD: retries/followups never wait for inbound
   followups.check:
     enabled: true
     cron: "*/30 * * * *"

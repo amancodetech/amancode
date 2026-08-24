@@ -58,10 +58,13 @@ other than the implementing agent, per plan §29.
   ban is root-caused and structurally eliminated (env-override fix +
   production-db hard guard); full narrative in incident archive.
 
-## G7 — Independent Re-audit ⏳ OPEN (REAUD-603)
-Requires: fresh audit pass (0 CRITICAL / 0 HIGH open) by non-implementing
-reviewer + quiet-hours production re-measure + opt-in flow live validation.
-Score ladder: C achieved · B achievable now · A/READY strictly post-G7.
+## G7 — Independent Re-audit ✅ EXECUTED (see REAUD_603_2026-08-24.md)
+Independent fresh-agent audit arrived FAIL (1 CRITICAL + 3 HIGH + 5 MEDIUM);
+all findings closed same-day with tests (commit history 2aea015→this).
+**Score: B.** A/READY withheld pending: quiet-hours production re-measure +
+live opt-in validation with a working number + LOW-residual triage.
+Standing policy adopted: gate evidence must cite LIVE call-site wiring,
+not helper-class fixtures alone.
 
 ---
 

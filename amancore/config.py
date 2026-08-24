@@ -17,7 +17,7 @@ import yaml
 from .errors import ConfigError
 
 
-def load_env(path: Path) -> dict[str, str]:
+def load_env(path: Path, mutate_environ: bool = True) -> dict[str, str]:
     """Parse a `.env` file into KEY=VALUE pairs (no interpolation)."""
     if not path.exists():
         return {}
@@ -30,7 +30,8 @@ def load_env(path: Path) -> dict[str, str]:
         key = key.strip()
         value = value.strip().strip('"').strip("'")
         # never override an already-set process env var
-        os.environ.setdefault(key, value)
+        if mutate_environ:
+            os.environ.setdefault(key, value)
         values[key] = value
     return values
 
@@ -80,9 +81,13 @@ class Config:
         return float(self.pricing.get("shadow_rate", self.app.get("shadow_rate", 40)))
 
 
-def load_config(root: Path) -> Config:
-    """Load all configs + local .env, returning a Config object."""
-    load_env(root / ".env")
+def load_config(root: Path, mutate_environ: bool = True) -> Config:
+    """Load all configs + local .env, returning a Config object.
+
+    mutate_environ=False keeps secrets OUT of os.environ — tests and any
+    non-CLI caller MUST use it (REAUD MEDIUM: env pollution was the class
+    of defect behind the 2026-08-24 WABA incident)."""
+    load_env(root / ".env", mutate_environ=mutate_environ)
     cfg = Config(
         root=root,
         app=_load_yaml(root / "configs" / "app.yaml"),

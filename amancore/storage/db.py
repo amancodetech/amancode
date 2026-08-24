@@ -171,7 +171,8 @@ _COLUMN_MIGRATIONS = [
     ("leads", "consent_at", "TEXT"),               # compliance kit: opt-in
     ("leads", "consent_source", "TEXT"),
     ("message_outbox", "initiation", "TEXT"),      # 'yes' = business-initiated
-]
+    ("message_outbox", "delivery_status", "TEXT"), # provider receipts live HERE,
+]                                                  # never in status (C3 closure)
 
 
 def ensure_unique_indexes(db: Database) -> None:
@@ -199,6 +200,21 @@ def ensure_unique_indexes(db: Database) -> None:
     db.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_channel_messages_wamid "
         "ON channel_messages (wa_message_id) WHERE wa_message_id IS NOT NULL"
+    )
+    # REAUD CRITICAL fix: the outbound hard gate — duplicate business sends
+    # collapse to one row at the database level, not just in app logic.
+    dupes = db.execute(
+        "SELECT idempotency_key FROM message_outbox WHERE idempotency_key IS NOT NULL "
+        "GROUP BY idempotency_key HAVING COUNT(*) > 1"
+    ).fetchall()
+    for r in dupes:
+        db.execute(
+            "DELETE FROM message_outbox WHERE idempotency_key = ? AND rowid NOT IN "
+            "(SELECT MIN(rowid) FROM message_outbox WHERE idempotency_key = ?)",
+            (r["idempotency_key"], r["idempotency_key"]))
+    db.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_outbox_idem "
+        "ON message_outbox (idempotency_key) WHERE idempotency_key IS NOT NULL"
     )
     db.commit()
 

@@ -480,7 +480,10 @@ class TelegramOwnerConsole:
         from ..channels.webhook_server import inbox_send_message
 
         result = inbox_send_message(self.runtime["inbox"],
-                                    normalize_number(number), text)
+                                    normalize_number(number), text,
+                                    initiation=True)
+        if not result.get("ok"):
+            return f"🛡️ حجب الالتزام: {result.get('error', 'غير معروف')}"
         if result.get("ok"):
             return (f"📨 أُرسلت للعميل +{normalize_number(number)}:\n"
                     f"«{text[:120]}»\nالحالة: {result.get('status', 'sent')}")
@@ -569,9 +572,10 @@ class TelegramOwnerConsole:
         HandoverService(self.runtime["coordinator"].crm).set_mode(lead["lead_id"], "AI_ACTIVE")
 
         from ..channels.webhook_server import inbox_send_message
-        result = inbox_send_message(self.runtime["inbox"], wa_id, opener)
+        result = inbox_send_message(self.runtime["inbox"], wa_id, opener,
+                                    initiation=True)
         if not result.get("ok"):
-            return f"❌ فشل الإرسال: {result.get('error', 'غير معروف')}"
+            return f"🛡️ حجب الالتزام: {result.get('error', 'غير معروف')}"
 
         report = (
             f"🤖 بدأتُ محادثة استباقية:\n"

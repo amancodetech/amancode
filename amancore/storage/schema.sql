@@ -514,3 +514,6 @@ CREATE INDEX IF NOT EXISTS idx_conversations_last_msg ON conversations(last_mess
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_channel_messages_wamid
   ON channel_messages (wa_message_id) WHERE wa_message_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_outbox_idem
+  ON message_outbox (idempotency_key) WHERE idempotency_key IS NOT NULL;

@@ -94,14 +94,14 @@ class OpsSecurityTest(TempDirTestCase, unittest.TestCase):
         from amancore.ops.registry import JobRegistry
         from amancore.config import load_config
 
-        cfg = load_config(ROOT)
+        cfg = load_config(ROOT, mutate_environ=False)
         before = bool(cfg.production.get("environment", {}).get("production_enabled", False))
         handlers = JobRegistry(self.db, cfg, ROOT).handlers()
         result = handlers["production.check"]({})
         # the check job reports but never toggles the flag
         self.assertEqual(bool(result.get("production_enabled")), before)
         # and production.yaml is unchanged by running the job
-        cfg_after = load_config(ROOT)
+        cfg_after = load_config(ROOT, mutate_environ=False)
         after = bool(cfg_after.production.get("environment", {}).get("production_enabled", False))
         self.assertEqual(before, after)
 

@@ -21,7 +21,7 @@ class OpsFlowIntegrationTest(TempDirTestCase, unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.db = make_db(self.tmp / "t.db")
-        self.config = load_config(ROOT)
+        self.config = load_config(ROOT, mutate_environ=False)
         # scheduler config for jobs
         import yaml
 
