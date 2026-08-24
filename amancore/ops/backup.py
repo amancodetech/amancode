@@ -81,10 +81,12 @@ class BackupService:
         # secondary copy + registry — INSIDE the raise-domain now
         self._check_cancel(payload)  # CC1 checkpoint: before secondary copy/verify
         for art in artifacts:
-            backup_id = self._register(kind, art)
+            # CHAOS-602 finding: register ONLY after both copies exist —
+            # an ENOSPC at secondary must not leave a hollow registry row.
             secondary = self.secondary_dir / Path(art["path"]).name
             shutil.copy2(Path(art["path"]), secondary)
             art["secondary"] = str(secondary)
+            backup_id = self._register(kind, art)
             if kind == "database":
                 # inline verification persisted — a backup isn't done until verified
                 verdict = self.verify_backup(backup_id)
