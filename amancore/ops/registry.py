@@ -63,29 +63,29 @@ class JobRegistry:
         def _followups():
             """CC2: REAL follow-ups — policy-gated outbox messages with daily
             idempotency, then the lead's next_followup_at advances so we do
-            not re-message daily. No more fire-and-forget phantom events."""
+            not re-message daily.
+
+            CHANNEL-NEUTRAL recipient selection is DETERMINISTIC: identities
+            are tried in configured preference order; channels without an
+            approved initiation template are skipped (never AI-chosen)."""
             from datetime import timedelta
             from ..ids import new_id, utcnow
             from ..channels.outbox import MessageOutbox
-            from ..channels.wa_errors import normalize_e164_digits
 
-            # Compliance kit: consent + valve + template — safe defaults.
+            # Compliance kit: consent + valve + per-channel template — safe defaults.
             from ..compliance.guard import ConsentGate, SendValve, TemplateLock
 
-            tpl_cfg = {}
+            comp = {}
             try:
-                tpl_cfg = dict((cfg.app.get("compliance") or {}).get(
-                    "approved_templates") or {})
+                comp = dict(cfg.app.get("compliance") or {})
             except Exception:  # noqa: BLE001
                 pass
-            tlock = TemplateLock(tpl_cfg)
-            tmpl = tlock.resolve("followup")
-            if tmpl is None:
-                return {"due_followups": 0, "enqueued": 0,
-                        "note": "no approved followup template configured"}
+            preference = list(comp.get("followup_channel_preference")
+                              or ["whatsapp"])
 
+            # resolve due leads once; recipients resolved per-identity below
             due = self.db.execute(
-                "SELECT l.lead_id, l.name, l.contact_whatsapp, l.language, "
+                "SELECT l.lead_id, l.name, l.language, "
                 "       l.next_followup_at, l.opt_out, l.consent_at, c.mode "
                 "FROM leads l LEFT JOIN conversations c ON c.lead_id = l.lead_id "
                 "WHERE l.next_followup_at IS NOT NULL AND l.next_followup_at <= ? "
@@ -94,47 +94,87 @@ class JobRegistry:
             ).fetchall()
 
             outbox = MessageOutbox(self.db)
-            valve = SendValve(
-                self.db,
-                tiers=(cfg.app.get("compliance") or {}).get("warmup_tiers"),
-                tier_index=int((cfg.app.get("compliance") or {}).get(
-                    "warmup_tier", 0)),
-                auto_cap=int((cfg.app.get("compliance") or {}).get(
-                    "auto_send_cap", 50)))
             today = utcnow()[:10]
-            enqueued, skipped_consent, blocked_valve = [], 0, 0
+            enqueued, skipped_consent, skipped_channel, blocked_valve = [], 0, 0, 0
             for r in due:
                 lead_row = dict(r)
                 ok, why = ConsentGate.can_initiate(lead_row)
                 if not ok:
                     skipped_consent += 1
                     continue
-                granted, _ = valve.reserve_initiations(1)
-                if not granted:
-                    blocked_valve += 1
-                    break   # cap reached — leave the rest for tomorrow
-                recipient = normalize_e164_digits(r["contact_whatsapp"] or "")
-                if not recipient:
-                    continue
-                mid = outbox.enqueue(
-                    channel="whatsapp", recipient=recipient,
-                    message_type="template",
-                    payload={"name": tmpl["name"], "language":
-                             {"code": tmpl.get("language", "ar")}},
-                    idempotency_key=f"followup:{r['lead_id']}:{today}",
-                    lead_id=r["lead_id"], correlation_id=new_id(),
-                )
-                self.db.execute(
-                    "UPDATE message_outbox SET initiation='yes' WHERE message_id=?",
-                    (mid,))
-                nxt = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
-                self.db.execute(
-                    "UPDATE leads SET next_followup_at = ? WHERE lead_id = ?",
-                    (nxt, r["lead_id"]))
-                enqueued.append(mid)
+                sent_this_lead = False
+                tpl_map = comp.get("approved_templates") or {}
+                for channel in preference:
+                    # deterministic template policy PER channel — a channel
+                    # without an approved template NEVER receives initiations
+                    ch_tpl = tpl_map.get(channel)
+                    if ch_tpl is None and "followup" in tpl_map:
+                        ch_tpl = tpl_map   # legacy flat shape (single-channel era)
+                    tlock = TemplateLock(ch_tpl)
+                    tmpl = tlock.resolve("followup")
+                    if tmpl is None:
+                        skipped_channel += 1
+                        continue
+                    ident = self.db.execute(
+                        "SELECT external_user_id FROM platform_identities"
+                        " WHERE lead_id=? AND channel=? LIMIT 1",
+                        (r["lead_id"], channel)).fetchone()
+                    ext = ident["external_user_id"] if ident else ""
+                    if channel == "whatsapp" and not ext:
+                        # legacy bridge for pre-identity leads
+                        legacy = self.db.execute(
+                            "SELECT contact_whatsapp c FROM leads WHERE lead_id=?",
+                            (r["lead_id"],)).fetchone()
+                        ext = (legacy["c"] or "") if legacy else ""
+                    if not ext:
+                        continue
+                    adapter = None
+                    try:
+                        from .scheduler_adapter import build_adapters
+
+                        adapters = build_adapters()
+                        adapter = adapters.get(channel)
+                    except Exception:  # noqa: BLE001 — factory optional in tests
+                        adapter = None
+                    recipient = (adapter.normalize_recipient(ext)
+                                 if adapter is not None and
+                                 callable(getattr(adapter, "normalize_recipient", None))
+                                 else str(ext))
+                    if not recipient:
+                        continue
+                    valve = SendValve(
+                        self.db,
+                        tiers=comp.get("warmup_tiers"),
+                        tier_index=int(comp.get("warmup_tier", 0)),
+                        auto_cap=int(comp.get("auto_send_cap", 50)),
+                        channel=channel)
+                    granted, _ = valve.reserve_initiations(1)
+                    if not granted:
+                        blocked_valve += 1
+                        break   # cap reached — leave the rest for tomorrow
+                    mid = outbox.enqueue(
+                        channel=channel, recipient=recipient,
+                        message_type="template",
+                        payload={"name": tmpl["name"], "language":
+                                 {"code": tmpl.get("language", "ar")}},
+                        idempotency_key=f"followup:{channel}:{r['lead_id']}:{today}",
+                        lead_id=r["lead_id"], correlation_id=new_id(),
+                    )
+                    self.db.execute(
+                        "UPDATE message_outbox SET initiation='yes' WHERE message_id=?",
+                        (mid,))
+                    nxt = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
+                    self.db.execute(
+                        "UPDATE leads SET next_followup_at = ? WHERE lead_id = ?",
+                        (nxt, r["lead_id"]))
+                    enqueued.append(mid)
+                    sent_this_lead = True
+                    break   # ONE channel per follow-up by design — never multi-spam
+                del sent_this_lead
             self.db.commit()
             return {"due_followups": len(due), "enqueued": len(enqueued),
                     "skipped_no_consent": skipped_consent,
+                    "skipped_no_channel_policy": skipped_channel,
                     "blocked_by_valve": blocked_valve}
 
         def _retention():
@@ -144,23 +184,20 @@ class JobRegistry:
 
         def _drain():
             """REAUD MEDIUM fix: retries/followups no longer wait for an
-            inbound webhook — the scheduler drains every minute."""
+            inbound webhook — the scheduler drains every minute.
+
+            CHANNEL-NEUTRAL: adapters come from the SAME composition factory as
+            the runtime, and the REAL ChannelPolicyEngine gates sends (the old
+            _AllowPolicy bypass that ignored warm-up ceilings is gone)."""
+            from ..business_brain.store import BrainStore
             from ..channels.outbox import MessageOutbox, OutboxWorker
-            from ..channels.whatsapp import WhatsAppAdapter
+            from ..channels.policy import ChannelPolicyEngine
+            from .scheduler_adapter import build_adapters
 
-            wa_cfg = {
-                "mode": os.environ.get("AMANCORE_ENV", "mock"),
-                "phone_number_id": os.environ.get("WHATSAPP_PHONE_NUMBER_ID"),
-                "access_token": os.environ.get("WHATSAPP_ACCESS_TOKEN"),
-            }
-            adapter = WhatsAppAdapter(wa_cfg)
-
-            class _AllowPolicy:
-                def evaluate_send(self, *a, **k):
-                    return "allow"
-
-            worker = OutboxWorker(MessageOutbox(self.db), {"whatsapp": adapter},
-                                  _AllowPolicy())
+            adapters = build_adapters()
+            brain = BrainStore(self.root / "amancore" / "business_brain")
+            policy = ChannelPolicyEngine(brain, getattr(cfg, "channels", {}) or {})
+            worker = OutboxWorker(MessageOutbox(self.db), adapters, policy)
             return {"drained": len(worker.drain(limit=25))}
 
         def _backup(payload=None):

@@ -14,3 +14,8 @@
 {"topic": "price objection", "category": "pricing", "objection": "customer disagrees with price", "new_need": "customized quote", "ts": "2026-08-24T11:36:56Z", "wa_id": "905349998899"}
 {"category": "need", "value": "whatsapp catalog for charity"}
 {"category": "sales", "value": "Needs discovery after customer acknowled", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-24T11:48:23Z", "wa_id": "905349998899"}
+{"category": "need", "value": "challenge questions uncover customer nee", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T05:13:32Z", "wa_id": "905342422565"}
+{"category": "need", "value": "Immediate qualification through challeng", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T05:13:37Z", "wa_id": "905342422565"}
+{"category": "need", "value": "Cultural greeting opens need discovery", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T05:13:38Z", "wa_id": "905342422565"}
+{"category": "sales", "value": "Greeting acknowledgement precedes needs", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T05:13:59Z", "wa_id": "905342422565"}
+{"category": "need", "value": "Probing for customer challenges", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T05:14:09Z", "wa_id": "905342422565"}

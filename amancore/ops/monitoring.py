@@ -70,15 +70,15 @@ class MonitoringService:
         return {
             "outbox": {r["status"]: r["c"] for r in outbox},
             "inbound_today": self.db.execute(
-                "SELECT COUNT(*) AS c FROM events WHERE event_type = 'whatsapp.message.received' "
+                "SELECT COUNT(*) AS c FROM events WHERE event_type = 'message.received' "
                 "AND timestamp >= ?", (today,),
             ).fetchone()["c"],
             "outbound_today": self.db.execute(
-                "SELECT COUNT(*) AS c FROM events WHERE event_type IN "
-                "('whatsapp.message.sent','message.sent') AND timestamp >= ?", (today,),
+                "SELECT COUNT(*) AS c FROM events WHERE event_type = 'message.sent' "
+                "AND timestamp >= ?", (today,),
             ).fetchone()["c"],
             "webhook_failures_today": self.db.execute(
-                "SELECT COUNT(*) AS c FROM events WHERE event_type = 'whatsapp.webhook.failed' "
+                "SELECT COUNT(*) AS c FROM events WHERE event_type = 'webhook.failed' "
                 "AND timestamp >= ?", (today,),
             ).fetchone()["c"],
         }

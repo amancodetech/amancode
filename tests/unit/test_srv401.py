@@ -100,7 +100,7 @@ class UI403ServerPagination(unittest.TestCase):
         now = "2026-08-24T12:00:00"
         for i in range(600):
             self.db.execute(
-                "INSERT INTO channel_messages (direction, wa_id, body, status,"
+                "INSERT INTO channel_messages (direction, external_user_id, body, status,"
                 " created_at) VALUES ('in', 'W-UI', ?, '', ?)",
                 (f"m{i:04d}", f"2026-08-24T12:{i//60:02d}:{i%60:02d}"))
         self.db.commit()
@@ -110,7 +110,7 @@ class UI403ServerPagination(unittest.TestCase):
 
     def _rows(self, before_id=None):
         base = ("SELECT m.id, m.body FROM channel_messages m"
-                " WHERE m.wa_id=? AND m.hidden=0")
+                " WHERE m.external_user_id=? AND m.hidden=0")
         if before_id:
             rows = self.db.execute(
                 base + " AND m.id < ? ORDER BY m.created_at DESC, m.id DESC LIMIT 200",

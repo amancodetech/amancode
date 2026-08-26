@@ -221,19 +221,31 @@ class MessageOutbox:
         return {r["status"]: r["c"] for r in rows}
 
 
-class OutboxWorker:
-    """Processes queued messages through channel adapters (mock-safe)."""
+def _as_router(adapters):
+    """Accept a ChannelRouter or a plain {channel: adapter} dict."""
+    from .router import ChannelRouter
 
-    def __init__(self, outbox: MessageOutbox, adapters: dict, policy, audit=None, dispatcher=None,
+    return adapters if isinstance(adapters, ChannelRouter) else ChannelRouter(adapters or {})
+
+
+class OutboxWorker:
+    """Processes queued messages through the ChannelRouter (mock-safe).
+
+    Channel-neutral by construction: adapters come from the router registry,
+    capabilities are checked BEFORE any provider call, and provider errors are
+    classified via the adapter contract (no provider imports here)."""
+
+    def __init__(self, outbox: MessageOutbox, adapters, policy, audit=None, dispatcher=None,
                  claim_mode: str = "legacy", stale_after_seconds: int = 300,
-                 owner_alert=None):
+                 owner_alert=None, send_valve=None):
         self.outbox = outbox
-        self.adapters = adapters
+        self.router = _as_router(adapters)
+        self.adapters = self.router   # back-compat attribute
         self.policy = policy
         self.audit = audit
         self.dispatcher = dispatcher
         self.owner_alert = owner_alert
-        self.send_valve = None  # SendValve — set by build_runtime
+        self.send_valve = send_valve
         if claim_mode not in {"legacy", "atomic"}:
             raise ValueError(f"unknown claim_mode: {claim_mode}")
         self.claim_mode = claim_mode
@@ -241,10 +253,27 @@ class OutboxWorker:
 
     def process_one(self, message: dict, already_claimed: bool = False) -> dict:
         channel = message["channel"]
-        adapter = self.adapters.get(channel)
+        adapter = self.router.adapter_for(channel)
         if adapter is None:
             self.outbox.mark_failed(message["message_id"], f"no adapter for {channel}")
             return {"message_id": message["message_id"], "status": "failed", "reason": "no adapter"}
+
+        # capability gate — unsupported messages fail fast WITHOUT a provider call
+        caps = self.router.capabilities(channel)
+        mtype = str(message.get("message_type") or "text")
+        supported = {
+            "text": caps.text, "image": caps.image, "audio": caps.audio,
+            "video": caps.video, "document": caps.document, "sticker": caps.sticker,
+            "template": caps.template,
+        }.get(mtype)
+        if supported is False:
+            self.outbox.mark_failed(
+                message["message_id"],
+                f"capability_unsupported: channel '{channel}' cannot carry '{mtype}'",
+                dead_now=True)
+            self._emit("message.failed", message)
+            return {"message_id": message["message_id"], "status": "failed",
+                    "reason": f"capability_unsupported:{mtype}"}
 
         # policy gate (deny → cancel; approval_required → hold)
         decision = self.policy.evaluate_send(channel, message["message_type"], "low")
@@ -273,19 +302,25 @@ class OutboxWorker:
         try:
             result = adapter.send(message["recipient"], message["message_type"], message["payload"])
             self.outbox.mark_sent(message["message_id"], result.get("provider_message_id"))
-            self._emit("whatsapp.message.sent" if channel == "whatsapp" else "message.sent", message)
+            self._emit("message.sent", message)
             self._audit("channel.sent", channel, result=str(result))
             return {"message_id": message["message_id"], "status": "sent", "provider_message_id": result.get("provider_message_id")}
         except Exception as exc:  # noqa: BLE001
-            from .wa_errors import FAST_DEAD_CATEGORIES, RETRYABLE_CATEGORIES, WhatsAppSendError
+            category, retry_in = (None, None)
+            classify = getattr(adapter, "classify_error", None)
+            if callable(classify):
+                try:
+                    category, retry_in = classify(exc)
+                except Exception:  # noqa: BLE001 — misbehaving adapter falls back to generic
+                    category, retry_in = None, None
+            from .wa_errors import FAST_DEAD_CATEGORIES, RETRYABLE_CATEGORIES
 
-            retry_in = None
             dead_now = False
-            if isinstance(exc, WhatsAppSendError):
-                if exc.category in FAST_DEAD_CATEGORIES:   # auth / bad_recipient
-                    dead_now = True
-                elif exc.category in RETRYABLE_CATEGORIES:
-                    retry_in = exc.retry_after_seconds     # None → default backoff
+            if category in FAST_DEAD_CATEGORIES:       # auth / bad_recipient
+                dead_now = True
+                retry_in = None
+            elif category not in RETRYABLE_CATEGORIES:
+                retry_in = None                        # generic linear backoff
             final = self.outbox.mark_failed(message["message_id"], f"[{getattr(exc, 'category', 'generic')}] {exc}",
                                             retry_in_seconds=retry_in, dead_now=dead_now)
             if final == "dead" and self.owner_alert is not None:  # OUT-205: dead is never silent

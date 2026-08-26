@@ -114,7 +114,7 @@ class CC2RealFollowups(Harness):
         self.assertEqual(res["enqueued"], 1)
         row = self.db.execute(
             "SELECT idempotency_key, recipient FROM message_outbox"
-            " WHERE idempotency_key LIKE 'followup:L1:%'").fetchone()
+            " WHERE idempotency_key LIKE 'followup:whatsapp:L1:%'").fetchone()
         self.assertIsNotNone(row)
         self.assertEqual(row["recipient"], "905321112233")     # normalized W2
         nxt = self.db.execute(

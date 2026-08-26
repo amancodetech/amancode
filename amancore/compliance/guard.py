@@ -43,7 +43,11 @@ class SendValve:
     """
 
     def __init__(self, db, tiers: list[int] | None = None, tier_index: int = 0,
-                 auto_cap: int = 50):
+                 auto_cap: int = 50, channel: str = "whatsapp"):
+        # CHANNEL POLICY: caps are enforced PER CHANNEL (legacy default keeps
+        # historical whatsapp behavior); global reputation ceiling = per-channel
+        # tier ceilings summed by configuration, never by ignoring channels.
+        self.channel = (channel or "whatsapp").lower()
         self.db = db
         self.tiers = [int(t) for t in (tiers or [50, 250, 1000])]
         self.tier_index = max(0, min(tier_index, len(self.tiers) - 1))
@@ -61,11 +65,11 @@ class SendValve:
         return utcnow()[:10]
 
     def _sent_today(self, initiated_only: bool) -> int:
-        sql = ("SELECT COUNT(*) c FROM message_outbox WHERE channel='whatsapp' "
+        sql = ("SELECT COUNT(*) c FROM message_outbox WHERE channel=? "
                "AND sent_at IS NOT NULL AND substr(sent_at,1,10)=?")
         if initiated_only:
             sql += " AND initiation='yes'"
-        row = self.db.execute(sql, (self._today(),)).fetchone()
+        row = self.db.execute(sql, (self.channel, self._today())).fetchone()
         try:
             db_count = row["c"]
         except (KeyError, IndexError):

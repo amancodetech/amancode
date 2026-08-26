@@ -468,7 +468,7 @@ class AnalyticsService:
             "hot_leads": self.hot_leads(date_str, end)["value"],
             "open_opportunities": self.opportunities(date_str, end)["value"],
             "messages": self._scalar(
-                "SELECT COUNT(*) FROM events WHERE event_type = 'whatsapp.message.received' "
+                "SELECT COUNT(*) FROM events WHERE event_type = 'message.received' "
                 "AND timestamp >= ? AND timestamp < ?", (date_str, end),
             ),
             "support_cases": self.support_cases(date_str, end)["value"],

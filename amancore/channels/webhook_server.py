@@ -50,7 +50,7 @@ def make_status_recorder(db):
         if not provider_message_id:
             return {"updated": False, "reason": "empty id"}
         cur = db.execute(
-            "SELECT id FROM channel_messages WHERE wa_message_id = ? AND direction='out'",
+            "SELECT id FROM channel_messages WHERE external_message_id = ? AND direction='out'",
             (provider_message_id,),
         ).fetchone()
         row = db.execute(
@@ -83,8 +83,8 @@ def make_status_recorder(db):
             if src is not None:
                 db.execute(
                     "INSERT INTO channel_messages"
-                    " (direction, wa_id, lead_id, wa_message_id, body, status, created_at)"
-                    " VALUES ('out', ?, ?, ?, ?, ?, ?)",
+                    " (direction, channel, external_user_id, lead_id, external_message_id, body, status, created_at)"
+                    " VALUES ('out', 'whatsapp', ?, ?, ?, ?, ?, ?)",
                     (src["recipient"], src["lead_id"], provider_message_id,
                      src["payload"] or "", status, utcnow()),
                 )
@@ -155,7 +155,14 @@ def build_runtime(root: Path):
     brain = BrainStore(root / "amancore" / "business_brain")
     audit = AuditService(db)
     dispatcher = EventDispatcher()
+    # PHASE-7: the events table is now real — every published event persists
+    from ..services.events import wire_event_persistence
+
+    wire_event_persistence(dispatcher, db)
     adapter = WhatsAppAdapter(wa_cfg)
+    from ..channels.router import ChannelRouter
+
+    router = ChannelRouter({"whatsapp": adapter})
     outbox = MessageOutbox(db)
     policy = ChannelPolicyEngine(brain)
     try:
@@ -172,7 +179,7 @@ def build_runtime(root: Path):
                       tier_index=int(_comp.get("warmup_tier", 0)),
                       auto_cap=int(_comp.get("auto_send_cap", 50)))
     worker = OutboxWorker(
-        outbox, {"whatsapp": adapter}, policy, audit=audit, dispatcher=dispatcher,
+        outbox, router, policy, audit=audit, dispatcher=dispatcher,
         claim_mode=str(outbox_cfg.get("claim_mode", "legacy")),
         stale_after_seconds=int(outbox_cfg.get("stale_after_seconds", 300)),
         owner_alert=send_owner_alert,
@@ -206,15 +213,18 @@ def build_runtime(root: Path):
     inbox = build_inbox_runtime(db, coordinator)
 
     if inbox is not None:
-        def _record_inbound(direction, wa_id, lead_id, wa_message_id=None, body="",
-                            quoted_wamid=None, **_):
+        def _record_inbound(direction, channel, external_user_id, lead_id,
+                            external_message_id=None, body="",
+                            quoted_external_message_id=None, **_):
             from ..ids import utcnow
 
             db.execute(
                 "INSERT INTO channel_messages"
-                " (direction, wa_id, lead_id, wa_message_id, body, status, created_at, quoted_wamid)"
-                " VALUES (?, ?, ?, ?, ?, '', ?, ?)",
-                (direction, wa_id, lead_id, wa_message_id, body, utcnow(), quoted_wamid or None),
+                " (direction, channel, external_user_id, lead_id, external_message_id,"
+                "  body, status, created_at, quoted_external_message_id)"
+                " VALUES (?, ?, ?, ?, ?, '', ?, ?, ?)",
+                (direction, channel, external_user_id, lead_id, external_message_id,
+                 body, utcnow(), quoted_external_message_id or None),
             )
             db.commit()
 
@@ -222,21 +232,22 @@ def build_runtime(root: Path):
 
         def _record_reaction(payload):
             """Customer reaction on our message: set/clear emoji chip in place."""
-            wmid = payload.get("message_id")
+            wmid = payload.get("target_external_message_id") or payload.get("message_id")
             if not wmid:
                 return
             emoji = payload.get("emoji") or None  # empty emoji == reaction removed
             cur = db.execute(
-                "UPDATE channel_messages SET reaction=? WHERE wa_message_id=?",
+                "UPDATE channel_messages SET reaction=? WHERE external_message_id=?",
                 (emoji, wmid),
             )
             if cur.rowcount == 0 and emoji:
                 # reaction on a message we have no row for — record as standalone note
                 db.execute(
                     "INSERT INTO channel_messages"
-                    " (direction, wa_id, lead_id, wa_message_id, body, status, created_at, reaction)"
-                    " VALUES ('in', ?, NULL, ?, '', '', datetime('now'), ?)",
-                    (payload.get("wa_id") or "", wmid, emoji),
+                    " (direction, channel, external_user_id, lead_id, external_message_id,"
+                    "  body, status, created_at, reaction)"
+                    " VALUES ('in', COALESCE(?, 'whatsapp'), ?, NULL, ?, '', '', datetime('now'), ?)",
+                    (payload.get("channel"), payload.get("external_user_id") or "", wmid, emoji),
                 )
             db.commit()
 
@@ -246,8 +257,18 @@ def build_runtime(root: Path):
     else:
         runtime_inbox_sync = lambda: None  # noqa: E731
 
-    runtime = {"db": db, "adapter": adapter, "coordinator": coordinator,
+    if inbox is not None:
+        inbox["adapter"] = adapter
+        inbox["router"] = router
+        inbox["valve"] = valve
+    try:
+        channels_view = dict(cfg.channels or {})
+    except Exception:  # noqa: BLE001
+        channels_view = {}
+    runtime = {"db": db, "adapter": adapter, "router": router,
+               "coordinator": coordinator,
                "inbox": inbox, "sync": runtime_inbox_sync,
+               "config_channels": channels_view,
                "cost_governor": governor}
     return runtime
 
@@ -281,25 +302,26 @@ def sync_channel_messages(db) -> None:
         UPDATE channel_messages SET
           status = COALESCE((SELECT o.status FROM message_outbox o
                              WHERE o.message_id = channel_messages.outbox_message_id), status),
-          wa_message_id = COALESCE(
+          external_message_id = COALESCE(
               (SELECT o.provider_message_id FROM message_outbox o
-               WHERE o.message_id = channel_messages.outbox_message_id), wa_message_id)
+               WHERE o.message_id = channel_messages.outbox_message_id), external_message_id)
         WHERE direction='out' AND outbox_message_id IS NOT NULL
         """
     )
     db.execute(
         """
         INSERT INTO channel_messages
-          (direction, wa_id, lead_id, wa_message_id, body, status, created_at, outbox_message_id)
-        SELECT 'out', o.recipient, o.lead_id, o.provider_message_id,
+          (direction, channel, external_user_id, lead_id, external_message_id,
+           body, status, created_at, outbox_message_id)
+        SELECT 'out', o.channel, o.recipient, o.lead_id, o.provider_message_id,
                COALESCE(o.payload, ''), o.status, o.created_at, o.message_id
           FROM message_outbox o
-         WHERE o.channel='whatsapp' AND o.message_type='text'
+         WHERE o.message_type='text'
            AND o.provider_message_id IS NOT NULL
            AND o.created_at >= datetime('now', '-7 days')
            AND NOT EXISTS (
                SELECT 1 FROM channel_messages c WHERE c.outbox_message_id = o.message_id)
-         ON CONFLICT(wa_message_id) WHERE wa_message_id IS NOT NULL DO NOTHING
+         ON CONFLICT(channel, external_message_id) WHERE external_message_id IS NOT NULL DO NOTHING
         """
     )
     db.commit()
@@ -347,6 +369,22 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
     @property
     def inbox(self):
         return self.runtime.get("inbox")
+
+    def _webhook_channel(self, path: str) -> str | None:
+        """Path registry: /webhook/<channel> → channel with a registered adapter."""
+        router = self.runtime.get("router")
+        if router is None:
+            # minimal runtimes (tests/tools) may only carry a coordinator
+            coord = self.runtime.get("coordinator")
+            adapters = getattr(coord, "adapters", None) or {}
+            if path.startswith("/webhook/"):
+                candidate = path[len("/webhook/"):]
+                return candidate if candidate in adapters else None
+            return None
+        if not path.startswith("/webhook/"):
+            return None
+        candidate = path[len("/webhook/"):]
+        return candidate if router.has(candidate) else None
 
     def _inbox_route(self, path: str) -> tuple[object | None, str]:
         """Match /{slug}/{action} -> (inbox_runtime, action)."""
@@ -399,12 +437,13 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
         if parsed.path == "/health":
             self._send(200, b"ok")
             return
-        if parsed.path == "/webhook/whatsapp":
+        channel = self._webhook_channel(parsed.path)
+        if channel is not None:
             qs = parse_qs(parsed.query)
             mode = (qs.get("hub.mode") or [""])[0]
             token = (qs.get("hub.verify_token") or [""])[0]
             challenge = (qs.get("hub.challenge") or [""])[0]
-            result = self.runtime["adapter"].verify_webhook(mode, token, challenge)
+            result = self.runtime["coordinator"]._adapter_for(channel).verify_webhook(mode, token, challenge)
             if result.get("verified"):
                 self._send(200, result["challenge"].encode("utf-8"))
             else:
@@ -427,7 +466,8 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
         inbox, action = self._inbox_route(parsed.path)
         if inbox is not None:
             return self._inbox_post(inbox, action)
-        if self.path != "/webhook/whatsapp":
+        channel = self._webhook_channel(parsed.path)
+        if channel is None:
             self._send(404, b"not found")
             return
         try:
@@ -445,8 +485,8 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
             return
         headers = {k.lower(): v for k, v in self.headers.items()}
         try:
-            summary = self.runtime["coordinator"].handle_whatsapp_webhook(
-                body, headers, raw_body=raw
+            summary = self.runtime["coordinator"].handle_inbound(
+                channel, body, headers, raw_body=raw
             )
         except Exception as exc:  # noqa: BLE001 — respond, never leak internals
             log.error("webhook processing failed: %s", exc)
@@ -462,7 +502,7 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
                 if frm:
                     row = self.runtime["db"].execute(
                         "SELECT body FROM channel_messages WHERE direction='out'"
-                        " AND wa_id=? ORDER BY id DESC LIMIT 1", (frm,)).fetchone()
+                        " AND external_user_id=? ORDER BY id DESC LIMIT 1", (frm,)).fetchone()
                     last = (row["body"][:300] if row else "")
                     notify_owner_console(
                         self.runtime, "🤖 ردّيتُ على +{frm}:\n«{last}»".format(frm=frm, last=last))
@@ -623,7 +663,7 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
             adapter = self.runtime["adapter"]
             ok_count = 0
             for wmid in wamids[:50]:
-                if not isinstance(wmid, str) or not wmid.startswith("wamid."):
+                if not isinstance(wmid, str) or not wmid.strip():
                     continue
                 try:
                     adapter.mark_read(wmid)
@@ -657,11 +697,11 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
                 return self._send(400, json.dumps({"ok": False, "error": "bad media"}).encode(), "application/json")
             if (not wa_id) or (not text and not media):
                 return self._send(400, b"bad request")
-            if len(text) > 4096:
+            max_len = int(((self.runtime.get("config_channels") or {})
+                           .get("whatsapp", {}) or {}).get("max_text_length", 4096))
+            if len(text) > max_len:
                 return self._send(400, json.dumps({"ok": False, "error": "text too long"}).encode(), "application/json")
             reply_to = str(data.get("reply_to") or "").strip() or None
-            if reply_to and not reply_to.startswith("wamid."):
-                return self._send(400, b"bad reply_to")
             result = inbox_send_message(inbox, wa_id, text, media=media, reply_to=reply_to)
             status = 200 if result.get("ok") else 502
             return self._send(status, json.dumps(result).encode("utf-8"), "application/json")
@@ -677,12 +717,12 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
                        COALESCE(c.mode, 'AI_ACTIVE') AS mode,
                        MAX(m.created_at) AS last_at,
                        (SELECT COUNT(*) FROM channel_messages u
-                         WHERE u.wa_id = l.contact_whatsapp AND u.direction='in'
+                         WHERE u.external_user_id = l.contact_whatsapp AND u.direction='in'
                            AND u.status IS NOT 'read' AND u.hidden = 0
-                           AND u.wa_message_id LIKE 'wamid.%') AS unread
+                           AND u.external_message_id IS NOT NULL) AS unread
                   FROM leads l
              LEFT JOIN conversations c ON c.lead_id = l.lead_id
-             LEFT JOIN channel_messages m ON m.wa_id = l.contact_whatsapp
+             LEFT JOIN channel_messages m ON m.external_user_id = l.contact_whatsapp
               GROUP BY l.contact_whatsapp
               ORDER BY last_at DESC NULLS LAST
                  LIMIT 200
@@ -696,10 +736,10 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
             before_id = (qs.get("before_id") or [""])[0]
             base_sql = """
                 SELECT m.id, m.direction, m.body, m.status, m.created_at,
-                       m.media_kind, m.media_ref, m.wa_message_id, m.reaction,
+                       m.media_kind, m.media_ref, m.external_message_id, m.reaction,
                        (SELECT substr(q.body, 1, 80) FROM channel_messages q
-                         WHERE q.wa_message_id = m.quoted_wamid) AS quoted
-                  FROM channel_messages m WHERE m.wa_id = ? AND m.hidden = 0
+                         WHERE q.external_message_id = m.quoted_external_message_id) AS quoted
+                  FROM channel_messages m WHERE m.external_user_id = ? AND m.hidden = 0
                 """
             if before_id:  # U3: older-page fetch (client paginates past 500)
                 rows = inbox["db"].execute(
@@ -769,14 +809,20 @@ def inbox_send_message(inbox, wa_id: str, text: str, media: dict | None = None,
 
         db0 = inbox["db"]
         lrow = db0.execute(
-            "SELECT opt_out, consent_at FROM leads WHERE contact_whatsapp=?"
-            " ORDER BY created_at DESC LIMIT 1", (wa_id,)).fetchone()
+            "SELECT opt_out, consent_at FROM leads l"
+            " JOIN platform_identities i ON i.lead_id = l.lead_id"
+            " WHERE i.channel='whatsapp' AND i.external_user_id=?"
+            " ORDER BY l.created_at DESC LIMIT 1", (wa_id,)).fetchone()
+        if lrow is None:
+            lrow = db0.execute(
+                "SELECT opt_out, consent_at FROM leads WHERE contact_whatsapp=?"
+                " ORDER BY created_at DESC LIMIT 1", (wa_id,)).fetchone()
         lead_dict = dict(lrow) if lrow else {}
         ok, why = ConsentGate.can_initiate(lead_dict)
         if not ok:
             return {"ok": False, "error": f"consent gate: {why}"}
         last_in = db0.execute(
-            "SELECT MAX(created_at) m FROM channel_messages WHERE wa_id=?"
+            "SELECT MAX(created_at) m FROM channel_messages WHERE external_user_id=?"
             " AND direction='in'", (wa_id,)).fetchone()["m"]
         window = None
         if last_in:
@@ -788,7 +834,9 @@ def inbox_send_message(inbox, wa_id: str, text: str, media: dict | None = None,
             return {"ok": False, "error":
                     "outside 24h customer window — use an approved template "
                     "(compliance kit blocks free-text initiation)"}
-        valve = SendValve(db0)
+        # REAUD fix: use the SHARED runtime valve so in-process reservations
+        # count against the same cap the worker enforces (was a fresh instance).
+        valve = inbox.get("valve") or SendValve(db0)
         granted, why = valve.reserve_initiations(1)
         if not granted:
             return {"ok": False, "error": f"send valve: {why}"}
@@ -891,8 +939,9 @@ def inbox_send_message(inbox, wa_id: str, text: str, media: dict | None = None,
     db = inbox["db"]
     db.execute(
         "INSERT INTO channel_messages"
-        " (direction, wa_id, lead_id, body, status, created_at, media_kind, media_ref, outbox_message_id)"
-        " VALUES ('out', ?, ?, ?, ?, ?, ?, ?, ?)",
+        " (direction, channel, external_user_id, lead_id, body, status, created_at,"
+        "  media_kind, media_ref, outbox_message_id)"
+        " VALUES ('out', 'whatsapp', ?, ?, ?, ?, ?, ?, ?, ?)",
         (wa_id, lead["lead_id"], stored_body, "queued" if not sent else "sent",
          utcnow(), media_kind, media_ref, mid),
     )
@@ -914,6 +963,7 @@ def inbox_send_message(inbox, wa_id: str, text: str, media: dict | None = None,
 
 class WebhookServer(ThreadingHTTPServer):
     daemon_threads = True
+    allow_reuse_address = True
 
     def __init__(self, addr, runtime: dict):
         super().__init__(addr, WebhookRequestHandler)

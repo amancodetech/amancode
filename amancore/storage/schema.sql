@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     last_message_at TEXT,
     next_action TEXT,
     next_followup_at TEXT,
+    external_thread_id TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -339,7 +340,11 @@ CREATE TABLE IF NOT EXISTS message_outbox (
     provider_message_id TEXT,
     failure_reason TEXT,
     created_at TEXT NOT NULL,
-    sent_at TEXT
+    sent_at TEXT,
+    claimed_at TEXT,
+    claim_token TEXT,
+    initiation TEXT,
+    delivery_status TEXT
 );
 
 CREATE TABLE IF NOT EXISTS intake_events (
@@ -372,11 +377,13 @@ CREATE TABLE IF NOT EXISTS usage_records (
 
 CREATE TABLE IF NOT EXISTS channel_messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    -- legacy-compat default kept ONLY so fresh and upgraded databases share
+    -- one authoritative shape; every writer MUST pass an explicit channel.
     channel TEXT NOT NULL DEFAULT 'whatsapp',
     direction TEXT NOT NULL CHECK (direction IN ('in','out')),
-    wa_id TEXT NOT NULL,
+    external_user_id TEXT NOT NULL,
     lead_id TEXT,
-    wa_message_id TEXT,
+    external_message_id TEXT,
     body TEXT NOT NULL,
     status TEXT,
     created_at TEXT NOT NULL,
@@ -385,7 +392,23 @@ CREATE TABLE IF NOT EXISTS channel_messages (
     outbox_message_id TEXT,
     hidden INTEGER NOT NULL DEFAULT 0,
     reaction TEXT,
-    quoted_wamid TEXT
+    quoted_external_message_id TEXT
+);
+
+-- Channel-neutral customer identity: one row per (channel, provider user id).
+-- The Core resolves customers through this table; leads.contact_whatsapp is
+-- a legacy display/fallback column only.
+CREATE TABLE IF NOT EXISTS platform_identities (
+    identity_id TEXT PRIMARY KEY,
+    lead_id TEXT NOT NULL REFERENCES leads(lead_id) ON DELETE CASCADE,
+    channel TEXT NOT NULL,
+    external_user_id TEXT NOT NULL,
+    external_username TEXT,
+    is_primary INTEGER NOT NULL DEFAULT 0,
+    verified INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(channel, external_user_id)
 );
 
 
@@ -506,14 +529,20 @@ CREATE INDEX IF NOT EXISTS idx_outbox_ready
 
 -- DB-301 (D3): hot-path indexes — previously manual-only in prod; a fresh
 -- deploy silently lost them and every inbound message did a full SCAN.
-CREATE INDEX IF NOT EXISTS idx_channel_messages_wa ON channel_messages(wa_id);
+CREATE INDEX IF NOT EXISTS idx_channel_messages_ext ON channel_messages(external_user_id);
 CREATE INDEX IF NOT EXISTS idx_channel_messages_dir ON channel_messages(direction);
 CREATE INDEX IF NOT EXISTS idx_channel_messages_lead ON channel_messages(lead_id);
 CREATE INDEX IF NOT EXISTS idx_leads_whatsapp ON leads(contact_whatsapp);
 CREATE INDEX IF NOT EXISTS idx_conversations_last_msg ON conversations(last_message_at);
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_channel_messages_wamid
-  ON channel_messages (wa_message_id) WHERE wa_message_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_channel_messages_external
+  ON channel_messages (channel, external_message_id) WHERE external_message_id IS NOT NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_outbox_idem
   ON message_outbox (idempotency_key) WHERE idempotency_key IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS channel_ai_settings (
+    channel TEXT PRIMARY KEY,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    updated_at TEXT NOT NULL
+);

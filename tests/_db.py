@@ -20,7 +20,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from amancore.storage.db import (  # noqa: E402
-    Database, ensure_columns, ensure_unique_indexes,
+    Database, ensure_channel_neutral, ensure_columns, ensure_unique_indexes,
 )
 
 TEST_DB_PATH = ROOT / "storage" / "_amancore_tests.db"
@@ -30,8 +30,8 @@ _SCHEMA_READY = False
 
 #: wipe order respects FK dependencies; audit/business_brain are permanent
 TABLES_TO_WIPE = (
-    "channel_messages", "message_outbox", "jobs", "alerts", "incidents",
-    "compliance_overrides",
+    "channel_messages", "message_outbox", "platform_identities", "jobs",
+    "alerts", "incidents", "compliance_overrides", "cost_counters",
     "idempotency_keys", "events", "conversations", "opportunities",
     "support_cases", "leads", "content_items", "proposals", "pricing_snapshots",
 )
@@ -44,6 +44,7 @@ def fresh_db() -> Database:
     if not _SCHEMA_READY:
         db.apply_schema(SCHEMA_PATH.read_text(encoding="utf-8"))
         ensure_columns(db)
+        ensure_channel_neutral(db)
         ensure_unique_indexes(db)
         _SCHEMA_READY = True
     return db

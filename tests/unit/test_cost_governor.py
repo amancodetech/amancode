@@ -26,7 +26,7 @@ class CostGovernorTests(unittest.TestCase):
             g.record("W1", 500, 200)
         allowed, reason = g.allow("W1")
         self.assertFalse(allowed)
-        self.assertEqual(reason, "per_wa_hourly")
+        self.assertEqual(reason, "per_identity_hourly")  # neutral rename
 
     def test_cost02_duplicate_webhook_no_amplification(self):
         """Same inbound replayed N times → charges stay at logical-call count."""

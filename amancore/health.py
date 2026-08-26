@@ -80,10 +80,13 @@ def run_health_checks(root: Path) -> dict[str, tuple[str, str]]:
     # security
     results["security"] = _check("security", lambda: _security(root))
 
-    # channels (Phase 3E — mock-mode configuration state, not production readiness)
+    # channels — generic per-channel registration (adapter-driven)
     cfg3 = cfg or load_config(root)
-    results["whatsapp_config"] = _check("whatsapp_config", lambda: _whatsapp_config(cfg3))
-    results["whatsapp_webhook"] = _check("whatsapp_webhook", lambda: _whatsapp_webhook(cfg3))
+    for _ch in ("whatsapp",):   # extend as adapters register in build_adapters()
+        results[f"channel_config:{_ch}"] = _check(
+            f"channel_config:{_ch}", lambda ch=_ch: _channel_config(cfg3, ch))
+        results[f"channel_webhook:{_ch}"] = _check(
+            f"channel_webhook:{_ch}", lambda ch=_ch: _channel_webhook(cfg3, ch))
     results["channel_policy"] = _check("channel_policy", lambda: _channel_policy(store))
     results["message_outbox"] = _check("message_outbox", lambda: _message_outbox(db))
     results["website_intake"] = _check("website_intake", lambda: _website_intake(db))
@@ -175,19 +178,25 @@ def _security(root: Path) -> str:
     return ".env excluded"
 
 
-def _whatsapp_config(cfg: Config) -> str:
-    w = cfg.channels.get("whatsapp", {})
+def _channel_config(cfg: Config, channel: str) -> str:
+    """Generic per-channel configuration check — valid modes are universal,
+    provider details stay inside the channel's own config block."""
+    w = cfg.channels.get(channel, {})
     mode = w.get("mode", "mock")
     if mode not in ("mock", "sandbox", "production"):
-        raise RuntimeError(f"invalid whatsapp mode: {mode}")
-    return f"mode={mode} api_version={w.get('api_version')}"
+        raise RuntimeError(f"invalid {channel} mode: {mode}")
+    return f"mode={mode}" + (f" api_version={w.get('api_version')}"
+                             if w.get("api_version") else "")
 
 
-def _whatsapp_webhook(cfg: Config) -> str:
-    from .channels.whatsapp import WhatsAppAdapter
+def _channel_webhook(cfg: Config, channel: str) -> str:
+    from .ops.scheduler_adapter import build_probe_adapter
 
-    w = cfg.channels.get("whatsapp", {})
-    adapter = WhatsAppAdapter(w)
+    w = cfg.channels.get(channel, {})
+    try:
+        adapter = build_probe_adapter(channel, w)
+    except KeyError:
+        raise RuntimeError(f"channel '{channel}' has no registered adapter")
     result = adapter.verify_webhook("subscribe", w.get("verify_token", ""), "challenge")
     if w.get("mode") == "mock":
         return "mock webhook verifier available (production pending verification)"

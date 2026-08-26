@@ -49,16 +49,19 @@ def parse_slash(text: str):
 
 HELP_TEXT = (
     "🤖 AmanCore Console — الأوامر:\n"
-    "/status — حالة النظام\n"
+    "/status — حالة النظام العامة\n"
+    "/ai [قناة] on|off — تشغيل أو إيقاف الذكاء الاصطناعي لقناة محددة\n"
+    "/ai status — عرض حالة الذكاء الاصطناعي لجميع القنوات\n"
     "/leads [عدد] — آخر المحادثات\n"
     "/customer <رقم> [اسم] — تسجيل عميل جديد\n"
     "/send <رقم> <نص> — إرسال واتساب فوري\n"
-    "/mode <رقم> ai|human — تبديل وضع الرد\n"
+    "/mode <رقم> ai|human — تبديل وضع الرد لعميل محدد\n"
     "/chat <رقم> [موضوع] — ابدأ محادثة ذكية استباقية مع الرقم\n"
     "\nأو اكتب بأي لغة طلباً حراً، مثال:\n"
-    "\"راسل 905342422565 وقل له عرضنا الجديد جاهز\"\n"
-    "\"سجل الرقم 62812345 باسم أحمد كعميل\"\n"
-    "\"تحدث مع 905342422565 واعرض عليه خدماتنا\""
+    "\"أوقف الذكاء الاصطناعي في واتساب\"\n"
+    "\"شغل الذكاء الاصطناعي لتيكتوك\"\n"
+    "\"حالة قنوات الذكاء الاصطناعي\"\n"
+    "\"راسل 905342422565 وقل له عرضنا الجديد جاهز\""
 )
 
 
@@ -179,6 +182,10 @@ class TelegramOwnerConsole:
             return HELP_TEXT
         if cmd == "status":
             return self._act_status()
+        if cmd in ("ai", "toggle", "channel"):
+            return self._act_channel_ai(args)
+        if cmd in ("channels", "ai_status"):
+            return self._act_channel_status()
         if cmd == "learned":
             from ..ops.learning import stats as learn_stats
 
@@ -224,6 +231,8 @@ class TelegramOwnerConsole:
         "if they give a saved customer name use \"who\" (keep the name exactly as written). "
         "Allowed actions:\n"
         '{"action":"status"}\n'
+        '{"action":"channel_ai","channel":"whatsapp|facebook|instagram|tiktok|youtube|website","state":"on|off"}\n'
+        '{"action":"channel_ai_status"}\n'
         '{"action":"leads","limit":<int optional>}\n'
         '{"action":"customer","number":"<full digits>","name":"<person name>"}\n'
         '{"action":"send","number":"","who":"<saved customer name>","text":"..."}\n'
@@ -263,6 +272,10 @@ class TelegramOwnerConsole:
         act = action.get("action")
         if act == "status":
             return self._act_status()
+        if act == "channel_ai":
+            return self._act_channel_ai(f"{action.get('channel', '')} {action.get('state', '')}".strip())
+        if act in ("channel_ai_status", "channels"):
+            return self._act_channel_status()
         if act == "leads":
             return self._act_leads(str(action.get("limit") or ""))
         if act == "customer":
@@ -294,7 +307,7 @@ class TelegramOwnerConsole:
         ).fetchone()["c"]
         unread = db.execute(
             "SELECT COUNT(*) c FROM channel_messages WHERE direction='in'"
-            " AND status IS NOT 'read' AND hidden=0 AND wa_message_id LIKE 'wamid.%'"
+            " AND status IS NOT 'read' AND hidden=0 AND external_message_id IS NOT NULL"
         ).fetchone()["c"]
         queued = db.execute(
             "SELECT COUNT(*) c FROM message_outbox WHERE status IN ('queued','processing')"
@@ -313,6 +326,73 @@ class TelegramOwnerConsole:
         ]
         return "\n".join(lines)
 
+    def _act_channel_ai(self, args: str) -> str:
+        channel_labels = {
+            "whatsapp": "واتساب (WhatsApp)",
+            "facebook": "فيسبوك (Facebook)",
+            "instagram": "إنستغرام (Instagram)",
+            "tiktok": "تيك توك (TikTok)",
+            "youtube": "يوتيوب (YouTube)",
+            "website": "الموقع الإلكتروني (Website)",
+        }
+        channel_map = {
+            "whatsapp": "whatsapp", "wa": "whatsapp", "واتساب": "whatsapp", "واتس": "whatsapp", "الواتساب": "whatsapp",
+            "facebook": "facebook", "fb": "facebook", "فيسبوك": "facebook", "فيس": "facebook", "الفيسبوك": "facebook",
+            "instagram": "instagram", "ig": "instagram", "insta": "instagram", "انستغرام": "instagram", "انستقرام": "instagram", "انستا": "instagram", "الانستغرام": "instagram",
+            "tiktok": "tiktok", "tt": "tiktok", "تيكتوك": "tiktok", "تيك توك": "tiktok", "التيكتوك": "tiktok",
+            "youtube": "youtube", "yt": "youtube", "يوتيوب": "youtube", "اليوتيوب": "youtube",
+            "website": "website", "web": "website", "site": "website", "موقع": "website", "الموقع": "website",
+        }
+        parts = (args or "").strip().split()
+        if not parts or parts[0].lower() in ("status", "حالة", "list", "عرض"):
+            return self._act_channel_status()
+
+        target_channel = channel_map.get(parts[0].lower())
+        if not target_channel:
+            valid_list = "، ".join(["واتساب (whatsapp)", "فيسبوك (facebook)", "انستغرام (instagram)", "تيكتوك (tiktok)", "يوتيوب (youtube)"])
+            return f"❌ قناة غير معروفة: '{parts[0]}'\nالقنوات المتاحة:\n• {valid_list}\n\nمثال:\n/ai whatsapp off\n/ai tiktok on"
+
+        hs = self.runtime["coordinator"].handover
+        label = channel_labels.get(target_channel, target_channel)
+
+        if len(parts) < 2:
+            curr = hs.is_channel_ai_enabled(target_channel)
+            return (f"حالة الذكاء الاصطناعي لـ {label}: {'🟢 مفعّل (ON)' if curr else '🔴 معطّل (OFF)'}\n\n"
+                    f"للتحكم:\n/ai {target_channel} on\n/ai {target_channel} off")
+
+        state_raw = parts[1].lower()
+        enable = state_raw in ("on", "enable", "1", "شغل", "تشغيل", "تفعيل", "مفعل", "نعم", "true")
+        disable = state_raw in ("off", "disable", "0", "اوقف", "إيقاف", "تعطيل", "معطل", "لا", "false")
+
+        if not (enable or disable):
+            return f"الصيغة: /ai {target_channel} on (تشغيل) أو off (إيقاف)"
+
+        enabled = bool(enable)
+        hs.set_channel_ai(target_channel, enabled)
+        if enabled:
+            return f"✅ تم تشغيل الذكاء الاصطناعي والرد التلقائي لقناة:\n• {label} 🟢"
+        else:
+            return f"🛑 تم إيقاف الذكاء الاصطناعي لقناة:\n• {label} 🔴\n(سيتوقف البوت عن الرد التلقائي على هذه القناة حتى تعيد تشغيله)"
+
+    def _act_channel_status(self) -> str:
+        channel_labels = {
+            "whatsapp": "واتساب (WhatsApp)",
+            "facebook": "فيسبوك (Facebook)",
+            "instagram": "إنستغرام (Instagram)",
+            "tiktok": "تيك توك (TikTok)",
+            "youtube": "يوتيوب (YouTube)",
+            "website": "الموقع الإلكتروني (Website)",
+        }
+        hs = self.runtime["coordinator"].handover
+        statuses = hs.get_all_channel_ai_status()
+        lines = ["🎛️ حالة الذكاء الاصطناعي لقنوات التواصل:"]
+        for ch, label in channel_labels.items():
+            is_on = statuses.get(ch, True)
+            icon = "🟢 مفعّل (AI ON)" if is_on else "🔴 معطّل (AI OFF)"
+            lines.append(f"• {label}: {icon}")
+        lines.append("\nللتحكم:\n/ai <اسم_القناة> on|off\nمثال: /ai whatsapp off")
+        return "\n".join(lines)
+
     def _act_leads(self, args: str) -> str:
         try:
             limit = max(1, min(int(args.split()[0]) if args.strip() else 5, 15))
@@ -320,11 +400,11 @@ class TelegramOwnerConsole:
             limit = 5
         rows = self.runtime["db"].execute(
             """
-            SELECT l.contact_whatsapp wa_id, COALESCE(l.name,'') name,
+            SELECT l.contact_whatsapp contact_id, COALESCE(l.name,'') name,
                    COALESCE(c.mode,'AI_ACTIVE') mode,
                    MAX(m.created_at) last_at
               FROM leads l LEFT JOIN conversations c ON c.lead_id=l.lead_id
-             LEFT JOIN channel_messages m ON m.wa_id=l.contact_whatsapp
+             LEFT JOIN channel_messages m ON m.external_user_id=l.contact_whatsapp
              GROUP BY l.contact_whatsapp ORDER BY last_at DESC NULLS LAST LIMIT ?
             """,
             (limit,),
@@ -336,7 +416,7 @@ class TelegramOwnerConsole:
         out = ["👥 آخر المحادثات:"]
         for r in rows:
             out.append(f"• {icon.get(r['mode'], '❔')} {r['name'] or 'عميل'}"
-                       f" — {r['wa_id']}"
+                       f" — {r['contact_id']}"
                        f"{(' · ' + r['last_at'][:16]) if r['last_at'] else ''}")
         return "\n".join(out)
 
@@ -344,13 +424,13 @@ class TelegramOwnerConsole:
     def _business_context(cls) -> str:
         return business_context()
 
-    def _customer_language(self, wa_id: str) -> str:
+    def _customer_language(self, contact_id: str) -> str:
         """Language for prompts — from the customer's OWN recent messages,
         falling back to country prefix."""
         try:
             rows = self.runtime["db"].execute(
-                "SELECT body FROM channel_messages WHERE wa_id=? AND direction='in'"
-                " AND body != '' ORDER BY id DESC LIMIT 5", (wa_id,)).fetchall()
+                "SELECT body FROM channel_messages WHERE external_user_id=? AND direction='in'"
+                " AND body != '' ORDER BY id DESC LIMIT 5", (contact_id,)).fetchall()
             from ..channels.language import LanguageDetector
             det = LanguageDetector()
             votes = {}
@@ -384,7 +464,7 @@ class TelegramOwnerConsole:
 
     def _by_suffix(self, digits: str):
         rows = self.runtime["db"].execute(
-            "SELECT l.contact_whatsapp AS wa_id, COALESCE(l.name,'') AS name"
+            "SELECT l.contact_whatsapp AS contact_id, COALESCE(l.name,'') AS name"
             " FROM leads l WHERE l.contact_whatsapp LIKE ?"
             " ORDER BY l.contact_whatsapp LIMIT 8",
             ("%" + digits,),
@@ -393,7 +473,7 @@ class TelegramOwnerConsole:
 
     def _by_name(self, name: str):
         rows = self.runtime["db"].execute(
-            "SELECT contact_whatsapp AS wa_id, COALESCE(name,'') AS name"
+            "SELECT contact_whatsapp AS contact_id, COALESCE(name,'') AS name"
             " FROM leads WHERE name LIKE ? ORDER BY contact_whatsapp LIMIT 6",
             ("%" + name + "%",),
         ).fetchall()
@@ -403,9 +483,9 @@ class TelegramOwnerConsole:
         if not rows:
             return None, f"لا يوجد عميل {desc}. جرّب /leads لعرض المحادثات."
         if len(rows) > 1:
-            lst = (NL).join(f"• {r['name'] or 'عميل'} — +{r['wa_id']}" for r in rows)
+            lst = (NL).join(f"• {r['name'] or 'عميل'} — +{r['contact_id']}" for r in rows)
             return None, f"وجدت أكثر من عميل {desc}، حدّد أيهم:" + NL + lst
-        return rows[0]["wa_id"], None
+        return rows[0]["contact_id"], None
 
     def _resolve_number(self, raw: str):
         """Full number -> digits. Short/partial -> search saved leads by suffix.
@@ -416,19 +496,19 @@ class TelegramOwnerConsole:
         if len(digits) >= 8:
             return digits, None
         rows = self.runtime["db"].execute(
-            "SELECT DISTINCT l.contact_whatsapp AS wa_id,"
+            "SELECT DISTINCT l.contact_whatsapp AS contact_id,"
             " COALESCE(l.name,'') AS name"
             " FROM leads l WHERE l.contact_whatsapp LIKE ? ORDER BY l.contact_whatsapp LIMIT 8",
             ("%" + digits,),
         ).fetchall()
         # LIKE مع لاحقة: نرشح يدوياً على الانتهاء
-        rows = [r for r in rows if r["wa_id"].endswith(digits)]
+        rows = [r for r in rows if r["contact_id"].endswith(digits)]
         if not rows:
             return None, f"لا يوجد عميل رقمه ينتهي بـ {digits}. جرّب /leads لعرض المحادثات."
         if len(rows) > 1:
-            lst = "\n".join(f"• {r['name'] or 'عميل'} — +{r['wa_id']}" for r in rows)
+            lst = "\n".join(f"• {r['name'] or 'عميل'} — +{r['contact_id']}" for r in rows)
             return None, f"وجدت أكثر من رقم ينتهي بـ {digits}، حدّد أيهم:\n{lst}"
-        return rows[0]["wa_id"], None
+        return rows[0]["contact_id"], None
 
     def _find_or_create(self, number: str, name: str | None):
         crm = self.runtime["coordinator"].crm

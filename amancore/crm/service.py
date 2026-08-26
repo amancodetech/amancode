@@ -83,17 +83,71 @@ class CRMService:
             params += [website, website]
         return [dict(r) for r in self.db.execute(sql, tuple(params)).fetchall()]
 
-    def find_lead_by_whatsapp(self, wa_id: str) -> dict | None:
+    # ---- Channel-neutral identity resolution ----------------------------
+    def find_lead_by_identity(self, channel: str, external_user_id: str) -> dict | None:
+        """Canonical lookup: platform_identities → leads (exact match)."""
         row = self.db.execute(
-            "SELECT * FROM leads WHERE contact_whatsapp = ? ORDER BY created_at DESC LIMIT 1", (wa_id,)
+            "SELECT l.* FROM platform_identities i"
+            " JOIN leads l ON l.lead_id = i.lead_id"
+            " WHERE i.channel = ? AND i.external_user_id = ?"
+            " ORDER BY l.created_at DESC LIMIT 1",
+            ((channel or "").lower(), external_user_id),
         ).fetchone()
         return _row(row)
 
+    def add_lead_identity(self, lead_id: str, channel: str, external_user_id: str,
+                          external_username: str | None = None,
+                          is_primary: bool = False) -> str | None:
+        """Attach a channel identity to a lead. Idempotent; returns identity_id
+        (existing one on conflict). Never merges leads automatically."""
+        if not (external_user_id or "").strip():
+            return None
+        now = utcnow()
+        existing = self.db.execute(
+            "SELECT identity_id, lead_id FROM platform_identities"
+            " WHERE channel = ? AND external_user_id = ?",
+            ((channel or "").lower(), external_user_id),
+        ).fetchone()
+        if existing is not None:
+            return existing["identity_id"] if existing["lead_id"] == lead_id else None
+        identity_id = new_id()
+        self.db.execute(
+            "INSERT INTO platform_identities "
+            "(identity_id, lead_id, channel, external_user_id, external_username,"
+            " is_primary, verified, created_at, updated_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)",
+            (identity_id, lead_id, (channel or "").lower(), external_user_id,
+             external_username, 1 if is_primary else 0, now, now),
+        )
+        self.db.commit()
+        return identity_id
+
+    def find_lead_by_whatsapp(self, wa_id: str) -> dict | None:
+        """LEGACY bridge — delegates to the generic resolver and falls back to
+        the historical contact_whatsapp column (pre-identity leads), backfilling
+        an identity row so the canonical path owns all future lookups."""
+        lead = self.find_lead_by_identity("whatsapp", wa_id)
+        if lead is not None:
+            return lead
+        row = self.db.execute(
+            "SELECT * FROM leads WHERE contact_whatsapp = ? ORDER BY created_at DESC LIMIT 1",
+            (wa_id,),
+        ).fetchone()
+        legacy = _row(row)
+        if legacy is not None:
+            try:
+                self.add_lead_identity(legacy["lead_id"], "whatsapp", wa_id,
+                                       external_username=legacy.get("name"), is_primary=True)
+            except Exception:  # noqa: BLE001 — backfill must never break callers
+                pass
+        return legacy
+
     def delete_test_lead(self, wa_id: str) -> None:
-        """Remove a TEST lead + conversations (smoke tests only — never real leads)."""
+        """Remove a TEST lead + conversations + identities (smoke tests only)."""
         lead = self.find_lead_by_whatsapp(wa_id)
         if lead is None:
             return
+        self.db.execute("DELETE FROM platform_identities WHERE lead_id = ?", (lead["lead_id"],))
         self.db.execute("DELETE FROM conversations WHERE lead_id = ?", (lead["lead_id"],))
         self.db.execute("DELETE FROM leads WHERE lead_id = ?", (lead["lead_id"],))
         self.db.commit()

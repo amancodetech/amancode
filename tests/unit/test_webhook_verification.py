@@ -50,7 +50,7 @@ class WhatsAppAdapterTest(unittest.TestCase):
         events = self.adapter.receive_webhook(self._webhook())
         self.assertEqual(len(events), 1)
         ev = events[0]
-        self.assertEqual(ev.event_type, "whatsapp.message.received")
+        self.assertEqual(ev.event_type, "message.received")  # canonical vocab
         self.assertEqual(ev.channel, "whatsapp")
         self.assertEqual(ev.actor_id, "551199999")
         self.assertEqual(ev.payload["text"], "مرحبا")

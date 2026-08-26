@@ -49,7 +49,7 @@ def sanitize_value(text: str) -> str:
     return "" if deny.search(t) else t
 
 
-def record_learning(wa_id: str, customer_msg: str, ai_reply: str) -> dict | None:
+def record_learning(contact_id: str, customer_msg: str, ai_reply: str) -> dict | None:
     """Extract one lesson from an exchange; append to journal. Never raises."""
     try:
         if not customer_msg.strip() or not ai_reply.strip():
@@ -76,7 +76,7 @@ def record_learning(wa_id: str, customer_msg: str, ai_reply: str) -> dict | None
         value = sanitize_value(str(parsed.get("value", "")))
         lesson = {"category": category, "value": value,
                   "source": "customer_message", "confidence": 0.6,
-                  "ts": utc_iso(), "wa_id": wa_id}
+                  "ts": utc_iso(), "contact_id": contact_id}
         _JOURNAL.parent.mkdir(parents=True, exist_ok=True)
         with _lock:
             with open(_JOURNAL, "a", encoding="utf-8") as fh:

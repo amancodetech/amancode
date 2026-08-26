@@ -188,7 +188,7 @@ class WhatsAppAdapter(ChannelAdapter):
             r = msg.get("reaction", {})
             return CanonicalEvent(
                 event_id=new_id(),
-                event_type="whatsapp.message.reaction",
+                event_type="message.reaction",
                 timestamp=utcnow(),
                 source="whatsapp",
                 channel="whatsapp",
@@ -197,8 +197,8 @@ class WhatsAppAdapter(ChannelAdapter):
                 idempotency_key=f"wa-react:{msg_id}",
                 risk_level="low",
                 payload={
-                    "wa_id": wa_id,
-                    "message_id": r.get("message_id", ""),
+                    "external_user_id": wa_id,
+                    "target_external_message_id": r.get("message_id", ""),
                     "emoji": r.get("emoji", ""),
                 },
                 metadata={"provider_message_id": msg_id},
@@ -210,7 +210,7 @@ class WhatsAppAdapter(ChannelAdapter):
             text = msg.get(msg_type, {}).get("caption", "") or ""
         return CanonicalEvent(
             event_id=new_id(),
-            event_type="whatsapp.message.received",
+            event_type="message.received",
             timestamp=utcnow(),
             source="whatsapp",
             channel="whatsapp",
@@ -219,12 +219,12 @@ class WhatsAppAdapter(ChannelAdapter):
             idempotency_key=f"wa:{msg_id}",
             risk_level="low",
             payload={
-                "wa_id": wa_id,
+                "external_user_id": wa_id,
                 "name": contacts.get(wa_id, ""),
                 "message_type": msg_type,
                 "text": text,
                 "timestamp": msg.get("timestamp"),
-                "quoted_wamid": (msg.get("context") or {}).get("id", ""),
+                "reply_to_external_message_id": (msg.get("context") or {}).get("id", "") or None,
             },
             metadata={"provider_message_id": msg_id},
         )
@@ -233,7 +233,7 @@ class WhatsAppAdapter(ChannelAdapter):
         stype = status.get("status", "delivered")
         return CanonicalEvent(
             event_id=new_id(),
-            event_type=f"whatsapp.message.{stype}",
+            event_type=f"message.{stype}",
             timestamp=utcnow(),
             source="whatsapp",
             channel="whatsapp",
@@ -241,8 +241,34 @@ class WhatsAppAdapter(ChannelAdapter):
             actor_id=status.get("recipient_id"),
             idempotency_key=f"wa-status:{status.get('id', new_id())}",
             risk_level="low",
-            payload={"status": stype, "message_id": status.get("id")},
+            payload={
+                "status": stype,
+                "external_message_id": status.get("id"),
+                "recipient_external_user_id": status.get("recipient_id"),
+            },
         )
+
+    # ---- contract surface ----------------------------------------------
+    def capabilities(self):
+        from .canonical import ChannelCapabilities
+
+        return ChannelCapabilities(
+            text=True, image=True, audio=True, video=True, document=True,
+            sticker=True, template=True, reaction=True, read_receipt=True,
+            reply_context=True,
+        )
+
+    def normalize_recipient(self, raw) -> str:
+        from .wa_errors import normalize_e164_digits
+
+        return normalize_e164_digits(str(raw or ""))
+
+    def classify_error(self, exc: Exception) -> tuple[str | None, int | None]:
+        from .wa_errors import WhatsAppSendError
+
+        if isinstance(exc, WhatsAppSendError):
+            return exc.category, exc.retry_after_seconds
+        return None, None
 
     # ---- send ---------------------------------------------------------
     def send(self, recipient: str, message_type: str, payload) -> dict:

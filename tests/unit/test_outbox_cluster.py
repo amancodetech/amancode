@@ -33,29 +33,29 @@ class ClusterHarness(unittest.TestCase):
 class Out203InboundIdempotency(ClusterHarness):
     def test_unique_index_rejects_duplicate_wamid(self):
         self.db.execute(
-            "INSERT INTO channel_messages (direction, wa_id, wa_message_id, body, status, created_at)"
+            "INSERT INTO channel_messages (direction, external_user_id, external_message_id, body, status, created_at)"
             " VALUES ('in', 'W1', 'wamid-X', 'hello', '', datetime('now'))"
         )
         self.db.commit()
         with self.assertRaises(Exception):
             self.db.execute(
-                "INSERT INTO channel_messages (direction, wa_id, wa_message_id, body, status, created_at)"
+                "INSERT INTO channel_messages (direction, external_user_id, external_message_id, body, status, created_at)"
                 " VALUES ('in', 'W1', 'wamid-X', 'hello AGAIN', '', datetime('now'))"
             )
 
     def test_dedupe_keeps_original_then_index_applies(self):
-        self.db.execute("DROP INDEX IF EXISTS uq_channel_messages_wamid")
+        self.db.execute("DROP INDEX IF EXISTS uq_channel_messages_external")
         for body in ("first", "dup", "dup2"):
             self.db.execute(
-                "INSERT INTO channel_messages (direction, wa_id, wa_message_id, body, status, created_at)"
+                "INSERT INTO channel_messages (direction, external_user_id, external_message_id, body, status, created_at)"
                 " VALUES ('in', 'W1', 'wamid-D', ?, '', datetime('now'))", (body,))
         self.db.commit()
         ensure_unique_indexes(self.db)   # legacy DB: clean + create without error
         n = self.db.execute(
-            "SELECT COUNT(*) c FROM channel_messages WHERE wa_message_id='wamid-D'"
+            "SELECT COUNT(*) c FROM channel_messages WHERE external_message_id='wamid-D'"
         ).fetchone()["c"]
         body = self.db.execute(
-            "SELECT body FROM channel_messages WHERE wa_message_id='wamid-D'"
+            "SELECT body FROM channel_messages WHERE external_message_id='wamid-D'"
         ).fetchone()["body"]
         self.assertEqual(n, 1)
         self.assertEqual(body, "first")  # lowest rowid survives
@@ -63,7 +63,7 @@ class Out203InboundIdempotency(ClusterHarness):
     def test_null_wamid_rows_unlimited(self):
         for i in range(3):
             self.db.execute(
-                "INSERT INTO channel_messages (direction, wa_id, wa_message_id, body, status, created_at)"
+                "INSERT INTO channel_messages (direction, external_user_id, external_message_id, body, status, created_at)"
                 " VALUES ('in', 'W1', NULL, ?, '', datetime('now'))", (f"m{i}",))
         self.db.commit()
         ensure_unique_indexes(self.db)

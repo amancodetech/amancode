@@ -7,6 +7,7 @@ sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "tests"))
 from tests._db import fresh_db, wipe  # noqa: E402
 from amancore.crm.service import CRMService  # noqa: E402
 from amancore.channels.coordinator import MessageCoordinator  # noqa: E402
+from amancore.channels.canonical import InboundMessage  # noqa: E402
 
 
 class ImpliedConsent(unittest.TestCase):
@@ -16,9 +17,11 @@ class ImpliedConsent(unittest.TestCase):
         coord.crm = CRMService(self.db)
         coord.outbox = MagicMock(); coord.worker = MagicMock()
         coord.worker.drain.return_value = []
-        coord.whatsapp = MagicMock()
-        coord.whatsapp.config.get.return_value = False
-        coord.whatsapp.receive_webhook.return_value = []
+        wa = MagicMock()
+        wa.config.get.return_value = False
+        wa.receive_webhook.return_value = []
+        coord.adapters = {"whatsapp": wa}   # canonical adapter registry
+        coord.whatsapp = wa
         coord.handover = MagicMock(); coord.handover.can_send_ai.return_value = False
         coord.channel_policy = MagicMock()
         coord.channel_policy.evaluate_send.return_value = "allow"
@@ -35,19 +38,23 @@ class ImpliedConsent(unittest.TestCase):
     def tearDown(self):
         self.db.close()
 
+    @staticmethod
+    def _msg(ext_id, text):
+        return InboundMessage(channel="whatsapp", external_message_id=ext_id,
+                              external_user_id=ext_id, text=text)
+
     def test_first_inbound_records_consent_once(self):
-        self.coord._process_inbound(
-            {"wa_id": "905555000111", "message_id": "w1", "text": "hi"})
+        self.coord._process_inbound(self._msg("905555000111", "hi"))
         row = self.db.execute(
-            "SELECT consent_at, consent_source FROM leads"
-            " WHERE contact_whatsapp='905555000111'").fetchone()
+            "SELECT l.consent_at AS consent_at, l.consent_source AS consent_source"
+            " FROM leads l JOIN platform_identities i ON i.lead_id = l.lead_id"
+            " WHERE i.channel='whatsapp' AND i.external_user_id='905555000111'").fetchone()
         self.assertIsNotNone(row["consent_at"])
         self.assertEqual(row["consent_source"], "inbound_first_message")
 
     def test_repeat_message_no_duplicate_lead(self):
         for mid in ("w1", "w2"):
-            self.coord._process_inbound(
-                {"wa_id": "905555000111", "message_id": mid, "text": "hi"})
+            self.coord._process_inbound(self._msg("905555000111", "hi"))
         n = self.db.execute("SELECT COUNT(*) c FROM leads").fetchone()[0]
         self.assertEqual(n, 1)
 

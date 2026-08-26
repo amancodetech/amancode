@@ -146,7 +146,7 @@ class FollowupsGated(Harness):
         self.assertEqual(res["skipped_no_consent"], 1)
         tag = self.db.execute(
             "SELECT initiation FROM message_outbox WHERE idempotency_key"
-            " LIKE 'followup:L9c:%'").fetchone()["initiation"]
+            " LIKE 'followup:whatsapp:L9c:%'").fetchone()["initiation"]
         self.assertEqual(tag, "yes")
 
 

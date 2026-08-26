@@ -16,13 +16,13 @@ from amancore.storage.db import open_database  # noqa: E402
 SCHEMA = ROOT / "amancore" / "storage" / "schema.sql"
 
 HOT_INDEXES = {
-    "idx_channel_messages_wa": "channel_messages",
+    "idx_channel_messages_ext": "channel_messages",
     "idx_channel_messages_dir": "channel_messages",
     "idx_channel_messages_lead": "channel_messages",
     "idx_leads_whatsapp": "leads",
     "idx_conversations_last_msg": "conversations",
     "idx_outbox_ready": "message_outbox",
-    "uq_channel_messages_wamid": "channel_messages",
+    "uq_channel_messages_external": "channel_messages",
 }
 
 
@@ -53,7 +53,7 @@ class FreshDeployParity(unittest.TestCase):
             plans = " ".join(
                 r["detail"] for r in db.execute(
                     "EXPLAIN QUERY PLAN SELECT * FROM channel_messages "
-                    "WHERE wa_id='x' AND direction='in'"
+                    "WHERE external_user_id='x' AND direction='in'"
                 ).fetchall()
             ) + " " + " ".join(
                 r["detail"] for r in db.execute(

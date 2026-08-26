@@ -140,6 +140,7 @@ class PromptPlacement(unittest.TestCase):
             try:
                 coord = Stub()
                 coord._draft_reply = MessageCoordinator._draft_reply.__get__(coord)
+                coord._complete_draft = MessageCoordinator._complete_draft.__get__(coord)
                 coord._localize = lambda text, lang: text
                 coord._audit = lambda *a, **k: None
                 coord._draft_reply({"lead_id": "L1",

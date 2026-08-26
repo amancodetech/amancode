@@ -157,15 +157,14 @@ _COLUMN_MIGRATIONS = [
     ("conversations", "next_action", "TEXT"),
     ("conversations", "next_followup_at", "TEXT"),
     ("conversations", "mode", "TEXT NOT NULL DEFAULT 'AI_ACTIVE'"),
+    ("conversations", "external_thread_id", "TEXT"),
     ("opportunities", "reason", "TEXT"),
     ("channel_messages", "media_kind", "TEXT"),
     ("channel_messages", "media_ref", "TEXT"),
     ("channel_messages", "outbox_message_id", "TEXT"),
-    ("channel_messages", "wa_message_id", "TEXT"),
     ("channel_messages", "lead_id", "TEXT"),
     ("channel_messages", "hidden", "INTEGER NOT NULL DEFAULT 0"),
     ("channel_messages", "reaction", "TEXT"),
-    ("channel_messages", "quoted_wamid", "TEXT"),
     ("message_outbox", "claimed_at", "TEXT"),      # OUT-202 atomic claims
     ("message_outbox", "claim_token", "TEXT"),
     ("leads", "consent_at", "TEXT"),               # compliance kit: opt-in
@@ -175,31 +174,95 @@ _COLUMN_MIGRATIONS = [
 ]                                                  # never in status (C3 closure)
 
 
+def ensure_channel_neutral(db: Database) -> None:
+    """One-time channel decoupling migration (idempotent, crash-safe).
+
+    Renames the last WhatsApp-shaped columns of channel_messages to the
+    canonical vocabulary, backfills platform_identities from the legacy
+    leads.contact_whatsapp column, and CONVERGES partially-migrated tables
+    (a prior interrupted rename can leave source+target both present —
+    values are merged COALESCE-style, then the legacy column is dropped).
+
+    SQLite RENAME keeps data intact; fresh databases created from the new
+    schema.sql skip via PRAGMA checks (fresh == upgraded convergence).
+    """
+    cols = {r["name"] for r in db.execute("PRAGMA table_info(channel_messages)").fetchall()}
+    if not cols:
+        return
+    pairs = [
+        ("wa_id", "external_user_id"),
+        ("wa_message_id", "external_message_id"),
+        ("quoted_wamid", "quoted_external_message_id"),
+    ]
+    # legacy indexes first — they block column drops/renames otherwise
+    db.execute("DROP INDEX IF EXISTS uq_channel_messages_wamid")
+    db.execute("DROP INDEX IF EXISTS idx_channel_messages_wa")
+    for old, new in pairs:
+        if old not in cols:
+            continue
+        if new in cols:
+            # partial-migration convergence: copy, then drop the legacy column
+            db.execute(
+                f"UPDATE channel_messages SET {new} = {new} "
+                f"WHERE {new} IS NULL AND {old} IS NOT NULL")
+            try:
+                db.execute(f"ALTER TABLE channel_messages DROP COLUMN {old}")
+            except Exception:  # noqa: BLE001 — very old SQLite without DROP COLUMN
+                log.warning("channel_neutral: could not drop %s (old sqlite)", old)
+        else:
+            db.execute(f"ALTER TABLE channel_messages RENAME COLUMN {old} TO {new}")
+        cols.discard(old)
+        cols.add(new)
+    # canonical hot-path + identity indexes (idempotent)
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_channel_messages_ext "
+        "ON channel_messages(external_user_id)")
+    db.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_channel_messages_external "
+        "ON channel_messages(channel, external_message_id) "
+        "WHERE external_message_id IS NOT NULL")
+    # identity backfill: every legacy WhatsApp contact becomes an identity row
+    idt = {r["name"] for r in db.execute("PRAGMA table_info(platform_identities)").fetchall()}
+    if idt:
+        db.execute(
+            "INSERT INTO platform_identities "
+            " (identity_id, lead_id, channel, external_user_id, is_primary, verified,"
+            "  created_at, updated_at)"
+            " SELECT lower(hex(randomblob(16))), l.lead_id, 'whatsapp',"
+            "        TRIM(l.contact_whatsapp), 1, 0, l.created_at, l.updated_at"
+            " FROM leads l"
+            " WHERE l.contact_whatsapp IS NOT NULL AND TRIM(l.contact_whatsapp) != ''"
+            " ON CONFLICT(channel, external_user_id) DO NOTHING")
+    db.commit()
+
+
 def ensure_unique_indexes(db: Database) -> None:
-    """OUT-203 (C2): enforce wa_message_id uniqueness on existing databases.
+    """OUT-203 (C2): enforce external_message_id uniqueness on existing databases.
 
     Removes duplicate rows first (keeps lowest rowid = original delivery),
     then creates the partial unique index. Safe to run repeatedly.
     """
     dupes = db.execute(
-        "SELECT wa_message_id FROM channel_messages WHERE wa_message_id IS NOT NULL "
-        "GROUP BY wa_message_id HAVING COUNT(*) > 1"
+        "SELECT external_message_id FROM channel_messages WHERE external_message_id IS NOT NULL "
+        "GROUP BY external_message_id HAVING COUNT(*) > 1"
     ).fetchall()
     for r in dupes:
         cur = db.execute(
-            "DELETE FROM channel_messages WHERE wa_message_id = ? AND rowid NOT IN "
-            "(SELECT MIN(rowid) FROM channel_messages WHERE wa_message_id = ?)",
-            (r["wa_message_id"], r["wa_message_id"]),
+            "DELETE FROM channel_messages WHERE external_message_id = ? AND rowid NOT IN "
+            "(SELECT MIN(rowid) FROM channel_messages WHERE external_message_id = ?)",
+            (r["external_message_id"], r["external_message_id"]),
         )
         db.commit()
         import logging
 
         logging.getLogger("amancore.storage").warning(
-            "out203.dedupe wamid=%s removed=%d", r["wa_message_id"], cur.rowcount
+            "out203.dedupe external_message_id=%s removed=%d",
+            r["external_message_id"], cur.rowcount
         )
     db.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS uq_channel_messages_wamid "
-        "ON channel_messages (wa_message_id) WHERE wa_message_id IS NOT NULL"
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_channel_messages_external "
+        "ON channel_messages (channel, external_message_id) "
+        "WHERE external_message_id IS NOT NULL"
     )
     # REAUD CRITICAL fix: the outbound hard gate — duplicate business sends
     # collapse to one row at the database level, not just in app logic.
@@ -248,6 +311,7 @@ def open_database(path: Path, schema_file: Path | None = None) -> Database:
         tables_sql, index_sql = _split_schema(schema_file.read_text(encoding="utf-8"))
         db.apply_schema(tables_sql)
         ensure_columns(db)
+        ensure_channel_neutral(db)
         ensure_unique_indexes(db)
         if index_sql.strip():
             db.apply_schema(index_sql)

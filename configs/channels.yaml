@@ -8,9 +8,7 @@ whatsapp:
   outbound_per_minute: 10
   auto_reply_low_risk: true
   template_policy: approved_only
-  signature_required: true
-
-website:
+  signature_required: true   # SEC-RESTORE 2026-08-26: reverted accidental disable — public endpoint MUST reject unsigned webhooks
   intake_rate_per_ip_minute: 5
   intake_rate_per_email_day: 3
   max_payload_bytes: 8192

@@ -62,6 +62,11 @@ class RetryPolicyIntegration(unittest.TestCase):
             def send(self, *a, **k):
                 raise exc_to_raise
 
+            def classify_error(self, exc):
+                # contract surface — mirrors WhatsAppAdapter behavior
+                return (getattr(exc, "category", None),
+                        getattr(exc, "retry_after_seconds", None))
+
         alert_calls = []
         w = OutboxWorker(MessageOutbox(self.db, max_attempts=3),
                          {"whatsapp": Adapter()}, P(), claim_mode="atomic",

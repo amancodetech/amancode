@@ -21,11 +21,12 @@ EVENT_TYPES = {
     "lead.discovered", "lead.enriched", "lead.duplicate_detected", "lead.rejected",
     "lead.stage_changed",
     "conversation.received", "conversation.updated",
-    "whatsapp.message.received", "whatsapp.message.sent", "whatsapp.message.failed",
-    "whatsapp.message.delivered", "whatsapp.message.read",
-    "whatsapp.webhook.verified", "whatsapp.webhook.failed",
+    # Channel-neutral message vocabulary — the channel rides in event.channel
+    "message.received", "message.sent", "message.failed",
+    "message.delivered", "message.read", "message.reaction",
+    "webhook.verified", "webhook.failed",
     "website.lead.received",
-    "optout.recorded", "handover.mode_changed",
+    "optout.recorded", "handover.mode_changed", "handover.channel_ai_toggled",
     "sales.conversation_started", "sales.discovery_updated", "sales.qualification_updated",
     "sales.handoff_requested",
     "objection.detected", "offer.recommended",
@@ -113,6 +114,36 @@ class EventDispatcher:
 
     def dispatch(self, event: CanonicalEvent) -> None:
         self.publish(event)
+
+
+def wire_event_persistence(dispatcher: EventDispatcher, db) -> None:
+    """Make the events table REAL (it was decorative/empty before this).
+
+    Subscribes one durable writer per known event type. Handler errors are
+    isolated by the dispatcher — persistence can never break a business flow.
+    """
+    def _persist(event: CanonicalEvent) -> None:
+        try:
+            db.execute(
+                "INSERT OR REPLACE INTO events "
+                "(event_id, event_type, source, channel, actor_type, actor_id, timestamp,"
+                " correlation_id, causation_id, idempotency_key, risk_level, payload, metadata)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    event.event_id, event.event_type, event.source, event.channel,
+                    event.actor_type, event.actor_id, event.timestamp,
+                    event.correlation_id, event.causation_id, event.idempotency_key,
+                    event.risk_level,
+                    json.dumps(event.payload, ensure_ascii=False),
+                    json.dumps(event.metadata, ensure_ascii=False),
+                ),
+            )
+            db.commit()
+        except Exception as exc:  # noqa: BLE001 — observability never blocks
+            log.error("event.persist failed type=%s err=%s", event.event_type, exc)
+
+    for event_type in EVENT_TYPES:
+        dispatcher.subscribe(event_type, _persist)
 
 
 class IdempotencyStore:
