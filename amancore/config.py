@@ -94,7 +94,9 @@ def load_config(root: Path, mutate_environ: bool = True) -> Config:
         root=root,
         app=_load_yaml(root / "configs" / "app.yaml"),
         models=_load_yaml(root / "configs" / "models.yaml"),
-        pricing=_load_yaml(root / "configs" / "pricing.yaml", optional=True),
+        # pricing.yaml was removed from the source tree (Brain is the single
+        # source of truth); keep an empty shim so legacy readers stay inert.
+        pricing={},
         lead_scoring=_load_yaml(root / "configs" / "lead_scoring.yaml"),
         retention=_load_yaml(root / "configs" / "retention.yaml"),
         channels=_load_yaml(root / "configs" / "channels.yaml"),

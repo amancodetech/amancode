@@ -1,0 +1,215 @@
+# Service Details Knowledge Pack (design §11) — extension meta-pack.
+# Extends the Business Brain SERVICES catalog (not one industry profile) with
+# consultative service details for deterministic requirement elicitation.
+# Brain-owned truth is never restated; no figures live here — the pack points
+# at price_bands_public by NAME only.
+
+id: service_details
+brain_profile_id: service_details
+version: 1.0.0
+last_verified: 2026-08-27
+
+sources:
+  - name: "Business Brain v1 services/offers + conversation_policy service_categories"
+    organization: "AmanCore"
+    url: ""
+    version: "v1"
+    authority: methodology
+    confidence: high
+    extraction_date: 2026-08-27
+    last_verified: 2026-08-27
+    license: "internal-brain"
+
+digital_maturity:
+  value: medium
+  note: "Not applicable at service level; kept to satisfy the industry-pack envelope shape."
+  source: { ref: business_brain_v1 }
+
+common_processes: []
+common_pain_points: []
+decision_roles: {}
+typical_integrations: []
+isic_refs: []
+
+service_details:
+  version: 1.0.0
+  statement_kind_note: >
+    Every derived statement below is consultative guidance, kind
+    RECOMMENDATION only. The Brain-reserved statement kinds (facts, tier refs)
+    may never be added to this layer.
+  services:
+
+    - service_id: business_website_system
+      offer_id: website_system
+      band_category_hint: website
+      what:
+        ar: "موقع أعمال متكامل يعرض نشاطك وخدماتك ويستقبل طلبات العملاء"
+        en: "A complete business presence site that presents your activity and takes in customer requests"
+      for_whom:
+        ar: "منشآت صغيرة ومتوسطة تحتاج حضوراً رقمياً واضحاً يحوّل الزائر إلى عميل"
+        en: "SMEs that need a clear online presence converting visitors into customers"
+      problem_solved:
+        ar: "شتّت المعلومات حول النشاط وضعف قنوات الطلب والثقة الرقمية"
+        en: "Scattered business info, weak request channels and low digital trust"
+      when_to_recommend:
+        - "عميل يريد موقعاً تعريفياً أو وجوداً رقمياً أساسياً"
+        - "أول مشروع رقمي للنشاط"
+      when_NOT_to_recommend:
+        - "عمليات إدارة داخلية معقدة أو أتمتة تشغيل واسعة"
+      required_info_to_estimate:
+        - { ar: "كم عدد الصفحات أو الأقسام الأساسية التي تحتاجها؟", en: "How many pages or core sections do you need?" }
+      typical_scope: ["صفحات تعريفية", "نموذج تواصل", "محتوى أساسي"]
+      common_integrations: ["خرائط", "نماذج تواصل", "روابط تواصل اجتماعي"]
+      compatible_addons: [care_plan]
+      related_services: [custom_web_application, ecommerce_store]
+      statement_kind: RECOMMENDATION
+      provenance:
+        source_ref: business_brain_v1.services[business_website_system].offer_id+name
+        confidence: medium
+        last_verified: 2026-08-27
+
+    - service_id: custom_web_application
+      offer_id: web_app
+      band_category_hint: website
+      what:
+        ar: "تطبيق ويب مخصص على مقاس سير عملك بدل الأدوات الجاهزة"
+        en: "A tailored web application shaped around your workflow instead of off-the-shelf tools"
+      for_whom:
+        ar: "أنشطة لها عملية فريدة لا تغطيها المنصات الجاهزة"
+        en: "Businesses with a unique process not covered by ready platforms"
+      problem_solved:
+        ar: "حدود الأدوات العامة وإعادة الشغل اليدوي بين الأنظمة"
+        en: "Generic-tool limits and manual re-entry between systems"
+      when_to_recommend:
+        - "سير عمل خاص أو لوحة تحكم مخصصة أو بوابة عملاء"
+      when_NOT_to_recommend:
+        - "حاجة لموقع عرض بسيط فقط"
+      required_info_to_estimate:
+        - { ar: "ما العمليات اليومية التي تريدها داخل التطبيق بالضبط؟", en: "Which daily operations should the app handle exactly?" }
+      typical_scope: ["لوحة تحكم", "أدوار مستخدمين", "تقارير أساسية"]
+      common_integrations: ["الدفعات", "البريد", "جداول بيانات خارجية"]
+      compatible_addons: [care_plan]
+      related_services: [business_website_system, business_system_mini_erp]
+      statement_kind: RECOMMENDATION
+      provenance:
+        source_ref: business_brain_v1.services[custom_web_application].offer_id+name
+        confidence: medium
+        last_verified: 2026-08-27
+
+    - service_id: ecommerce_store
+      offer_id: ecommerce_store
+      band_category_hint: ecommerce
+      what:
+        ar: "متجر إلكتروني كامل من الكتالوج حتى الدفع والتوصيل"
+        en: "A full online store from catalog to checkout and delivery"
+      for_whom:
+        ar: "تجار وأصحاب منتجات يبيعون مباشرة للعملاء أونلاين"
+        en: "Merchants and product owners selling directly online"
+      problem_solved:
+        ar: "الاعتماد على قنوات بيع يدوية بلا دفع أو كتالوج منظم"
+        en: "Manual sales channels without organized checkout or catalog"
+      when_to_recommend:
+        - "بيع فعلي للعملاء النهائيين بحاجة سلة ودفع"
+      when_NOT_to_recommend:
+        - "موقع عرض فقط بلا بيع مباشر"
+      required_info_to_estimate:
+        - { ar: "كم عدد المنتجات تقريباً، وهل تحتاج دفعاً إلكترونياً منذ البداية؟", en: "Roughly how many products, and do you need online payments from day one?" }
+      typical_scope: ["كتالوج", "سلة ودفع", "إدارة طلبات"]
+      common_integrations: ["بوابات دفع", "شحن", "واتساب للأعمال"]
+      compatible_addons: [care_plan]
+      related_services: [business_website_system, custom_web_application]
+      statement_kind: RECOMMENDATION
+      provenance:
+        source_ref: business_brain_v1.services[ecommerce_store].offer_id+name
+        confidence: medium
+        last_verified: 2026-08-27
+
+    - service_id: mobile_app
+      offer_id: mobile_app
+      band_category_hint: mobile
+      what:
+        ar: "تطبيق جوال لعملائك أو فرقك بنشر للمتاجر"
+        en: "A mobile app for your customers or teams, published to stores"
+      for_whom:
+        ar: "أنشطة يعود فيها استخدام الجميع للتطبيق بشكل متكرر"
+        en: "Businesses where recurring daily use justifies an installed app"
+      problem_solved:
+        ar: "ضعف التفاعل المتكرر عبر الويب وحده"
+        en: "Limited recurring engagement through the web alone"
+      when_to_recommend:
+        - "استخدام يومي متكرر أو إشعارات أو عمل دون اتصال"
+      when_NOT_to_recommend:
+        - "حضور رقمي أو تجارة تُخدم أفضل عبر الموقع"
+      required_info_to_estimate:
+        - { ar: "هل التطبيق للعملاء أم للفريق، وما أهم ثلاث شاشات فيه؟", en: "Customer-facing or internal team app, and which three screens matter most?" }
+      typical_scope: ["شاشات رئيسية", "حساب مستخدم", "إشعارات أساسية"]
+      common_integrations: ["إشعارات فورية", "دفعات داخل التطبيق عند الحاجة"]
+      compatible_addons: [care_plan]
+      related_services: [business_website_system, ai_automation_suite]
+      statement_kind: RECOMMENDATION
+      provenance:
+        source_ref: business_brain_v1.services[mobile_app].offer_id+name
+        confidence: medium
+        last_verified: 2026-08-27
+
+    - service_id: business_system_mini_erp
+      offer_id: mini_erp
+      band_category_hint: business_system
+      what:
+        ar: "نظام إدارة مصغّر يجمع الفواتير والمخزون والعملاء في مكان واحد"
+        en: "A compact management system unifying invoicing, stock and customers"
+      for_whom:
+        ar: "منشآت مثقلة بالملفات والشيتات وتكرار الإدخال"
+        en: "Organizations weighed down by spreadsheets and duplicate data entry"
+      problem_solved:
+        ar: "تشظي البيانات وغياب رؤية موحدة للتشغيل"
+        en: "Fragmented records and no unified operating view"
+      when_to_recommend:
+        - "عمليات إدارة يومية مع تعدد المستخدمين والأدوار"
+      when_NOT_to_recommend:
+        - "حاجة تسويقية بسيطة أو موقع عرض"
+      required_info_to_estimate:
+        - { ar: "كم عدد الفروع أو المستخدمين، وما حجم العمليات التي تريد أتمتتها؟", en: "How many branches/users, and how large are the operations to automate?" }
+      typical_scope: ["فواتير ومخزون", "أدوار وصلاحيات", "تقارير"]
+      common_integrations: ["الفوترة", "CRM خفيف", "تصدير محاسبي"]
+      compatible_addons: [care_plan]
+      related_services: [custom_web_application, ai_automation_suite]
+      statement_kind: RECOMMENDATION
+      provenance:
+        source_ref: business_brain_v1.services[business_system_mini_erp].offer_id+name
+        confidence: medium
+        last_verified: 2026-08-27
+
+    - service_id: ai_automation_suite
+      offer_id: ai_automation
+      band_category_hint: automation
+      what:
+        ar: "أتمتة المهام المتكررة بتدفقات ذكية تربط أدواتك الحالية"
+        en: "Automation of repetitive tasks via smart flows connecting your current tools"
+      for_whom:
+        ar: "فرق تقضي وقتاً طويلاً في نسخ وتنسيق وتجهيز رسائل يدوية"
+        en: "Teams spending hours on copy-paste coordination and manual messaging"
+      problem_solved:
+        ar: "الشغل اليدوي المتكرر وبطء الاستجابة للعملاء"
+        en: "Repetitive manual work and slow customer response"
+      when_to_recommend:
+        - "مهام متكررة واضحة وفنية قابلة للتوصيل بين أدوات موجودة"
+      when_NOT_to_recommend:
+        - "قرارات استراتيجية تحتاج حكماً بشرياً"
+      required_info_to_estimate:
+        - { ar: "ما المهمة المتكررة الأولى التي تريد أتمتتها ومن أي أدوات تبدأ؟", en: "Which first repetitive task should we automate, starting from which tools?" }
+      typical_scope: ["دفقة واحدة أو اثنتان", "ربط أداتين", "مراقبة بسيطة"]
+      common_integrations: ["بريد", "جداول", "واتساب للأعمال", "أنظمة داخلية"]
+      compatible_addons: [care_plan]
+      related_services: [business_system_mini_erp, custom_web_application]
+      statement_kind: RECOMMENDATION
+      provenance:
+        source_ref: business_brain_v1.services[ai_automation_suite].offer_id+name
+        confidence: medium
+        last_verified: 2026-08-27
+
+price_reference_pointer:
+  note: >
+    Figures for every hint above live ONLY in Business Brain
+    price_bands_public; this layer never carries numbers, quotes or tiers.
+  source: { ref: business_brain_v1.price_bands_public }

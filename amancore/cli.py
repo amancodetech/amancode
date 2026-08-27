@@ -71,7 +71,6 @@ def _config_check(args) -> int:
     print(f"env          : {cfg.app.get('env')}")
     print(f"database_path: {cfg.database_path}")
     print(f"shadow_rate  : {cfg.shadow_rate}")
-    print(f"markets      : {list(cfg.pricing.get('market_multiplier', {}).keys())}")
     return 0
 
 

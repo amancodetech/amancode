@@ -150,5 +150,12 @@ class QualityGuard:
             if _NUM_RE.search(text or ""):
                 violations.append("scope_under_review_block:number")
 
+        # 10 — P1-1 §1.3: common brand misspelling in outbound = advisory
+        # only (republish phrasing); never a hard block.
+        for wrong in ("amancode",):
+            if wrong in lower:
+                advisories.append(f"brand_spelling_advisory:{wrong}")
+                break
+
         return {"allowed": not violations, "violations": violations,
                 "advisories": advisories}

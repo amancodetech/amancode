@@ -10,6 +10,7 @@ Channels are transport only: no sales logic, no pricing logic here.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 
@@ -24,12 +25,53 @@ from .handover import HandoverService
 
 from ..conversation.pricing_flow import QuoteFlow
 from ..conversation.quality_guard import QualityGuard
+from ..conversation.planner import _ESCALATION_KEYWORDS
 from ..pricing import registry
 from ..sales.conversation_memory import SCOPE_DELTA_MAP, detect_scope_delta
 
 log = get_logger("channels.coordinator")
 
 _SAFE_FALLBACK = "Thank you — our team will follow up with you shortly."
+
+# P1-1 §2.4 — deterministic deferral: acknowledge + ONE next step.
+# No time promises, no prices, no claims.
+_DEFERRAL_AR = ("وصلني طلبك وأتابعه معك. ما الخدمة التي تهمك؟")
+_DEFERRAL_EN = "Got your message — I'm on it with you. What service do you need?"
+
+# P1-1 §2.1 — deterministic identity disclosure (honest, never human).
+_IDENTITY_AR = ("أنا مساعد رقمي في AmanCore وأعمل مع فريق حقيقي يساندك؛ "
+                "ما الخدمة التي أُساعدك بها الآن؟")
+_IDENTITY_EN = ("I'm a digital assistant at AmanCore working alongside our "
+                "real team — what can we help you with right now?")
+
+# P1-1 §2.2 — deterministic escalation handoff text (team review, no
+# commitment verbs, no price). Used verbatim when the LLM is unavailable.
+_ESCALATION_TEXTS = {
+    "legal": ("هذا موضوع قانوني/تعاقدي نحيله إلى فريقنا المختص للمراجعة "
+              "بدقة، ولن أُصدر أي قرار أو التزام من جهتي هنا.",
+              "This is a legal/contractual matter — I'll route it to our "
+              "specialist team for careful review; no decision or commitment "
+              "from me here."),
+    "financial": ("هذا موضوع مالي نحيله إلى فريقنا المختص لدراسته وفق "
+                  "سياساتنا المعتمدة، ولن أقدم أي التزام من جهتي هنا.",
+                  "This is a financial matter for our specialist team to "
+                  "review per approved policy; no commitment from me here."),
+    "urgent": ("طلبك عاجل وسأرفعه فورًا لفريقنا ليتولاه مباشرة.",
+               "Your request is urgent — raising it to our team right away "
+               "to take it directly."),
+}
+
+# P1-1 §2.3 — Arabic T1 openers (MSA), selected by hash-seed of the inbound
+# message id inside the price branch itself (the price branch does NOT pass
+# through the planner). Deterministic and traceable; zero random noise.
+_T1_AR_OPENERS = (
+    "سؤال في محله!",
+    "بكل سرور أوضح لك هذا أولًا:",
+    "تفضل الصورة العامة عن النطاق:",
+    "خلني أعطيك فكرة صادقة من البداية:",
+    "هذه نقطة البداية المعلنة لدينا:",
+    "أهلًا بك؛ لنبدأ من الأساسيات:",
+)
 
 _OPT_OUT = re.compile(
     r"\b(stop|unsubscribe|don'?t message|not interested|quit|أوقف|لا ترسل|لا اريد|berhenti|jangan kirim|stop kirim)\b",
@@ -465,12 +507,57 @@ class MessageCoordinator:
     # EVERY inbound turn so a scope expansion is remembered even when the next
     # message is a price ask. A pending, unresolved scope-delta field blocks
     # any stale figure (safety bias: false positive OK, false negative never).
+    # P1-1 §4.1 — explicit withdrawal: a negated feature mention ("لا لا ما
+    # أبغى الحجز") must REMOVE the delta, not capture it. Detection is per
+    # field keyword with a negation cue in the same clause.
+    _WITHDRAW_CUES = re.compile(
+        r"(?:\b(?:no|not|cancel|drop|without)\b)|"
+        r"(?:^|\s)(?:ولا|ما|لا|بدون|إلغاء|الغاء)\s",
+        re.IGNORECASE,
+    )
+
+    def _withdrawn_fields(self, text: str) -> set:
+        out = set()
+        if not text:
+            return out
+        for field, kws in {
+            "booking": ("حجز", "booking"),
+            "payments": ("طلبات أونلاين", "دفع", "أونلاين", "payments",
+                         "online order", "payment"),
+            "integrations": ("ربط", "تكامل", "integration"),
+            "languages": ("لغة ثانية", "متعدد اللغات", "language"),
+            "member_areas": ("أعضاء", "عضوية", "member", "login area"),
+            "dynamic_content": ("معرض", "مدونة", "أخبار", "gallery",
+                                "blog", "news"),
+        }.items():
+            low = f" {text.lower()} "
+            for kw in kws:
+                idx = low.find(kw.lower())
+                if idx == -1:
+                    continue
+                # negation cue anywhere in the 14 chars BEFORE the keyword
+                window = low[max(0, idx - 15):idx]
+                if self._WITHDRAW_CUES.search(window) or \
+                        self._WITHDRAW_CUES.search(low[idx + len(kw):
+                                                       idx + len(kw) + 6]):
+                    out.add(field)
+                    break
+        return out
+
     def _update_scope_review(self, fresh: dict, msg: InboundMessage | None) -> None:
         wm = fresh.get("working_memory") or {}
         facts = fresh.get("facts") or {}
         pending = set(wm.get("scope_review_fields") or [])
         if msg:
             pending |= detect_scope_delta(msg.text)
+        withdrawn = self._withdrawn_fields(msg.text if msg else "")
+        for f in withdrawn:
+            pending.discard(f)
+            # force the fingerprint input OFF so the scope returns to its
+            # pre-signal state even if extraction had flagged it earlier.
+            facts[f] = False
+        if withdrawn:
+            fresh["facts"] = facts
         # a field is resolved once the fingerprint inputs actually carry it
         pending -= {f for f in pending if facts.get(f)}
         wm["scope_review_fields"] = sorted(pending)
@@ -496,6 +583,103 @@ class MessageCoordinator:
                             "Do you really want to add a gallery or news/blog?"),
     }
 
+    # P1-1 §3 — service_details knowledge feeding for band-less categories.
+    # Brain service ids -> detectable price categories (derived from Brain
+    # services/offers names against conversation_policy.service_categories).
+    _SERVICE_CATEGORY_MAP = {
+        "business_website_system": "website",
+        "custom_web_application": "website",
+        "ecommerce_store": "ecommerce",
+        "mobile_app": "mobile",
+        "business_system_mini_erp": "business_system",
+        "ai_automation_suite": "automation",
+    }
+    _svc_pack_cache: dict | None = None
+
+    def _knowledge_root(self):
+        """Resolve the versioned knowledge/ dir behind the live stack."""
+        p = getattr(getattr(self.conversation, "planner", None), "_root",
+                    None)
+        if p:
+            from pathlib import Path as _P
+
+            return _P(p)
+        return None
+
+    def _service_pack(self) -> dict:
+        if self._svc_pack_cache is not None:
+            return self._svc_pack_cache
+        pack: dict = {}
+        root = self._knowledge_root()
+        try:
+            import yaml
+
+            path = (root / "knowledge" / "packs"
+                    / "service_details.v1.yaml") if root else None
+            if path and path.exists():
+                pack = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except Exception:  # noqa: BLE001 — pack must never break pricing
+            pack = {}
+        self._svc_pack_cache = pack
+        return pack
+
+    def _pack_questions_for(self, category: str | None) -> str | None:
+        """Data-driven requirement question for a category, merged from the
+        service_details pack records mapped to it (file order)."""
+        if not category:
+            return None
+        details = (self._service_pack().get("service_details") or {})
+        svc_by_cat = {}
+        svc_list = details.get("services") or []
+        for rec in svc_list:
+            sid = rec.get("service_id")
+            cat = self._SERVICE_CATEGORY_MAP.get(sid)
+            if cat:
+                svc_by_cat.setdefault(cat, []).append(rec)
+        recs = svc_by_cat.get(category) or []
+        # Keep ONE question only — deterministic pick = first service record
+        # in file order, first required-info item.
+        first_req_ar = ""
+        first_req_en = ""
+        for r in recs:
+            req = r.get("required_info_to_estimate") or []
+            item = req[0] if isinstance(req, list) and req else {}
+            if not first_req_ar:
+                first_req_ar = (item.get("ar") or "") if isinstance(item, dict) \
+                    else str(item)
+            if not first_req_en:
+                first_req_en = (item.get("en") or "") if isinstance(item, dict) \
+                    else str(item)
+        if not (first_req_ar or first_req_en):
+            return None
+        return {"ar": first_req_ar, "en": first_req_en}
+
+    # P1-1 §2.x — deterministic voice used whenever the LLM layer cannot
+    # serve the turn (draft failure / cost gate / empty output).
+    def _deterministic_voice_reply(self, lead: dict,
+                                   msg: InboundMessage | None,
+                                   language: str) -> str | None:
+        if msg is None:
+            return None
+        try:
+            low = f" {(msg.text or '').lower()} "
+            rules = {}
+            rules = {r.get("id"): r for r in
+                     self.conversation.planner.interaction_rules}
+            ident = rules.get("ir_identity_disclosure")
+            if ident and any(t.lower() in low
+                             for t in (ident.get("trigger") or [])):
+                return (_IDENTITY_AR if language == "ar" else _IDENTITY_EN)
+            esc = next(
+                (kind for kind, kws in _ESCALATION_KEYWORDS.items()
+                 if any(k.lower() in low for k in kws)), None)
+            if esc:
+                ar, en = _ESCALATION_TEXTS[esc]
+                return (ar if language == "ar" else en)
+        except Exception:  # noqa: BLE001 — voice must never break fallbacks
+            return None
+        return None
+
     def _scope_review_reply(self, pending_fields: list, language: str) -> str:
         field = pending_fields[0] if pending_fields else "scope"
         ar, en = self._SCOPE_REVIEW_QUESTIONS.get(
@@ -513,10 +697,31 @@ class MessageCoordinator:
     }
 
     def _requirement_reply(self, category: str, language: str) -> str:
-        """P0.3 / GAP-2 — deterministic acknowledgment + ONE requirement
-        question for a known category with no public band (never a silent
-        deferral and never a stale/invented figure)."""
+        """P0.3 / GAP-2 + P1-1 §3 — deterministic acknowledgment + ONE
+        requirement question. Question source priority:
+        1) knowledge pack service_details.v1.yaml (data-driven)
+        2) hard-coded category question (legacy)
+        3) declared generic detail request (documented fallback, never silent).
+        Never a stale/invented figure."""
         q = self._REQUIREMENT_QUESTIONS.get(category)
+        if not q:
+            packed = self._pack_questions_for(category)
+            if packed and (packed.get("ar") or packed.get("en")):
+                q_text = packed["ar"] if language == "ar" else (
+                    packed["en"] or packed["ar"])
+                ack = ("شكرًا، هذا النطاق المتوسّع يتطلب تقديرًا أدقّ. "
+                       "أحتاج تفصيلة واحدة فقط: " if language == "ar"
+                       else "Thanks — this expanded scope needs a precise "
+                            "estimate. One detail, please: ")
+                return ack + q_text
+            if category is not None:
+                # declared fallback: pack has no entry for this known
+                # category — audited so the gap is visible, not silent.
+                try:
+                    self._audit("service_details.missing_entry", "lead",
+                                result=str(category))
+                except Exception:  # noqa: BLE001
+                    pass
         if q:
             q_text = q[0] if language == "ar" else q[1]
             ack = ("شكرًا، هذا النطاق المتوسّع يتطلب تقديرًا أدقّ. أحتاج تفصيلة واحدة فقط: "
@@ -625,19 +830,41 @@ class MessageCoordinator:
             if not band or band.get("low") is None:
                 return None
             scope_phrase = f" ({band['hint']})" if small and band.get("hint") else ""
-            base = (f"STARTING RANGE ONLY{scope_phrase}: projects in this "
-                    f"category typically start from {band['low']:g} up to "
-                    f"around {band['high']:g} {band.get('currency', 'USD')} "
-                    "depending on scope. Present as an honest entry range; the "
-                    "exact number follows once we confirm their scope together. "
-                    "Invite them to share the basics so we can pin it down.")
-            brief = ("MODE=COMMERCIAL tier=T1. Convey EXACTLY the starting "
-                     "range in DRAFT CONTENT (both numbers + currency). Never "
-                     "round, extend, discount, or call it a final quote.")
+            if lang == "ar":
+                # P1-1 §2.3 — deterministic Arabic T1 voice, composed INSIDE
+                # the price branch (price never routes through the planner).
+                # Opener = hash-seed rotation on the message id; zero silent
+                # randomness; numbers verbatim from Brain.
+                seed = int(hashlib.sha256(
+                    (msg.external_message_id or "").encode("utf-8")
+                    or b"t1").hexdigest(), 16)
+                opener = _T1_AR_OPENERS[seed % len(_T1_AR_OPENERS)]
+                cur_ar = "دولار أمريكي" \
+                    if (band.get('currency') or 'USD').upper() == 'USD' \
+                    else band.get('currency', 'USD')
+                hint_ar = " بأصغر نطاق" if small and band.get("hint") else ""
+                base = (f"{opener} المشاريع في فئة «{category}» تبدأ "
+                        f"عادةً من {band['low']:g} وقد تصل إلى حوالي "
+                        f"{band['high']:g} {cur_ar}{hint_ar} بحسب تفاصيل "
+                        "النطاق. الرقم النهائي نثبّته معك بعد تأكيد "
+                        "المتطلبات؛ ما أهم جزء تودّ أن نبدأ به؟")
+                brief = ("MODE=COMMERCIAL tier=T1. Convey EXACTLY the starting "
+                         "range in DRAFT CONTENT (both numbers + currency). Never "
+                         "round, extend, discount, or call it a final quote.")
+            else:
+                base = (f"STARTING RANGE ONLY{scope_phrase}: projects in this "
+                        f"category typically start from {band['low']:g} up to "
+                        f"around {band['high']:g} {band.get('currency', 'USD')} "
+                        "depending on scope. Present as an honest entry range; the "
+                        "exact number follows once we confirm their scope together. "
+                        "Invite them to share the basics so we can pin it down.")
+                brief = ("MODE=COMMERCIAL tier=T1. Convey EXACTLY the starting "
+                         "range in DRAFT CONTENT (both numbers + currency). Never "
+                         "round, extend, discount, or call it a final quote.")
             log.info("quote.t1 lead=%s band=%s-%s %s", lead["lead_id"],
                      band["low"], band["high"], band.get("currency"))
             return self._draft_reply(
-                lead, msg, "en", intent_note=brief, base=base,
+                lead, msg, lang, intent_note=brief, base=base,
                 history=self._recent_history(msg.channel, msg.external_user_id))
         except Exception as exc:  # noqa: BLE001 — pricing must never break intake
             self._audit("quote.t1_failed", "lead", result=str(exc)[:160])
@@ -837,7 +1064,12 @@ class MessageCoordinator:
             allowed, reason = self.cost_governor.allow(gov_key)
             if not allowed:
                 log.info("cost.blocked key=%s reason=%s", gov_key, reason)
-                return self._localize(base or _SAFE_FALLBACK, language)
+                _v = getattr(self, "_deterministic_voice_reply", None)
+                voice = _v(lead, msg, language) if callable(_v) else None
+                if voice:
+                    return voice
+                fallback = _DEFERRAL_AR if language == "ar" else _DEFERRAL_EN
+                return self._localize(base or fallback, language)
         try:
             learnings = ""
             try:
@@ -854,7 +1086,9 @@ class MessageCoordinator:
                 facts = ""
             messages = [
                 {"role": "system", "content":
-                 "You are AmanCode's assistant (websites, systems, digital solutions). "
+                 "You are AmanCore's assistant (websites, systems, digital "
+                 "solutions). Brand spelling is exactly \"AmanCore\" — never "
+                 "\"AmanCode\". "
                  f"CHANNEL: {msg.channel}. Write the customer's reply: warm, confident,"
                  " human, max 55 words, in the SAME language/dialect as their message. "
                  "Convey exactly the facts in DRAFT CONTENT (translate if needed); "
@@ -883,11 +1117,24 @@ class MessageCoordinator:
                     gov_key, prompt_chars=sum(len(m["content"]) for m in messages),
                     output_chars=len(out))
             log.info("draft.completed via=model-router chars=%d", len(out))
-            return out or self._localize(base or _SAFE_FALLBACK, language)
+            if not out:
+                _v = getattr(self, "_deterministic_voice_reply", None)
+                voice = _v(lead, msg, language) if callable(_v) else None
+                if voice:
+                    return voice
+            return out or self._localize(
+                base or (_DEFERRAL_AR if language == "ar" else _DEFERRAL_EN),
+                language)
         except Exception as exc:  # noqa: BLE001 — deterministic fallback covers failures
             self._audit("reply.draft_failed", "lead", result=str(exc))
             log.error("draft.failed err=%s", str(exc)[:200])
-            return self._localize(base or _SAFE_FALLBACK, language)
+            _v = getattr(self, "_deterministic_voice_reply", None)
+            voice = _v(lead, msg, language) if callable(_v) else None
+            if voice:
+                return voice
+            return self._localize(
+                base or (_DEFERRAL_AR if language == "ar" else _DEFERRAL_EN),
+                language)
 
     def _draft_quote_reply(self, lead: dict, msg: InboundMessage | None = None) -> str:
         """AI-drafted price-safe reply in the customer's own language.
