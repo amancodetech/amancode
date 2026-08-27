@@ -288,9 +288,8 @@ class OutboxWorker:
         if self.send_valve is not None:   # reputation guard: global tier ceiling
             ok, why = self.send_valve.check_all_outbound(1)
             if not ok:
-                from datetime import datetime as _dt, timezone as _tz
-
-                retry_at = (_dt.now(_tz.utc) + _dt.timedelta(minutes=30)).isoformat()
+                retry_at = (datetime.now(timezone.utc)
+                            + timedelta(minutes=30)).isoformat()
                 self.outbox.db.execute(
                     "UPDATE message_outbox SET status='queued', next_attempt_at=?, "
                     "failure_reason=? WHERE message_id=?",

@@ -429,13 +429,168 @@ industry_profiles:
     relevant_services: [business_website_system]
     cross_sell: [care_plan]
     resources_for_followup: [قائمة تحقق محتوى موقع الأعمال]
+# P1-final §4 — single objection taxonomy of record (12 rows).
+# Golden-rule ladder ONLY: value -> scope-reduce -> phased -> smallest-tier.
+# Every row is a prior/playbook; CRM + Brain remain the truth for prices/approvals.
 objections:
-  - {id: price_high, objection: "The price is high", intent: price_sensitivity}
-  - {id: need_think, objection: "I need to think", intent: hesitation}
-  - {id: have_developer, objection: "I already have a developer", intent: comparison}
-  - {id: want_simpler, objection: "I want something simpler", intent: scope}
-  - {id: want_discount, objection: "I want a discount", intent: price}
-  - {id: need_faster, objection: "I need it faster", intent: timeline}
+  - id: price_high
+    objection: "The price is high"
+    intent: price_sensitivity
+    signals:
+      en: ["expensive", "too pricey", "costly", "out of budget"]
+      ar: ["غالي", "غالية", "مكلف", "سعر مرتفع"]
+    customer_concern: {ar: "هل القيمة تستحق هذا المبلغ؟", en: "Is the value worth this amount?"}
+    recommended_strategy: scope-reduce
+    allowed_direction: {ar: "اعرض خفض النطاق قبل أي لمسة للسعر، وأبرز مكونات القيمة الحقيقية", en: "Offer scope reduction before touching price; surface the real value components"}
+    forbidden: {ar: "لا خصم ولا تعديل رقم ولا وعود بأسعار خاصة", en: "No discounts, no number edits, no special-price promises"}
+    owner_escalation_requirement: "request below minimum approved price"
+    statement_kind: RECOMMENDATION
+    source: {ref: golden_rule_ladder+internal_sales_priors.v1}
+  - id: need_think
+    objection: "I need to think"
+    intent: hesitation
+    signals:
+      en: ["need to think", "let me think", "i will consider"]
+      ar: ["أفكر", "سأفكر", "احتاج وقت للتفكير", "أفكر وارجع لك"]
+    customer_concern: {ar: "قلق من قرار غير مستكمل معلوماته", en: "Fear of an under-informed decision"}
+    recommended_strategy: value
+    allowed_direction: {ar: "اسأل عن العائق الوحيد الأهم ثم زد يقيناً بمعلومة عملية واحدة", en: "Ask about the single main blocker; add one practical certainty"}
+    forbidden: {ar: "لا تضغط بمنطق الندرة ولا تكرر نفس السؤال", en: "No scarcity pressure, no repeated identical question"}
+    owner_escalation_requirement: ""
+    statement_kind: RECOMMENDATION
+    source: {ref: golden_rule_ladder+internal_sales_priors.v1}
+  - id: have_developer
+    objection: "I already have a developer"
+    intent: comparison
+    signals:
+      en: ["already have a developer", "our developer", "work with a developer"]
+      ar: ["عندي مطور", "عندنا مطور", "مبرمج", "لدينا مبرمج", "نتعامل مع مبرمج"]
+    customer_concern: {ar: "ما الذي ستضيفونه فوق ما لديّ؟", en: "What do you add over what I have?"}
+    recommended_strategy: value
+    allowed_direction: {ar: "اسأل أين الفجوة ثم اعرض التكامل لا الاستبدال", en: "Probe the gap; position complement not replacement"}
+    forbidden: {ar: "لا تنقد جهة أخرى ولا تدّع تفوقاً مطلقاً", en: "Never disparage others or claim absolute superiority"}
+    owner_escalation_requirement: ""
+    statement_kind: RECOMMENDATION
+    source: {ref: golden_rule_ladder+internal_sales_priors.v1}
+  - id: want_simpler
+    objection: "I want something simpler"
+    intent: scope
+    signals:
+      en: ["simpler", "keep it simple", "too much for us"]
+      ar: ["أبسط", "أسهل", "بسيط أكثر", "أكثر من احتياجنا"]
+    customer_concern: {ar: "التشغيل اليومي يبدو مرهقاً", en: "Daily operations feel heavy"}
+    recommended_strategy: scope-reduce
+    allowed_direction: {ar: "اقترح قلب واحداً يستحق البقاء ثم أضف ما تبقى لاحقاً كمراحل", en: "Propose one core to keep now; phase the rest later"}
+    forbidden: {ar: "لا تحذف متطلبات قانونية أو أمان حفظاً لبساطة الشكل", en: "No dropping legal/security essentials for simplicity"}
+    owner_escalation_requirement: ""
+    statement_kind: RECOMMENDATION
+    source: {ref: golden_rule_ladder+internal_sales_priors.v1}
+  - id: want_discount
+    objection: "I want a discount"
+    intent: price
+    signals:
+      en: ["discount", "any cheaper option?", "best price you can do"]
+      ar: ["خصم", "تخفيض", "ارخص", "سعر خاص"]
+    customer_concern: {ar: "تخفيض التكلفة دون فقدان الجوهر", en: "Cut cost without losing essence"}
+    recommended_strategy: scope-reduce
+    allowed_direction: {ar: "ابدأ من أصغر نطاق رسمي وأنزل السعر عبر النطاق فقط", en: "Start from smallest official tier; move price only via scope"}
+    forbidden: {ar: "يُمنع إصدار أي نسبة خصم من الجهة الذكية مهما كانت الصيغة", en: "The assistant may never issue any discount in any phrasing"}
+    owner_escalation_requirement: "any discount decision (owner-only)"
+    statement_kind: RECOMMENDATION
+    source: {ref: golden_rule_ladder+internal_sales_priors.v1}
+  - id: need_faster
+    objection: "I need it faster"
+    intent: timeline
+    signals:
+      en: ["faster delivery", "shorter timeline", "can we speed up"]
+      ar: ["أسرع", "بحاجة أسرع", "تقصير المدة", "تسريع التنفيذ"]
+    customer_concern: {ar: "موعد إطلاق مضغوط", en: "Tight launch date"}
+    recommended_strategy: phased
+    allowed_direction: {ar: "اقترح إطلاق مرحلة أولى حقيقية بدل وعد بتقصير كل شيء", en: "Propose a real first-phase launch instead of promising everything sooner"}
+    forbidden: {ar: "يُمنع تثبيت أي تاريخ أو وعد إنجاز", en: "No dates or completion promises whatsoever"}
+    owner_escalation_requirement: "impossible deadline"
+    statement_kind: RECOMMENDATION
+    source: {ref: golden_rule_ladder+internal_sales_priors.v1}
+  - id: see_value
+    objection: "I do not see the value yet"
+    intent: value_clarity
+    signals:
+      en: ["what is the value", "why worth it", "how does this help my business"]
+      ar: ["ما القيمة", "وين الفايدة", "كيف يساعدني عملي", "ماذا سوف أستفيد"]
+    customer_concern: {ar: "رباط النتيجة بالمال والحياة اليومية", en: "Connecting outcome to money and daily reality"}
+    recommended_strategy: value
+    allowed_direction: {ar: "اربط بالمخرج التجاري الذي طلب بنفسه بصياغته هو", en: "Reflect HIS OWN stated business outcome back"}
+    forbidden: {ar: "لا عروض أسعار دفاعية ولا مبالغة نتائج", en: "No defensive price talk, no outcome exaggeration"}
+    owner_escalation_requirement: ""
+    statement_kind: RECOMMENDATION
+    source: {ref: golden_rule_ladder+internal_sales_priors.v1}
+  - id: just_prices
+    objection: "Just send me your price list"
+    intent: shopping_comparator
+    signals:
+      en: ["price list", "just send prices", "send me your rates"]
+      ar: ["قائمة أسعار", "أرسل الأسعار", "كم عندكم الأسعار", "بس ابعث أسعارك"]
+    customer_concern: {ar: "يقارن بسرعة ويحتاج مرجعاً صادقاً للبدء", en: "Fast comparison; needs an honest anchor first"}
+    recommended_strategy: value
+    allowed_direction: {ar: "اذكر النطاق العام المعلن فقط مع ربطه بالنطاق والخطوة التالية", en: "State ONLY the public starting range, tied to scope and next step"}
+    forbidden: {ar: "يُمنع اختراع قائمة أسعار أو خصومات ولاء", en: "No inventing price lists or loyalty discounts"}
+    owner_escalation_requirement: "final price requires owner"
+    statement_kind: RECOMMENDATION
+    source: {ref: golden_rule_ladder+internal_sales_priors.v1}
+  - id: comparing_vendors
+    objection: "Another vendor quoted less"
+    intent: comparison
+    signals:
+      en: ["another vendor", "other company said", "competitor quoted"]
+      ar: ["عرض آخر أقل", "شركة ثانية قالت", "المنافس عرض", "عرضوا سعر أفضل"]
+    customer_concern: {ar: "مصاريف مخيفة بالإضافة إلى الخوف من سوء التنفيذ", en: "Cost anxiety plus execution-risk fear"}
+    recommended_strategy: value
+    allowed_direction: {ar: "اسأل ماذا يشمل عرضهم ثم قارن التغطية والاستمرارية بأمانة", en: "Ask what their quote covers; compare coverage honestly"}
+    forbidden: {ar: "لا تسخّف عرض المنافس ولا تدّعي معرفة تفاصيله", en: "No belittling rivals; never pretend to know their details"}
+    owner_escalation_requirement: ""
+    statement_kind: RECOMMENDATION
+    source: {ref: golden_rule_ladder+internal_sales_priors.v1}
+  - id: need_management_approval
+    objection: "Management must approve"
+    intent: approval_chain
+    signals:
+      en: ["management approval", "my boss decides", "need sign-off"]
+      ar: ["تحتاج موافقة الإدارة", "المدير هو من يقرر", "موافقة المسؤول", "الإدارة توافق"]
+    customer_concern: {ar: "ينتقل القرار خارج دائرة المفاوض", en: "Decision sits outside negotiator authority"}
+    recommended_strategy: phased
+    allowed_direction: {ar: "سلّمه ملخص قرار موجزاً يحمله للجهة الصانعة مع نقطة واحدة تبدأ بها", en: "Hand him a short decision brief to carry up, with ONE starting point"}
+    forbidden: {ar: "لا تجاوز جهته ولا اتفاقات جانبية مع أحد آخر", en: "Never bypass his chain or side-deal with anyone else"}
+    owner_escalation_requirement: ""
+    statement_kind: RECOMMENDATION
+    source: {ref: decision_roles_pack+internal_sales_priors.v1}
+  - id: not_ready
+    objection: "Not ready to start right now"
+    intent: timing_hesitation
+    signals:
+      en: ["not ready", "next quarter maybe", "later on"]
+      ar: ["غير جاهز", "مو جاهز الآن", "بعد فترة", "الربع القادم ربما"]
+    customer_concern: {ar: "طاقة استيعاب داخلية شاغلة قبل التوسع", en: "Internal bandwidth before expansion"}
+    recommended_strategy: phased
+    allowed_direction: {ar: "اجعل الزمن اعتماده هو الخطوة الأولى المجانية للجانبين ثم تحقق دورياً بلطف", en: "Offer a tiny zero-cost readiness step; follow up gently on a cadence"}
+    forbidden: {ar: "لا حدود زمنية ملزمة ولا تخزين وعود خاصة", en: "No binding dates, no hoarded special promises"}
+    owner_escalation_requirement: ""
+    statement_kind: RECOMMENDATION
+    source: {ref: golden_rule_ladder+internal_sales_priors.v1}
+  - id: trust_security_concern
+    objection: "Concerned about data security"
+    intent: trust_security
+    signals:
+      en: ["data security", "is my data safe", "who accesses our data"]
+      ar: ["أمان البيانات", "هل بياناتنا محمية", "خصوصية العملاء عندنا", "من يشاهد بياناتنا"]
+    customer_concern: {ar: "خطر التسريب ومسؤولية الامتثال", en: "Leak risk and compliance liability"}
+    recommended_strategy: value
+    allowed_direction: {ar: "اشرح الممارسات العامة بحذر بدون تكييف ذاتي على الامتثال، وحول التفاصيل للأخصائي", en: "Describe general practices carefully WITHOUT compliance self-assertions; route specifics to specialist"}
+    forbidden: {ar: 'يُمنع إطلاقاً عبارة "متوافقون مع" أو شهادات غير مملوكة', en: "'We are compliant with X' is absolutely forbidden"}
+    owner_escalation_requirement: "specific compliance/legal assertions"
+    statement_kind: RECOMMENDATION
+    source: {ref: golden_rule_ladder+internal_sales_priors.v1}
+
+brand_voice:
 
 brand_voice:
   tone: professional

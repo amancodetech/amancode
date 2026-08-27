@@ -13,6 +13,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import threading
+from pathlib import Path
 
 from ..ids import new_id, utcnow
 from ..log import get_logger
@@ -27,7 +29,8 @@ from ..conversation.pricing_flow import QuoteFlow
 from ..conversation.quality_guard import QualityGuard
 from ..conversation.planner import _ESCALATION_KEYWORDS
 from ..pricing import registry
-from ..sales.conversation_memory import SCOPE_DELTA_MAP, detect_scope_delta
+from ..sales.conversation_memory import (SCOPE_DELTA_MAP, _deterministic_facts,
+                                         detect_scope_delta)
 
 log = get_logger("channels.coordinator")
 
@@ -88,6 +91,124 @@ _HUMAN_INTENT = re.compile(
 )
 
 _STATUS_EVENTS = ("message.delivered", "message.read", "message.sent", "message.failed")
+
+
+# P1-2 §2 — extraction gating cues (deterministic only).
+_UNCERTAIN_CUES = re.compile(
+    r"ربما|يمكن أن|مو متأكد|مش متأكد|ما أدري|لا أعرف|غير متأكد|"
+    r"not sure|maybe|i think|perhaps", re.I)
+_VAGUE_BUDGET_CUES = re.compile(r"ميزانية|budget|anggaran", re.I)
+_INDIRECT_AUTHORITY_CUES = re.compile(
+    r"شريكي|مديري|boss|my partner|the manager|يقرر مع", re.I)
+
+# P1-1 §4.1 withdrawal cues live at module level so deterministic helpers
+# (and the extraction gate) can share them without an instance.
+_WITHDRAW_CUES = re.compile(
+    r"(?:\b(?:no|not|cancel|drop|without)\b)|"
+    r"(?:^|\s)(?:ولا|ما|لا|بدون|إلغاء|الغاء)\s",
+    re.IGNORECASE)
+
+
+def _withdrawn(text: str) -> set:
+    """P1-1 §4.1 — deterministic scope-withdrawal detection (pure)."""
+    out = set()
+    if not text:
+        return out
+    for field, kws in {
+        "booking": ("حجز", "booking"),
+        "payments": ("طلبات أونلاين", "دفع", "أونلاين", "payments",
+                     "online order", "payment"),
+        "integrations": ("ربط", "تكامل", "integration"),
+        "languages": ("لغة ثانية", "متعدد اللغات", "language"),
+        "member_areas": ("أعضاء", "عضوية", "member", "login area"),
+        "dynamic_content": ("معرض", "مدونة", "أخبار", "gallery",
+                            "blog", "news"),
+    }.items():
+        low = f" {text.lower()} "
+        for kw in kws:
+            idx = low.find(kw.lower())
+            if idx == -1:
+                continue
+            window = low[max(0, idx - 15):idx]
+            if _WITHDRAW_CUES.search(window) or \
+                    _WITHDRAW_CUES.search(low[idx + len(kw):
+                                              idx + len(kw) + 6]):
+                out.add(field)
+                break
+    return out
+
+
+class _GateSkippedResult:
+    """Minimal RoutingResult stand-in for a gated-out extraction call."""
+
+    text = "{}"
+
+
+class _ExtractionGateRouter:
+    """P1-2 §2 — deterministic extraction gating.
+
+    Wraps the sales agent's router for ONE inbound message. If the
+    deterministic layer already yields a confident, unambiguous picture
+    (industry known + exactly one service need + concrete facts + no
+    uncertainty/vague-authority signals), the LLM extraction call is
+    skipped entirely and `{}` is returned instead. Anything ambiguous
+    passes through to the real router — an extra call is always safer
+    than a lost fact.
+    """
+
+    def __init__(self, inner, *, text: str, policy=None, wm: dict | None = None,
+                 industry_known: bool | None = None):
+        self.inner = inner
+        self.skipped = False
+        low = f" {(text or '').lower()} "
+        det = _deterministic_facts(text or "")
+        wm = wm or {}
+        # Safety direction: an extra extraction call is always acceptable;
+        # a lost fact never is. Any digit anywhere (page counts, product
+        # counts, budgets, dates) forces the LLM pass, because the
+        # deterministic layer cannot parse rich numeric details reliably.
+        has_digits = any(ch.isdigit() for ch in (text or ""))
+        ind = wm.get("industry") if industry_known is None else \
+            ("known" if industry_known else None)
+        if not ind:
+            try:
+                ind = (policy.detect_industry(text or "")
+                       if policy is not None else None) or wm.get("industry")
+            except Exception:  # noqa: BLE001
+                ind = None
+        cats = 0
+        try:
+            cats = sum(1 for spec in
+                       (policy.data.get("service_categories") or {}).values()
+                       if any(k.lower() in low for k in spec.get("keywords", [])))
+        except Exception:  # noqa: BLE001
+            cats = 0
+        scope_negated = bool(_withdrawn(text or ""))
+        vague_budget = bool(_VAGUE_BUDGET_CUES.search(low)) and not (
+            det.get("budget") and any(c.isdigit() for c in str(det["budget"])))
+        indirect_auth = bool(_INDIRECT_AUTHORITY_CUES.search(low)) and not \
+            det.get("authority")
+        self._skip_reason = ""
+        confident_evidence = bool(ind) and cats == 1 and not has_digits
+        if confident_evidence and not scope_negated \
+                and not _UNCERTAIN_CUES.search(low) and not vague_budget \
+                and not indirect_auth:
+            self._skip_reason = "confident_deterministic"
+        # anything ambiguous → the real router handles it (extra call OK)
+        self.last_det_keys = sorted(det)
+
+    @property
+    def skip_decision(self) -> str:
+        return self._skip_reason
+
+    def route(self, task_class: str, messages: list, **kw):
+        if task_class == "extraction" and self._skip_reason:
+            self.skipped = True
+            log.info("extract.gate decision=skip reason=%s",
+                     self._skip_reason)
+            return _GateSkippedResult()
+        log.info("extract.gate decision=call task=%s", task_class)
+        return self.inner.route(task_class, messages, **kw)
 
 
 class MessageCoordinator:
@@ -174,6 +295,66 @@ class MessageCoordinator:
             raise KeyError(f"no adapter registered for channel '{channel_or_adapter}'")
         return adapter
 
+    # ---- P1-2 §4 perceived latency --------------------------------------
+    _TYPING_INTERVAL_S = 4.0
+    _TYPING_MAX_REFRESHES = 22  # ~90s hard cap; never outlives its purpose
+
+    def _start_typing(self, channel: str, chat_id: str):
+        """Fire sendChatAction immediately on receipt + refresh every ~4s
+        until the reply drain completes (or the hard cap). Returns a stop
+        Event, or None when the channel cannot express typing."""
+        if channel != "telegram" or not chat_id:
+            return None
+        try:
+            adapter = self._adapter_for(channel)
+        except Exception:  # noqa: BLE001
+            return None
+        action = getattr(adapter, "send_chat_action", None)
+        if not callable(action):
+            return None
+        ok = False
+        try:
+            ok = bool(action(str(chat_id)))
+        except Exception:  # noqa: BLE001
+            return None
+        if not ok:
+            return None
+        stop = threading.Event()
+        interval = self._TYPING_INTERVAL_S
+        max_refreshes = self._TYPING_MAX_REFRESHES
+
+        def _refresh_loop():
+            for _ in range(max_refreshes):
+                if stop.wait(interval):
+                    return
+                try:
+                    if not action(str(chat_id)):
+                        return
+                except Exception:  # noqa: BLE001 — indicator is best-effort
+                    return
+
+        threading.Thread(target=_refresh_loop, daemon=True,
+                         name="typing-indicator").start()
+        return stop
+
+    # ---- P1-2 §5 first-pass metrics -------------------------------------
+    _METRICS_DIR = Path("storage/metrics")
+
+    def _log_draft_outcome(self, corr: str, mode, outcome: str,
+                           reason: str = "", chars: int = 0) -> None:
+        """Append one lightweight draft-outcome row (JSONL). Metrics only —
+        no decision path reads this file."""
+        try:
+            directory = self._METRICS_DIR
+            directory.mkdir(parents=True, exist_ok=True)
+            row = {"ts": utcnow(), "corr": corr, "mode": mode,
+                   "outcome": outcome, "reason": reason, "chars": chars}
+            with open(directory / "first_pass.jsonl", "a",
+                      encoding="utf-8") as fh:
+                fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+        except Exception:  # noqa: BLE001 — metrics must never break a turn
+            pass
+
     # ---- intake --------------------------------------------------------
     def handle_inbound(self, channel_or_adapter, body, headers=None,
                        raw_body: bytes | None = None) -> dict:
@@ -234,6 +415,10 @@ class MessageCoordinator:
             summary["support"] += 1 if result.get("support") else 0
 
         self.worker.drain(limit=10)
+        # P1-2 §4 — stop the typing indicator now that replies were drained.
+        ev = getattr(self, "_typing_stop", None)
+        if ev is not None:
+            ev.set()
         return summary
 
     def handle_whatsapp_webhook(self, body, headers=None,
@@ -251,6 +436,12 @@ class MessageCoordinator:
         log.info("inbound.received channel=%s user=%s msg=%s chars=%d",
                  msg.channel, msg.external_user_id,
                  msg.external_message_id[:24], len(text))
+        # P1-2 §4 — perceived latency: typing action fires on receipt for
+        # channels that support it (Telegram), refreshed ~every 4s until the
+        # reply is drained. WhatsApp: no real typing API — intentionally
+        # omitted (a fake receipt notification is a later product decision).
+        self._typing_stop = self._start_typing(msg.channel,
+                                               msg.external_user_id)
 
         lead = self.crm.find_lead_by_identity(msg.channel, msg.external_user_id)
         if lead is None and msg.channel == "whatsapp":
@@ -376,7 +567,21 @@ class MessageCoordinator:
             return {"lead_id": lead["lead_id"], "reply_sent": True, "price_reply": True}
 
         # sales flow — engine computes facts/state, AI speaks
-        result = self.sales_agent.process_message(lead, text)
+        # P1-2 §2 — deterministic extraction gating for this single message.
+        router_obj = getattr(self.sales_agent, "router", None)
+        gate = None
+        if router_obj is not None and callable(getattr(router_obj, "route",
+                                                       None)):
+            gate = _ExtractionGateRouter(
+                router_obj, text=text,
+                policy=getattr(self.conversation, "policy", None),
+                wm=(mem.get("working_memory") or {}))
+            self.sales_agent.router = gate
+        try:
+            result = self.sales_agent.process_message(lead, text)
+        finally:
+            if gate is not None:
+                self.sales_agent.router = router_obj
         raw_reply = result.get("reply") or ""
         history = self._recent_history(msg.channel, msg.external_user_id)
         log.info("route.decision lead=%s action=%s",
@@ -509,12 +714,8 @@ class MessageCoordinator:
     # any stale figure (safety bias: false positive OK, false negative never).
     # P1-1 §4.1 — explicit withdrawal: a negated feature mention ("لا لا ما
     # أبغى الحجز") must REMOVE the delta, not capture it. Detection is per
-    # field keyword with a negation cue in the same clause.
-    _WITHDRAW_CUES = re.compile(
-        r"(?:\b(?:no|not|cancel|drop|without)\b)|"
-        r"(?:^|\s)(?:ولا|ما|لا|بدون|إلغاء|الغاء)\s",
-        re.IGNORECASE,
-    )
+    # field keyword with a negation cue in the same clause (module-level
+    # _WITHDRAW_CUES so the extraction gate shares the exact same cues).
 
     def _withdrawn_fields(self, text: str) -> set:
         out = set()
@@ -537,8 +738,8 @@ class MessageCoordinator:
                     continue
                 # negation cue anywhere in the 14 chars BEFORE the keyword
                 window = low[max(0, idx - 15):idx]
-                if self._WITHDRAW_CUES.search(window) or \
-                        self._WITHDRAW_CUES.search(low[idx + len(kw):
+                if _WITHDRAW_CUES.search(window) or \
+                        _WITHDRAW_CUES.search(low[idx + len(kw):
                                                        idx + len(kw) + 6]):
                     out.add(field)
                     break
@@ -1091,6 +1292,10 @@ class MessageCoordinator:
                  "\"AmanCode\". "
                  f"CHANNEL: {msg.channel}. Write the customer's reply: warm, confident,"
                  " human, max 55 words, in the SAME language/dialect as their message. "
+                 # P1-2 §5 single permitted lever — language-lock first-pass fix.
+                 "LANGUAGE LOCK: read the customer's own words and answer ONLY in "
+                 "that exact language and script (Arabic message ⇒ fully Arabic "
+                 "output, zero English words); never switch language unless they do. "
                  "Convey exactly the facts in DRAFT CONTENT (translate if needed); "
                  "NEVER invent prices, discounts, deadlines, or approvals beyond it. "
                  f"Purpose: {intent_note or 'move the conversation forward'}. "
@@ -1158,7 +1363,7 @@ class MessageCoordinator:
                 learnings = ""
             r = self._complete_draft([
                 {"role": "system", "content":
-                 "You are AmanCode's sales assistant. Draft ONE short warm reply "
+                 "You are AmanCore's sales assistant. Draft ONE short warm reply "
                  "(max 40 words) in the SAME language/dialect the customer used. "
                  "NEVER mention any price or commitment. Thank them, say our team will "
                  "send a personalized official quote shortly, and ask ONE useful "
@@ -1196,6 +1401,13 @@ class MessageCoordinator:
                                                     msg.external_user_id)
             verdict = self.quality_guard.check(text, plan=plan,
                                                recent_replies=recent)
+            # P1-2 §5 — first-pass rate recording (metrics only).
+            self._log_draft_outcome(corr, plan.get("mode"),
+                                    "first_pass" if verdict["allowed"]
+                                    else "regenerated",
+                                    "" if verdict["allowed"] else
+                                    ",".join(verdict["violations"])[:120],
+                                    chars=len(text))
             if not verdict["allowed"]:
                 self._audit("channel.quality_blocked", "lead",
                             result=",".join(verdict["violations"])[:160])
@@ -1212,6 +1424,13 @@ class MessageCoordinator:
                 if not recheck["allowed"]:
                     text = self._localize(_SAFE_FALLBACK,
                                           plan.get("language", "en"))
+                    self._log_draft_outcome(corr, plan.get("mode"),
+                                            "regenerated_fallback", "recheck")
+        else:
+            # P1-2 §5 — legacy turns ship one deterministic-base draft with
+            # no quality loop; recorded so the rate covers EVERY draft.
+            self._log_draft_outcome(corr, "legacy", "first_pass",
+                                    "guard_not_applied", chars=len(text))
         decision = self.channel_policy.evaluate_send(channel, "text", "low")
         if decision != "allow":
             self._audit("channel.policy_blocked", "lead", result=decision)

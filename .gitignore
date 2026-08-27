@@ -44,3 +44,6 @@ cookies/
 .idea/
 .vscode/
 .DS_Store
+
+# runtime state (DBs, metrics, logs) — never version-controlled
+storage/

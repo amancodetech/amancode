@@ -307,7 +307,10 @@ class TelegramOwnerConsole:
         cfg = yaml.safe_load(open(root / "configs" / "models.yaml"))
         from ..routing.providers import build_providers
 
-        return build_providers(cfg)["deepseek-v4-flash"]
+        # P1-final §2 — DeepSeek removed: follow the live text chain primary.
+        primary = next(p["primary"] for p in cfg["task_routing"].values()
+                       if p.get("primary"))
+        return build_providers(cfg)[primary]
 
     def _execute_action(self, action: dict) -> str:
         act = action.get("action")

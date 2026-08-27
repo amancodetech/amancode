@@ -9,6 +9,11 @@ brain_profile_id: service_details
 version: 1.0.0
 last_verified: 2026-08-27
 
+# P1-2 §6 — this is a META-pack (type: service_details), not an industry
+# extension: the validator no longer requires the industry-only envelope, so
+# empty filler fields (digital_maturity/common_processes/...) were removed.
+type: service_details
+
 sources:
   - name: "Business Brain v1 services/offers + conversation_policy service_categories"
     organization: "AmanCore"
@@ -19,17 +24,6 @@ sources:
     extraction_date: 2026-08-27
     last_verified: 2026-08-27
     license: "internal-brain"
-
-digital_maturity:
-  value: medium
-  note: "Not applicable at service level; kept to satisfy the industry-pack envelope shape."
-  source: { ref: business_brain_v1 }
-
-common_processes: []
-common_pain_points: []
-decision_roles: {}
-typical_integrations: []
-isic_refs: []
 
 service_details:
   version: 1.0.0

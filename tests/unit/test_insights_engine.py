@@ -68,8 +68,8 @@ class InsightsEngineTest(TempDirTestCase, unittest.TestCase):
 
     def test_ai_cost_pro_share_insight(self):
         for _ in range(6):
-            seed_usage(self.db, model="deepseek-v4-pro", cost=0.5)
-        seed_usage(self.db, model="deepseek-v4-flash", cost=0.1)
+            seed_usage(self.db, model="glm-dummy-pro", cost=0.5)
+        seed_usage(self.db, model="glm-dummy-flash", cost=0.1)
         summary = self.engine.run()
         ai = [i for i in self.mem.list_insights() if i["type"] == "ai_cost"]
         self.assertTrue(any("Pro" in i["title"] for i in ai))
@@ -176,7 +176,7 @@ class OptimizerSegmentTest(TempDirTestCase, unittest.TestCase):
         self.assertEqual(analysis["by_category"].get("billing"), 1)
 
     def test_ai_cost_analysis(self):
-        seed_usage(self.db, model="deepseek-v4-pro", cost=0.5)
+        seed_usage(self.db, model="glm-dummy-pro", cost=0.5)
         analysis = self.opt.ai_cost_analysis()
         self.assertGreater(analysis["total_cost"], 0)
         self.assertIsNotNone(analysis["pro_share"])

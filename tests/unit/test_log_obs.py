@@ -24,7 +24,7 @@ class TestSecretRedaction(unittest.TestCase):
         self.assertNotIn("eyJhbGciOi", out)
 
     def test_api_key_redacted(self):
-        out = self._filtered_message("deepseek api_key=sk-demo12345678")
+        out = self._filtered_message("demo-provider api_key=sk-demo12345678")
         self.assertNotIn("sk-demo12345678", out)
 
     def test_normal_text_untouched(self):

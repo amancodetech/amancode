@@ -1,0 +1,112 @@
+id: decision_roles
+brain_profile_id: decision_roles
+type: service_meta_pack
+version: 1.0.0
+last_verified: 2026-08-27
+sources:
+- name: ISCO-08 major groups + SMB buying-pattern priors
+  organization: ILO / internal heuristic synthesis
+  url: ''
+  version: ISCO-08
+  authority: methodology
+  confidence: medium
+  extraction_date: 2026-08-27
+  last_verified: 2026-08-27
+  license: public-isco + internal
+statement_kind_note: 'كل بند أدناه استدلال عام بصيغة تحفظية، نوعه RECOMMENDATION؛ لا يُنسب لأي عميل كحقيقة،
+  ومصدر الحقيقة للعميل المحدد حقول الـCRM.
+
+  '
+decision_roles:
+  base_matrix:
+    micro_1_4:
+      size: 1–4
+      roles:
+        likely: صاحب العمل نفسه غالباً هو صانع القرار الوحيد (Manager, ISCO-08 MG1)
+        possible: شريك مؤسس أو فرد من العائلة قد يشارك عادةً
+        unknown: ''
+      buying_concerns:
+      - السعر
+      - السرعة
+      - الثقة
+      - إنجاز الأمر بنفسه
+      tone_hint_ar: تحدث بلغة مباشرة وقرارات سريعة وبدون سلاسل موافقات
+      statement_kind: RECOMMENDATION
+      provenance:
+        source_ref: isco08_mg1+internal_smb_priors.v1
+    small_5_49:
+      size: 5–49
+      roles:
+        likely: المالك/المدير العام غالباً يقرر مع مدير تشغيلي مشارك (MG1)
+        possible: مشرف تقني أو مسؤول تسويق داخلي عادةً يؤثر على النطاق
+        unknown: إدارة مالية قد تراجع المدفوعات أحياناً
+      buying_concerns:
+      - القيمة مقابل السعر
+      - سهولة التشغيل اليومي
+      - موثوقية الدعم
+      tone_hint_ar: اعرض المنفعة التشغيلية ثم السعر بصيغة مرنة
+      statement_kind: RECOMMENDATION
+      provenance:
+        source_ref: isco08_mg1+internal_smb_priors.v1
+    medium_50_249:
+      size: 50–249
+      roles:
+        likely: مدير قسم/وحدة يملك القرار عادةً، مع حاجز تمرير رسمي
+        possible: أمن معلومات أو إدارة مالية في الموافقة أحياناً
+        unknown: لجنة فنية قد تدخل عند تكاملات حساسة
+      buying_concerns:
+      - العائد على الاستثمار
+      - التكامل مع الأنظمة
+      - الحوكمة والموافقات
+      - استمرارية العمل
+      tone_hint_ar: جهّز ملخص تنفيذي موجز وعناصر ROI قابلة للقياس دون مبالغة
+      statement_kind: RECOMMENDATION
+      provenance:
+        source_ref: isco08_mg1+internal_smb_priors.v1
+    large_250_plus:
+      size: 250+
+      roles:
+        likely: سلسلة موافقات متعددة المستويات عادةً (MG1/MG2)
+        possible: مشتريات رسمية بـRFQ/RFP غالباً في الصورة
+        unknown: متطلبات امتثال خارجية غير قابلة للتقدير مسبقاً
+      buying_concerns:
+      - ROI
+      - تكامل المؤسسة
+      - الأمان والحوكمة
+      - مسار الموافقات
+      - الدعم طويل الأمد
+      tone_hint_ar: احترم دورة المشتريات ولا تعِد بأي موعد اعتماد
+      statement_kind: RECOMMENDATION
+      provenance:
+        source_ref: isco08_mg1+internal_smb_priors.v1
+  industry_overrides:
+    restaurant:
+      note: طابع تشغيلي يومي سريع — الغالب صاحب/مدير المكان يتخذ قراراً خفيفاً
+      tone_delta_ar: أكّد السرعة وسهولة القائمة والطلب قبل أي تفاصيل تقنية
+      statement_kind: RECOMMENDATION
+      provenance:
+        source_ref: isco08_mg1+internal_smb_priors.v1
+    ecommerce:
+      note: حساسية أسعار وموسمية غالباً أعلى من المتوسط
+      tone_delta_ar: اربط أي نقاش بالتحويل والمبيعات لا بالميزات
+      statement_kind: RECOMMENDATION
+      provenance:
+        source_ref: isco08_mg1+internal_smb_priors.v1
+    healthcare_clinic:
+      note: خصوصية بيانات المرضى عادةً تهيمن على المخاوف
+      tone_delta_ar: راحل ذكر أي وعود امتثال؛ احيل الثقة إلى فريقنا المتخصص
+      statement_kind: RECOMMENDATION
+      provenance:
+        source_ref: isco08_mg1+internal_smb_priors.v1
+    real_estate:
+      note: عرض المخزون وتوليد العملاء المحتملين غالباً هو القلق الأول
+      tone_delta_ar: ركّز على جودة العرض والفلترة وتجربة الزائر
+      statement_kind: RECOMMENDATION
+      provenance:
+        source_ref: isco08_mg1+internal_smb_priors.v1
+    ngo_charity:
+      note: لجان وزملاء أمانة عادةً يشاركون القرار حتى في الحجم الصغير
+      tone_delta_ar: اطلب دائماً توضيح الجهة التي تعتمد الميزانية بهدوء
+      statement_kind: RECOMMENDATION
+      provenance:
+        source_ref: isco08_mg1+internal_smb_priors.v1

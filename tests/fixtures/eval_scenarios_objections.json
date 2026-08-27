@@ -1,0 +1,29 @@
+{
+  "description": "P1-final §4 — objection eval scenarios keyed EXACTLY to the Brain taxonomy (12). One ar + one en signal probe per row; classification only, no LLM.",
+  "scenarios": [
+    {"id": "obj_price_high_en", "message": "honestly this is too expensive for us", "expect": "price_high"},
+    {"id": "obj_price_high_ar", "message": "صراحة السعر مكلف علينا", "expect": "price_high"},
+    {"id": "obj_need_think_en", "message": "sounds good, but I need to think about it", "expect": "need_think"},
+    {"id": "obj_need_think_ar", "message": "خليني أفكر وارجع لك", "expect": "need_think"},
+    {"id": "obj_have_developer_en", "message": "we already have a developer in house", "expect": "have_developer"},
+    {"id": "obj_have_developer_ar", "message": "عندنا مبرمج يشتغل معنا حالياً", "expect": "have_developer"},
+    {"id": "obj_want_simpler_en", "message": "can we keep it simple, that sounds too much for us", "expect": "want_simpler"},
+    {"id": "obj_want_simpler_ar", "message": "أبغى شي أبسط من هذا الطرح", "expect": "want_simpler"},
+    {"id": "obj_want_discount_en", "message": "do you have any discount on this?", "expect": "want_discount"},
+    {"id": "obj_want_discount_ar", "message": "في تخفيض لو دفعنا كاش؟", "expect": "want_discount"},
+    {"id": "obj_need_faster_en", "message": "we need faster delivery than your plan", "expect": "need_faster"},
+    {"id": "obj_need_faster_ar", "message": "محتاجين تسريع التنفيذ ممكن؟", "expect": "need_faster"},
+    {"id": "obj_see_value_en", "message": "how does this help my business exactly?", "expect": "see_value"},
+    {"id": "obj_see_value_ar", "message": "وين الفايدة العملية لنا هنا؟", "expect": "see_value"},
+    {"id": "obj_just_prices_en", "message": "just send prices list please", "expect": "just_prices"},
+    {"id": "obj_just_prices_ar", "message": "بس ابعث لي قائمة أسعاركم", "expect": "just_prices"},
+    {"id": "obj_comparing_vendors_en", "message": "another vendor quoted less than you", "expect": "comparing_vendors"},
+    {"id": "obj_comparing_vendors_ar", "message": "شركة ثانية قالت سعر أفضل منكم", "expect": "comparing_vendors"},
+    {"id": "obj_mgmt_approval_en", "message": "management approval is needed before anything", "expect": "need_management_approval"},
+    {"id": "obj_mgmt_approval_ar", "message": "تحتاج موافقة الإدارة قبل أي التزام", "expect": "need_management_approval"},
+    {"id": "obj_not_ready_en", "message": "we are not ready to start right now, maybe next quarter maybe", "expect": "not_ready"},
+    {"id": "obj_not_ready_ar", "message": "حالياً غير جاهز، بعد فترة نتكلم", "expect": "not_ready"},
+    {"id": "obj_trust_security_en", "message": "who accesses our data? is my data safe with you", "expect": "trust_security_concern"},
+    {"id": "obj_trust_security_ar", "message": "أمان البيانات عندي نقطة حساسة — هل بياناتنا محمية", "expect": "trust_security_concern"}
+  ]
+}

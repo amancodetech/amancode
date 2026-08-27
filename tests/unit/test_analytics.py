@@ -93,14 +93,14 @@ class AnalyticsServiceTest(TempDirTestCase, unittest.TestCase):
         self.assertEqual(self.svc.mrr()["value"], 400)  # 200 + 2400/12
 
     def test_ai_cost_and_usage(self):
-        self._insert_usage("deepseek", "deepseek-v4-pro", "strategy", 1000, 500, 0.05, 200, "ok")
-        self._insert_usage("deepseek", "deepseek-v4-flash", "routine", 500, 100, 0.01, 150, "ok")
-        self._insert_usage("deepseek", "deepseek-v4-pro", "strategy", 100, 50, 0.005, 300, "error")
+        self._insert_usage("dummy", "glm-dummy-pro", "strategy", 1000, 500, 0.05, 200, "ok")
+        self._insert_usage("dummy", "glm-dummy-flash", "routine", 500, 100, 0.01, 150, "ok")
+        self._insert_usage("dummy", "glm-dummy-pro", "strategy", 100, 50, 0.005, 300, "error")
         self.assertAlmostEqual(self.svc.ai_cost()["value"], 0.065, places=4)
         self.assertEqual(self.svc.ai_tokens()["value"], 2250)
         self.assertAlmostEqual(self.svc.ai_failure_rate()["value"], 1 / 3, places=4)
         by_model = self.svc.ai_usage_by("model")["value"]
-        pro = [g for g in by_model if g["group"] == "deepseek-v4-pro"][0]
+        pro = [g for g in by_model if g["group"] == "glm-dummy-pro"][0]
         self.assertEqual(pro["requests"], 2)
 
     def _insert_usage(self, provider, model, task, inp, out, cost, lat, status):

@@ -87,8 +87,8 @@ class InsightsEvals(TempDirTestCase, unittest.TestCase):
                 seed_support_case(self.db, category="technical_support")
         elif scenario_id == "ai_cost_spike":
             for _ in range(6):
-                seed_usage(self.db, model="deepseek-v4-pro", cost=0.5)
-            seed_usage(self.db, model="deepseek-v4-flash", cost=0.1)
+                seed_usage(self.db, model="glm-dummy-pro", cost=0.5)
+            seed_usage(self.db, model="glm-dummy-flash", cost=0.1)
         elif scenario_id == "capacity_bottleneck":
             for _ in range(6):
                 seed_project(self.db, hours=90.0)

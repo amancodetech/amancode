@@ -1,0 +1,122 @@
+# Web-Standards Pack — KB Design §14–15 (consultative summaries).
+# The SINGLE pack where statement_kind = FACT is permitted
+# (authority = official_standard): these are facts about WORLD standards,
+# never assertions about AmanCore. Any "AmanCore متوافق مع …" phrasing is
+# forbidden and remains gated by approved_claims/forbidden_claims.
+
+id: standards_web
+brain_profile_id: standards_web
+type: service_meta_pack
+version: 1.0.0
+last_verified: 2026-08-27
+
+sources:
+  - name: "W3C WCAG 2.2 (quickref JSON)"
+    organization: "W3C"
+    url: "https://www.w3.org/WAI/WCAG22/quickref/"
+    version: "WCAG 2.2"
+    authority: official_standard
+    confidence: high
+    extraction_date: 2026-08-27
+    last_verified: 2026-08-27
+    license: "W3C Document License"
+  - name: "OWASP Top 10:2025"
+    organization: "OWASP Foundation"
+    url: "https://owasp.org/Top10/"
+    version: "2025"
+    authority: official_standard
+    confidence: high
+    extraction_date: 2026-08-27
+    last_verified: 2026-08-27
+    license: "CC BY-SA 4.0"
+  - name: "NIST Cybersecurity Framework 2.0 (+ official Arabic translation)"
+    organization: "NIST"
+    url: "https://www.nist.gov/cyberframework"
+    version: "CSF 2.0 (Feb 2024)"
+    authority: official_standard
+    confidence: high
+    extraction_date: 2026-08-27
+    last_verified: 2026-08-27
+    license: "public domain (NIST)"
+  - name: "Schema.org vocabulary releases"
+    organization: "Schema.org"
+    url: "https://schema.org/docs/releases.html"
+    version: "v30 (owner-pinned)"
+    authority: official_standard
+    confidence: high
+    extraction_date: 2026-08-27
+    last_verified: 2026-08-27
+    license: "CC BY-SA 3.0"
+
+standards_web:
+  consumption_rule: >
+    تُستدعى هذه الشريحة فقط حين يلمس الحديث الجودة أو الأمان أو السيو؛
+    لا تُحقن افتراضياً في أي mode (قاعدة الـdiet في P1-2 قائمة).
+  # ----------------------------- WCAG 2.2 ---------------------------------
+  wcag_2_2_a_aa:
+    statement_kind: FACT
+    provenance: {source_ref: w3c_wcag22_quickref_json}
+    summary_ar: >
+      معيار W3C لإمكانية الوصول للويب (A/AA): استخدام بالكيبورد فقط، بديل
+      نصي للصور، تباين نص لا يقل عن 4.5:1 لعادي، تركيز ظاهر وغير محجوب،
+      بدائل للسحب، أهداف لمس بحجم أدنى، ومساعدة متسقة عبر الصفحات.
+      ينطبق الحكم النهائي على كل واجهة على حدة بعد فحص فعلي.
+    new_in_2_2_notes:
+      - "Focus Appearance / Focus Not Obscured (رؤية التركيز وعدم حجبه)"
+      - "Dragging Alternatives (بديل إلزامي لأي عملية سحب)"
+      - "Target Size Minimum (حد أدنى لهدف اللمس)"
+      - "Consistent Help / Redundant Entry (مساعدة متسقة وتقليل الإعادة)"
+    claim_guard_ar: "يُمنع ادعاء امتثال AmanCore؛ الفحص لكل مشروع على حدة."
+  # --------------------------- OWASP Top 10:2025 --------------------------
+  owasp_top_10_2025:
+    statement_kind: FACT
+    provenance: {source_ref: owasp_org_top10_2025_publication}
+    categories:
+      - {rank: A01, name: "Broken Access Control",
+         one_liner_ar: "التحقق من صلاحية كل طلب من جهة الخادم، ليس الواجهة فقط."}
+      - {rank: A02, name: "Security Misconfiguration",
+         one_liner_ar: "تهيئة آمنة افتراضية للخوادم والأطر وإغلاق النقاط المكشوفة."}
+      - {rank: A03, name: "Software Supply Chain Failures",
+         one_liner_ar: "حوكمة الاعتمادات والإضافات الخارجية وسلسلة البناء."}
+      - {rank: A04, name: "Cryptographic Failures",
+         one_liner_ar: "تشفير البيانات أثناء التنقل والتخزين وإدارة مفاتيح سليمة."}
+      - {rank: A05, name: "Injection",
+         one_liner_ar: "فصل المدخلات عن الأوامر/الاستعلامات ومعايرتها دائماً."}
+      - {rank: A06, name: "Insecure Design",
+         one_liner_ar: "أنماط تصميم آمنة منذ الصفحة الأولى لا ترقيعات لاحقة."}
+      - {rank: A07, name: "Authentication Failures",
+         one_liner_ar: "إدارة جلسات وكلمات مرور واستعادة حساب بمسارات مضمونة."}
+      - {rank: A08, name: "Software or Data Integrity Failures",
+         one_liner_ar: "التحقق من سلامة التحديثات والمكونات وخطافات CI."}
+      - {rank: A09, name: "Logging & Alerting Failures",
+        one_liner_ar: "سجلّات كافية وتنبيه قابل للتصرف عند الحادثة."}
+      - {rank: A10, name: "Server-Side Request Forgery",
+         one_liner_ar: "تقييد عناوين URL التي يجلبها الخادم بنفسه وفق قائمة مسموحة."}
+    claim_guard_ar: >
+      الإشارة إليها كمرجع عالمي جائزة؛ تكييف امتثال AmanCore يمنع.
+  # ------------------------------ NIST CSF 2.0 ----------------------------
+  nist_csf_2_0:
+    statement_kind: FACT
+    provenance: {source_ref: nist_gov_csf20_plus_official_arabic_translation}
+    functions_arabic:
+      govern: الحوكمة
+      identify: التحديد
+      protect: الحماية
+      detect: الكشف
+      respond: الاستجابة
+      recover: التعافي
+    usage_note_ar: >
+      المصطلحات العربية أعلاه وفق الترجمة الرسمية لـ NIST؛ تُستخدم للتسمية
+      الصحيحة في نقاش المخاطر مع العملاء دون وعود مستوى تطبيق.
+  # ---------------------------- Schema.org v30 ----------------------------
+  schema_org_v30:
+    statement_kind: FACT
+    provenance: {source_ref: schema_org_releases_page_v30_owner_pinned}
+    relevant_types:
+      - {name: LocalBusiness, use_ar: "أعمال محلي لهوية وفروع وأوقات عمل"}
+      - {name: Restaurant, use_ar: "مطعم: قائمة، حجز، موقع فرعي"}
+      - {name: Product, use_ar: "منتج متجر مع مواصفات وتوفر"}
+      - {name: Offer, use_ar: "عرض سعر/توفر مرتبط بالمنتج"}
+      - {name: Event, use_ar: "فعالية بتوقيت ومكان ومقاعد"}
+      - {name: RealEstateListing, use_ar: "عرض عقاري بخصائص وموقع وسعر"}
+    claim_guard_ar: "البيانات المنظمة تساعد محركات الفهم ولا تضمن رانك."

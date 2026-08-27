@@ -75,12 +75,12 @@ def seed_support_case(db, *, category="technical_support", priority="MEDIUM",
     return case_id
 
 
-def seed_usage(db, *, model="deepseek-v4-pro", task="strategy", cost=0.5, tokens=1000,
+def seed_usage(db, *, model="glm-dummy-pro", task="strategy", cost=0.5, tokens=1000,
                status="ok", days_ago=0) -> None:
     db.execute(
         "INSERT INTO usage_records (request_id, provider, model, task_class, input_tokens, "
         " output_tokens, estimated_cost, latency_ms, status, created_at) "
-        "VALUES (?, 'deepseek', ?, ?, 500, ?, ?, 200, ?, ?)",
+        "VALUES (?, 'dummy', ?, ?, 500, ?, ?, 200, ?, ?)",
         (new_id(), model, task, tokens - 500, cost, status, _ts(days_ago)),
     )
     db.commit()

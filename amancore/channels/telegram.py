@@ -80,10 +80,15 @@ class MockTelegramProvider:
 
     def __init__(self):
         self.sent: list[dict] = []
+        self.chat_actions: list[dict] = []
 
     def send(self, recipient: str, payload: dict) -> dict:
         self.sent.append({"recipient": recipient, "payload": payload})
         return {"ok": True, "result": {"message_id": len(self.sent)}}
+
+    def send_chat_action(self, recipient: str, action: str = "typing") -> dict:
+        self.chat_actions.append({"recipient": recipient, "action": action})
+        return {"ok": True}
 
 
 class TelegramBotApiProvider:
@@ -123,6 +128,26 @@ class TelegramBotApiProvider:
         result = data.get("result") or {}
         return {"ok": True, "result": {"message_id": result.get("message_id")}}
 
+    def send_chat_action(self, recipient: str, action: str = "typing") -> dict:
+        """P1-2 §4 — perceived latency: Telegram typing indicator."""
+        block_unless_production_enabled(self.config)
+        if not self.bot_token:
+            raise RuntimeError("telegram provider not configured "
+                               f"(env '{self.config.get('bot_token_env', 'TELEGRAM_CUSTOMER_BOT_TOKEN')}')")
+        url = f"{self.api_base}/bot{self.bot_token}/sendChatAction"
+        import requests
+
+        try:
+            resp = requests.post(url, json={"chat_id": str(recipient),
+                                            "action": action}, timeout=10)
+        except requests.RequestException as exc:  # network → transient
+            raise TelegramAPIError("provider",
+                                   f"telegram network error: {exc}") from exc
+        if resp.status_code != 200:
+            raise classify_telegram_error(resp.status_code,
+                                          "sendChatAction failed")
+        return {"ok": True}
+
 
 class TelegramAdapter(ChannelAdapter):
     channel = "telegram"
@@ -158,6 +183,21 @@ class TelegramAdapter(ChannelAdapter):
         if not re.fullmatch(r"-?\d+", s):
             raise ValueError(f"invalid telegram chat id: {raw!r}")
         return s
+
+    def send_chat_action(self, recipient: str, action: str = "typing") -> bool:
+        """P1-2 §4 — perceived latency hook (delegates to the provider).
+
+        Returns False silently when the provider cannot express chat actions
+        (e.g. test doubles) — typing must never break message intake.
+        """
+        provider = getattr(self.provider, "send_chat_action", None)
+        if provider is None:
+            return False
+        try:
+            provider(str(recipient), action)
+            return True
+        except Exception:  # noqa: BLE001 — indicator is best-effort only
+            return False
 
     def verify_webhook(self, mode: str = "", token: str = "", challenge: str = "") -> dict:
         """Telegram performs NO GET challenge handshake (Meta-style); every

@@ -34,6 +34,25 @@ _EXTENSION_FIELDS = (
 )
 _FALLBACK_INDUSTRY = "generic_business"
 
+# P1-2 §3 — prompt diet: per-mode allow-lists. A mode never receives data it
+# does not use. ``None`` value = legacy full slice (only for unknown/None
+# modes, so behaviour is unchanged when mode is not threaded through).
+_MODE_EXT_SLICE: dict[str, tuple | None] = {
+    "NEED": ("common_pain_points",),
+    "SHAPING": (),
+    "COMMERCIAL": (),          # PRICE/T1 band path — no pack payloads
+    "OFFER": (),               # objection ladder lives in Brain profile
+    "NEGOTIATION": (),
+}
+_MODE_BRAIN_SLICE: dict[str, tuple | None] = {
+    "NEED": ("id", "goals"),
+    "SHAPING": ("id", "typical_sections", "features"),
+    # OBJECTION row + relevant service only
+    "OFFER": ("id", "objections", "relevant_services"),
+    "NEGOTIATION": ("id", "objections", "relevant_services"),
+    "COMMERCIAL": ("id",),     # price ask: the name is usually all it needs
+}
+
 
 def _load_yaml(path: Path) -> dict:
     try:
@@ -96,20 +115,31 @@ class KnowledgeRetriever:
     def retrieve(self, industry: str | None = None, service: str | None = None,
                  language: str | None = None, size: str | None = None,
                  stage: str | None = None, brain_profile: dict | None = None,
-                 include_source_refs: bool = False) -> dict:
+                 include_source_refs: bool = False,
+                 mode: str | None = None) -> dict:
         """Return a small merged slice (Brain profile + pack extension).
 
         ``include_source_refs`` (default False) toggles provenance references;
         it is intended for internal/audit use only and must never be enabled
         when composing a customer-facing reply.
+
+        P1-2 §3: ``mode`` narrows the slice further (prompt diet). Known
+        modes get only the fields listed in _MODE_*_SLICE; unknown/None keeps
+        the legacy full slice.
         """
         industry = industry or _FALLBACK_INDUSTRY
         pack = self.packs.get(industry) or self.packs.get(_FALLBACK_INDUSTRY) \
             or {}
+        ext_allowed = (_MODE_EXT_SLICE.get(mode)
+                       if mode in _MODE_EXT_SLICE else None)
+        brain_allowed = (_MODE_BRAIN_SLICE.get(mode)
+                         if mode in _MODE_BRAIN_SLICE else None)
 
         # 1) build the DATA-only extension slice (allow-list).
         ext: dict = {}
         for field in _EXTENSION_FIELDS:
+            if ext_allowed is not None and field not in ext_allowed:
+                continue
             val = pack.get(field)
             if val is None:
                 continue
@@ -144,16 +174,71 @@ class KnowledgeRetriever:
             "extension": ext,
         }
         if brain_profile is not None and isinstance(brain_profile, dict):
+            if brain_allowed is None:
+                keys = ("id", "goals", "typical_sections", "features",
+                        "conversion", "trust_needs", "objections",
+                        "relevant_services", "cross_sell")
+            else:
+                keys = brain_allowed
             merged["brain_profile"] = {
-                k: brain_profile.get(k) for k in
-                ("id", "goals", "typical_sections", "features", "conversion",
-                 "trust_needs", "objections", "relevant_services",
-                 "cross_sell") if brain_profile.get(k)
+                k: brain_profile.get(k) for k in keys
+                if brain_profile.get(k)
             }
         if include_source_refs and pack.get("sources"):
             merged["source_refs"] = [s.get("ref") for s in pack["sources"]
                                      if isinstance(s, dict)]
+
+        # P1-final §3 — decision-roles prior (BANT-lite tone ONLY). Sliced by
+        # (industry, size); conservative phrasing travels with the entry.
+        roles = self.decision_roles_prior(industry, size)
+        if roles:
+            merged["decision_roles"] = roles
         return merged
+
+    def decision_roles_prior(self, industry: str | None = None,
+                             size: str | int | None = None) -> dict | None:
+        """Return the smallest honest prior for qualification TONE, or None.
+
+        ``size`` may be a user count (int) or one of the bucket keys. No CRM
+        field is consulted here — the CRM stays the deterministic truth for a
+        specific lead; this slice only shapes phrasing."""
+        meta = self.packs.get("decision_roles")
+        if not isinstance(meta, dict):
+            return None
+        base = ((meta.get("decision_roles") or {})
+                .get("base_matrix") or {})
+        bucket = None
+        if size is not None:
+            n = int(size) if str(size).isdigit() else None
+            keys = ("micro_1_4", "small_5_49", "medium_50_249",
+                    "large_250_plus")
+            if n is None:
+                for k in keys:
+                    if k.startswith(str(size).lower()[:5]):
+                        bucket = base.get(k)
+                        break
+            else:
+                picked = "micro_1_4" if n <= 4 else \
+                    "small_5_49" if n <= 49 else \
+                    "medium_50_249" if n <= 249 else "large_250_plus"
+                bucket = base.get(picked)
+        override = ((meta.get("decision_roles") or {})
+                    .get("industry_overrides") or {}).get(industry or "")
+        if bucket is None and not override:
+            return None
+        out: dict = {}
+        if bucket:
+            out["roles"] = {k: v for k, v in (bucket.get("roles") or {}).items()
+                            if v}
+            out["buying_concerns"] = list(bucket.get("buying_concerns") or [])
+            out["tone_hint_ar"] = bucket.get("tone_hint_ar")
+            out["size"] = bucket.get("size")
+        if override:
+            out["industry_note"] = override.get("note")
+            out["tone_delta_ar"] = override.get("tone_delta_ar")
+        out["kind"] = "RECOMMENDATION"
+        out["provenance"] = {"source_ref": "isco08_mg1+internal_smb_priors.v1"}
+        return out
 
     def reload(self) -> None:
         self._packs = None
