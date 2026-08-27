@@ -3,16 +3,19 @@ defaults:
   max_retries: 2
   monthly_cost_alert_usd: 20
 
+# Effective chain per task: GLM only -> deterministic fallback.
+# DeepSeek paused 2026-08-27 (402 no balance) and Gemini capped (20/day):
+# definitions kept in `providers:` below, re-add to a chain slot after top-up.
 task_routing:
-  strategy:    {primary: deepseek-v4-pro,   secondary: gemini,            fallback: glm}
-  reasoning:   {primary: deepseek-v4-pro,   secondary: gemini,            fallback: glm}
-  pricing:     {primary: deepseek-v4-pro,   secondary: gemini,            fallback: glm}
-  coding:      {primary: deepseek-v4-flash, secondary: glm,               fallback: deepseek-v4-pro}
-  routine:     {primary: deepseek-v4-flash, secondary: glm,               fallback: deepseek-v4-pro}
-  classification: {primary: deepseek-v4-flash, secondary: glm,            fallback: deepseek-v4-pro}
-  extraction:  {primary: deepseek-v4-flash, secondary: glm,               fallback: deepseek-v4-pro}
-  summarization: {primary: deepseek-v4-flash, secondary: glm,             fallback: deepseek-v4-pro}
-  multimodal:  {primary: gemini,            secondary: deepseek-v4-pro,   fallback: glm}
+  strategy:    {primary: glm, secondary: null, fallback: null}
+  reasoning:   {primary: glm, secondary: null, fallback: null}
+  pricing:     {primary: glm, secondary: null, fallback: null}
+  coding:      {primary: glm, secondary: null, fallback: null}
+  routine:     {primary: glm, secondary: null, fallback: null}
+  classification: {primary: glm, secondary: null, fallback: null}
+  extraction:  {primary: glm, secondary: null, fallback: null}
+  summarization: {primary: glm, secondary: null, fallback: null}
+  multimodal:  {primary: gemini, secondary: null, fallback: null}
 
 providers:
   deepseek-v4-pro:
