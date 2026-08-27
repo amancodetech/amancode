@@ -44,6 +44,9 @@ class OpenAICompatibleProvider(Provider):
         url = f"{self._base_url()}/chat/completions"
         headers = {"Authorization": f"Bearer {self._api_key()}", "Content-Type": "application/json"}
         payload = {"model": self.model, "messages": messages}
+        # config-injected extras (e.g. thinking level) — never override core fields
+        for k, v in (self.config.get("extra_payload") or {}).items():
+            payload.setdefault(k, v)
         resp = requests.post(url, json=payload, headers=headers, timeout=kwargs.get("timeout", 60))
         if resp.status_code != 200:
             raise RoutingError(f"{self.provider_id} HTTP {resp.status_code}: {resp.text[:200]}")

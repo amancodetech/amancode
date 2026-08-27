@@ -43,6 +43,8 @@ providers:
     base_url_env: ZHIPU_BASE_URL
     api_key_env: ZHIPU_API_KEY
     model: glm-5.3-flash
+    extra_payload:
+      thinking: {level: low}
 
 # USD per 1M tokens (estimates, configurable)
 pricing_per_million:
