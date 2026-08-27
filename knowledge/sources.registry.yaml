@@ -1,0 +1,193 @@
+# Knowledge Layer — Source Registry (v1)
+#
+# Single reference for every external source cited by the knowledge packs.
+# Internal AmanCore facts/pricing/claims are NOT listed here: they live in the
+# Business Brain and are authoritative regardless of this registry.
+#
+# A pack's per-field `source` block may reference a source by `name` from this
+# registry or embed the full provenance block directly. The registry guarantees
+# consistency of organization / url / version / license across packs.
+
+version: 1.0.0
+last_verified: 2026-08-27
+
+sources:
+  isic_rev5:
+    name: "ISIC Rev.5 (International Standard Industrial Classification)"
+    organization: "United Nations Statistics Division"
+    url: "https://unstats.un.org/unsd/classifications/Econ/ISIC"
+    version: "Rev.5"
+    type: official_standard
+    authority: official_standard
+    geographic_scope: global
+    extraction_date: 2026-08-27
+    last_verified: 2026-08-27
+    license: "public (attribution requested)"
+    machine_readable: true
+    allowed_use: ["industry_classification", "taxonomy_reference", "isic_refs"]
+    prohibited_use: ["pricing", "company_claim", "must_have_assertion"]
+
+  isic_rev4:
+    name: "ISIC Rev.4 (reference classification)"
+    organization: "United Nations Statistics Division"
+    url: "https://unstats.un.org/unsd/classifications/Econ"
+    version: "Rev.4"
+    type: official_standard
+    authority: official_standard
+    geographic_scope: global
+    extraction_date: 2026-08-27
+    last_verified: 2026-08-27
+    license: "public (attribution requested)"
+    machine_readable: true
+    allowed_use: ["industry_classification", "taxonomy_reference"]
+    prohibited_use: ["pricing", "company_claim"]
+
+  schema_org:
+    name: "Schema.org vocabulary"
+    organization: "Schema.org (W3C community)"
+    url: "https://schema.org"
+    version: "v30.0"
+    type: open_vocabulary
+    authority: methodology
+    geographic_scope: global
+    extraction_date: 2026-08-27
+    last_verified: 2026-08-27
+    license: "CC-BY-SA vocabulary terms apply"
+    machine_readable: true
+    allowed_use: ["capability_typing", "structured_data_reference"]
+    prohibited_use: ["pricing", "company_claim"]
+
+  oecd_sme:
+    name: "OECD SME & entrepreneurship statistics"
+    organization: "OECD"
+    url: "https://stats.oecd.org"
+    version: "current"
+    type: official_statistics
+    authority: official_statistics
+    geographic_scope: "OECD economies"
+    extraction_date: 2026-08-27
+    last_verified: 2026-08-27
+    license: "attribution"
+    machine_readable: true
+    allowed_use: ["sme_context", "business_demography"]
+    prohibited_use: ["pricing", "company_claim"]
+
+  wb_enterprise_surveys:
+    name: "World Bank Enterprise Surveys"
+    organization: "World Bank Group"
+    url: "https://www.enterprisesurveys.org/en/data"
+    version: "current (B-READY successor)"
+    type: official_statistics
+    authority: official_statistics
+    geographic_scope: "150+ economies"
+    extraction_date: 2026-08-27
+    last_verified: 2026-08-27
+    license: "free with registration for microdata"
+    machine_readable: true
+    allowed_use: ["sme_context", "operational_reality"]
+    prohibited_use: ["pricing", "company_claim"]
+
+  isco_08:
+    name: "ISCO-08 (International Standard Classification of Occupations)"
+    organization: "ILO"
+    url: "https://ilostat.ilo.org"
+    version: "ISCO-08"
+    type: official_standard
+    authority: official_standard
+    geographic_scope: global
+    extraction_date: 2026-08-27
+    last_verified: 2026-08-27
+    license: "free"
+    machine_readable: true
+    allowed_use: ["decision_role_reference"]
+    prohibited_use: ["pricing", "company_claim"]
+
+  wcag_22:
+    name: "WCAG 2.2 (Web Content Accessibility Guidelines)"
+    organization: "W3C WAI"
+    url: "https://www.w3.org/TR/WCAG22/"
+    version: "2.2"
+    type: official_standard
+    authority: official_standard
+    geographic_scope: global
+    extraction_date: 2026-08-27
+    last_verified: 2026-08-27
+    license: "W3C permissive"
+    machine_readable: true
+    allowed_use: ["accessibility_floor", "technical_quality"]
+    prohibited_use: ["pricing", "company_claim"]
+
+  owasp_top10_2025:
+    name: "OWASP Top 10:2025"
+    organization: "OWASP Foundation"
+    url: "https://owasp.org/Top10/"
+    version: "2025"
+    type: official_standard
+    authority: official_standard
+    geographic_scope: global
+    extraction_date: 2026-08-27
+    last_verified: 2026-08-27
+    license: "CC-BY 3.0"
+    machine_readable: true
+    allowed_use: ["security_floor", "technical_quality"]
+    prohibited_use: ["pricing", "company_claim", "certification_claim"]
+
+  nist_csf20:
+    name: "NIST Cybersecurity Framework 2.0"
+    organization: "NIST"
+    url: "https://www.nist.gov/cyberframework"
+    version: "2.0"
+    type: official_standard
+    authority: official_standard
+    geographic_scope: global
+    extraction_date: 2026-08-27
+    last_verified: 2026-08-27
+    license: "public domain"
+    machine_readable: true
+    allowed_use: ["security_floor", "technical_quality"]
+    prohibited_use: ["pricing", "company_claim", "certification_claim"]
+
+  spin_selling:
+    name: "SPIN Selling"
+    organization: "Huthwaite Research"
+    url: ""
+    version: "1988"
+    type: methodology
+    authority: methodology
+    geographic_scope: global
+    extraction_date: 2026-08-27
+    last_verified: 2026-08-27
+    license: "methodology (not absolute truth)"
+    machine_readable: false
+    allowed_use: ["consultative_method", "objection_method"]
+    prohibited_use: ["pricing", "company_claim", "script"]
+
+  reflective_listening:
+    name: "Reflective listening / paraphrase-back"
+    organization: "Miller & Rollnick (motivational interviewing); contact-center QA practice"
+    url: ""
+    version: "method"
+    type: methodology
+    authority: methodology
+    geographic_scope: global
+    extraction_date: 2026-08-27
+    last_verified: 2026-08-27
+    license: "methodology"
+    machine_readable: false
+    allowed_use: ["active_listening", "recap_method"]
+    prohibited_use: ["pricing", "company_claim", "script"]
+
+  diglossia:
+    name: "Arabic diglossia (classical vs colloquial register)"
+    organization: "Ferguson 1959; Britannica"
+    url: "https://www.britannica.com/topic/diglossia"
+    version: "concept"
+    type: methodology
+    authority: methodology
+    geographic_scope: "MENA / Gulf"
+    extraction_date: 2026-08-27
+    last_verified: 2026-08-27
+    license: "concept"
+    machine_readable: false
+    allowed_use: ["register_calibration"]
+    prohibited_use: ["dialect_generation", "company_claim"]

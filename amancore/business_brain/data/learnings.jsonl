@@ -19,3 +19,46 @@
 {"category": "need", "value": "Cultural greeting opens need discovery", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T05:13:38Z", "wa_id": "905342422565"}
 {"category": "sales", "value": "Greeting acknowledgement precedes needs", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T05:13:59Z", "wa_id": "905342422565"}
 {"category": "need", "value": "Probing for customer challenges", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T05:14:09Z", "wa_id": "905342422565"}
+{"category": "need", "value": "Opening greeting invites customer need d", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T09:42:00Z", "contact_id": "7707069522"}
+{"category": "need", "value": "asking about challenges to uncover needs", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T09:42:25Z", "contact_id": "7707069522"}
+{"category": "need", "value": "Probing challenges to identify needs", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T09:45:47Z", "contact_id": "905000000001"}
+{"category": "need", "value": "Suggested website sections for associati", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T09:46:04Z", "contact_id": "7707069522"}
+{"category": "sales", "value": "Tailoring services to customer context", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T09:48:05Z", "contact_id": "7707069522"}
+{"category": "need", "value": "Asking about challenges reveals customer", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T09:57:28Z", "contact_id": "905342422565"}
+{"category": "need", "value": "Initial open-ended needs assessment", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T09:59:01Z", "contact_id": "905342422565"}
+{"category": "sales", "value": "Proactive need discovery following greet", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T10:04:13Z", "contact_id": "905342422565"}
+{"category": "support", "value": "Customer need for quick replies", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T10:06:25Z", "contact_id": "905342422565"}
+{"category": "sales", "value": "Warm greeting with service invitation", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T10:23:52Z", "contact_id": "905342422565"}
+{"category": "support", "value": "welcoming customer with assistance offer", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T10:24:16Z", "contact_id": "905342422565"}
+{"category": "need", "value": "Greeting opens need identification", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T10:24:33Z", "contact_id": "905342422565"}
+{"category": "need", "value": "proactive need clarification via service", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T10:25:50Z", "contact_id": "905342422565"}
+{"category": "need", "value": "identify customer's primary business cha", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T10:32:48Z", "contact_id": "905342422565"}
+{"category": "need", "value": "", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T10:40:04Z", "contact_id": "905342422565"}
+{"category": "need", "value": "Probe for pain points to tailor solution", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T12:01:17Z", "contact_id": "905342422565"}
+{"category": "need", "value": "Clarify website purpose before offering", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T12:01:41Z", "contact_id": "905342422565"}
+{"category": "sales", "value": "agreement on full proposed solution scop", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T12:02:39Z", "contact_id": "905342422565"}
+{"category": "sales", "value": "Transition from broad agreement to speci", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T12:03:35Z", "contact_id": "905342422565"}
+{"category": "sales", "value": "Specific suggestion for indecisive custo", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T12:03:58Z", "contact_id": "905342422565"}
+{"category": "sales", "value": "tailored starter package for uncertain c", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T12:04:08Z", "contact_id": "905342422565"}
+{"category": "objection", "value": "redirecting price questions to needs", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T12:05:20Z", "contact_id": "905342422565"}
+{"category": "objection", "value": "Discover needs before quoting price", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T12:05:25Z", "contact_id": "905342422565"}
+{"category": "need", "value": "customer's main challenge identification", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T12:30:15Z", "contact_id": "905342422565"}
+{"category": "need", "value": "Clarify client's most important requirem", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T12:34:04Z", "contact_id": "62800000000101"}
+{"category": "need", "value": "most important website section for assoc", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T13:22:30Z", "contact_id": "62800000000102"}
+{"category": "pricing", "value": "price range based on requirements", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T13:22:34Z", "contact_id": "62800000000102"}
+{"category": "need", "value": "Early customer needs identification", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T13:47:27Z", "contact_id": "905342422565"}
+{"category": "need", "value": "Simplification through requirement clari", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T14:07:32Z", "contact_id": "62800000000103"}
+{"category": "objection", "value": "Concrete proposal and clarifying questio", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T14:08:05Z", "contact_id": "62800000000103"}
+{"category": "support", "value": "", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T14:08:13Z", "contact_id": "62800000000103"}
+{"category": "pricing", "value": "trust through transparent pricing", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T14:08:21Z", "contact_id": "62800000000103"}
+{"category": "need", "value": "Personalized follow-up uncovering custom", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T14:13:14Z", "contact_id": "905342422565"}
+{"category": "support", "value": "remembering context personalizes ongoing", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T22:36:52Z", "contact_id": "905342422565"}
+{"category": "need", "value": "tailored services based on customer cont", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T22:49:16Z", "contact_id": "7707069522"}
+{"category": "need", "value": "key need identification through question", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T22:58:18Z", "contact_id": "6280000000099"}
+{"category": "pricing", "value": "Accurate quote requires specific project", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T22:58:26Z", "contact_id": "6280000000099"}
+{"category": "need", "value": "bilingual donation portal", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T22:58:50Z", "contact_id": "6280000000099"}
+{"category": "need", "value": "", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-26T23:14:25Z", "contact_id": "905342422565"}
+{"category": "sales", "value": "Acknowledge setup topic, pivot to need q", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-27T00:14:45Z", "contact_id": "16465894168"}
+{"category": "objection", "value": "AI transparency and human team reassuran", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-27T00:32:01Z", "contact_id": "905342422565"}
+{"category": "need", "value": "core feature prioritization", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-27T00:33:31Z", "contact_id": "905342422565"}
+{"category": "need", "value": "Essential feature clarification reveals", "source": "customer_message", "confidence": 0.6, "ts": "2026-08-27T00:33:33Z", "contact_id": "905342422565"}

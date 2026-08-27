@@ -24,6 +24,12 @@ class ChannelAdapter:
 
     # ---- contract surface (each method has a real core consumer) -------
 
+    def signature_header_name(self) -> str:
+        """Header carrying the request-authenticating value for this channel.
+        Default is Meta's X-Hub-Signature-256; channels override (e.g.
+        Telegram's secret-token header)."""
+        return "x-hub-signature-256"
+
     def verify_signature(self, body_bytes: bytes, signature_header: str | None) -> bool:
         """Fail-closed by default: a channel that enables signature_required
         MUST implement real verification (loud misconfiguration > silent bypass)."""

@@ -158,7 +158,12 @@ _COLUMN_MIGRATIONS = [
     ("conversations", "next_followup_at", "TEXT"),
     ("conversations", "mode", "TEXT NOT NULL DEFAULT 'AI_ACTIVE'"),
     ("conversations", "external_thread_id", "TEXT"),
+    ("conversations", "working_memory", "TEXT"),   # COM-1: conversation mode state
     ("opportunities", "reason", "TEXT"),
+    ("pricing_snapshots", "status", "TEXT NOT NULL DEFAULT 'approved'"),  # pricing lifecycle
+    ("pricing_snapshots", "scope_fingerprint", "TEXT"),                   # scope-change invalidation
+    ("pricing_snapshots", "superseded_at", "TEXT"),
+    ("pricing_snapshots", "superseded_by", "TEXT"),
     ("channel_messages", "media_kind", "TEXT"),
     ("channel_messages", "media_ref", "TEXT"),
     ("channel_messages", "outbox_message_id", "TEXT"),

@@ -8,7 +8,7 @@ from ..services.events import CanonicalEvent
 MODES = ["AI_ACTIVE", "HUMAN_REQUESTED", "HUMAN_ACTIVE", "AI_RESUMED", "CLOSED"]
 
 
-ALL_CHANNELS = ["whatsapp", "facebook", "instagram", "tiktok", "youtube", "website"]
+ALL_CHANNELS = ["whatsapp", "telegram", "facebook", "instagram", "tiktok", "youtube", "website"]
 
 
 class HandoverService:

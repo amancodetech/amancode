@@ -1,0 +1,157 @@
+# ConversationPolicy — the ONLY steering source for conversation behavior.
+# Missing/empty file is safe: code defaults in amancore/conversation/policy.py
+# apply. Values here OVERRIDE defaults per-key (shallow merge at top level).
+#
+# Knowledge (services, industries, claims, price bands) lives in the
+# Business Brain — NOT here. This file holds STRATEGY only.
+
+value_first: true
+max_questions_per_reply: 1
+budget_weight_outside_commercial: 0
+
+service_categories:
+  website:
+    keywords: [موقع, "موقع إلكتروني", صفحة, website, site, situs, laman]
+    brain_service_id: business_website_system
+  ecommerce:
+    keywords: [متجر, متاجر, "تجارة إلكترونية", e-commerce, ecommerce, "online store", "toko online", toko]
+    brain_service_id: ecommerce_store
+  mobile:
+    keywords: [تطبيق, تطبيقات, جوال, app, "mobile app", android, ios, aplikasi]
+    brain_service_id: mobile_app
+  business_system:
+    keywords: [erp, نظام, "نظام إدارة", محاسبة, مخزون, crm, "إدارة موارد", sistem, inventory]
+    brain_service_id: business_system_mini_erp
+  automation:
+    keywords: [أتمتة, اتمة, "ذكاء اصطناعي", بوت, automation, ai, chatbot, bot, otomatisasi]
+    brain_service_id: ai_automation_suite
+
+industry_aliases:
+  association_ngo: [جمعية, جمعيات, خيرية, تعاون, ngo, association, charity, foundation, yayasan]
+  restaurant: [مطعم, مطاعم, كافيه, مقهى, restaurant, cafe, "coffee shop", restoran]
+  real_estate: [عقار, عقارات, عقاري, "real estate", realty, property, properti]
+  ecommerce: [متجر, "تجارة إلكترونية", e-commerce, ecommerce, "online store", "toko online"]
+
+question_weights:
+  website:      {key_features: 9, integrations: 8, languages: 7, timeline: 5, authority: 4, scale: 4}
+  ecommerce:    {key_features: 8, scale: 9, integrations: 8, languages: 6, timeline: 6, authority: 4}
+  mobile:       {key_features: 8, integrations: 7, scale: 6, languages: 4, timeline: 6, authority: 4}
+  business_system: {key_features: 10, scale: 9, integrations: 9, languages: 5, timeline: 6, authority: 5}
+  automation:   {key_features: 9, integrations: 7, scale: 6, languages: 3, timeline: 5, authority: 4}
+  _default:     {key_features: 9, integrations: 6, scale: 5, languages: 5, timeline: 5, authority: 4}
+
+commercial_boost: {budget_band: 9, timeline: 8, authority: 7}
+
+field_satisfied_by:
+  key_features: [scope]
+  scale: [users]
+  languages: [languages]
+  integrations: [integrations]
+  timeline: [timeline]
+  authority: [authority]
+  budget_band: [budget]
+
+question_hints:
+  key_features:
+    ar: "ما الجزء الأهم الذي لا يمكن الاستغناء عنه؟"
+    en: "Which part matters most to you?"
+    id: "Bagian mana yang paling penting?"
+  scale:
+    ar: "كم عدد المستخدمين أو حجم النشاط تقريبًا؟"
+    en: "Roughly how many users or how big is the operation?"
+    id: "Kira-kira berapa jumlah pengguna atau skala usahanya?"
+  languages:
+    ar: "بأي لغة أو لغات تريد الواجهة؟"
+    en: "Which language(s) should it support?"
+    id: "Bahasa apa saja yang dibutuhkan?"
+  integrations:
+    ar: "هل يحتاج ربطًا مع أنظمة موجودة (دفع، واتساب، محاسبة)؟"
+    en: "Does it need to connect to existing systems (payments, WhatsApp, accounting)?"
+    id: "Perlu terhubung dengan sistem lain (pembayaran, WhatsApp, akuntansi)?"
+  timeline:
+    ar: "متى تحب أن يكون جاهزًا؟"
+    en: "When would you like it ready?"
+    id: "Kapan kira-kira dibutuhkan jadi?"
+  authority:
+    ar: "من يعتمد المشروع نهائيًا من جهتكم؟"
+    en: "Who gives the final approval on your side?"
+    id: "Siapa yang memberi keputusan akhir?"
+  budget_band:
+    ar: "ما نطاق الميزانية التقريبي الذي وضعتموه؟"
+    en: "What rough budget range have you set aside?"
+    id: "Kira-kira berapa rentang anggarannya?"
+
+request_verbs:
+  - أريد
+  - نريد
+  - ابغى
+  - " أحتاج"
+  - احتاج
+  - نبني
+  - بناء
+  - تصميم
+  - need
+  - want
+  - "looking for"
+  - build
+  - buat
+  - butuh
+  - mau
+  - cari
+
+commercial_signals:
+  - "كم سعر"
+  - "كم تكلف"
+  - بكم
+  - السعر
+  - التكلفة
+  - "كم تستغرق"
+  - مدة
+  - المدة
+  - متى
+  - الميزانية
+  - ميزانية
+  - "من يقرر"
+  - "من يعتمد"
+  - "عرض سعر"
+  - دفعة
+  - "how long"
+  - "how much time"
+  - timeline
+  - budget
+  - price
+  - cost
+  - "berapa lama"
+  - harga
+  - anggaran
+
+affirmations:
+  - نعم
+  - تمام
+  - صحيح
+  - ممتاز
+  - موافق
+  - حلو
+  - كذا
+  - " تمام "
+  - yes
+  - ok
+  - okay
+  - good
+  - great
+  - correct
+  - ya
+  - betul
+  - setuju
+
+suggestion_triggers:
+  - "لا أدري"
+  - "لا ادري"
+  - "ما أعرف"
+  - "ما اعرف"
+  - اقترح
+  - "أنت تقترح"
+  - "عليك الاختيار"
+  - suggest
+  - "you decide"
+  - "up to you"

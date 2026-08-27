@@ -4,15 +4,15 @@ defaults:
   monthly_cost_alert_usd: 20
 
 task_routing:
-  strategy:    {primary: deepseek-v4-pro,   secondary: gemini,            fallback: deepseek-v4-flash}
-  reasoning:   {primary: deepseek-v4-pro,   secondary: gemini,            fallback: deepseek-v4-flash}
-  pricing:     {primary: deepseek-v4-pro,   secondary: gemini,            fallback: deepseek-v4-flash}
-  coding:      {primary: deepseek-v4-flash, secondary: deepseek-v4-pro,   fallback: gemini}
-  routine:     {primary: deepseek-v4-flash, secondary: deepseek-v4-pro,   fallback: gemini}
-  classification: {primary: deepseek-v4-flash, secondary: gemini,         fallback: deepseek-v4-pro}
-  extraction:  {primary: deepseek-v4-flash, secondary: gemini,            fallback: deepseek-v4-pro}
-  summarization: {primary: deepseek-v4-flash, secondary: gemini,          fallback: deepseek-v4-pro}
-  multimodal:  {primary: gemini,            secondary: deepseek-v4-pro,   fallback: null}
+  strategy:    {primary: deepseek-v4-pro,   secondary: gemini,            fallback: glm}
+  reasoning:   {primary: deepseek-v4-pro,   secondary: gemini,            fallback: glm}
+  pricing:     {primary: deepseek-v4-pro,   secondary: gemini,            fallback: glm}
+  coding:      {primary: deepseek-v4-flash, secondary: glm,               fallback: deepseek-v4-pro}
+  routine:     {primary: deepseek-v4-flash, secondary: glm,               fallback: deepseek-v4-pro}
+  classification: {primary: deepseek-v4-flash, secondary: glm,            fallback: deepseek-v4-pro}
+  extraction:  {primary: deepseek-v4-flash, secondary: glm,               fallback: deepseek-v4-pro}
+  summarization: {primary: deepseek-v4-flash, secondary: glm,             fallback: deepseek-v4-pro}
+  multimodal:  {primary: gemini,            secondary: deepseek-v4-pro,   fallback: glm}
 
 providers:
   deepseek-v4-pro:
@@ -35,6 +35,11 @@ providers:
     base_url_env: ANTHROPIC_BASE_URL
     api_key_env: ANTHROPIC_API_KEY
     model: claude-sonnet-4-5
+  glm:
+    type: openai_compatible
+    base_url_env: ZHIPU_BASE_URL
+    api_key_env: ZHIPU_API_KEY
+    model: glm-5.3-flash
 
 # USD per 1M tokens (estimates, configurable)
 pricing_per_million:
@@ -42,3 +47,4 @@ pricing_per_million:
   deepseek-v4-flash: {input: 0.2, output: 0.6}
   gemini:            {input: 1.0, output: 4.0}
   claude:            {input: 3.0, output: 15.0}
+  glm:               {input: 0.1, output: 0.4}

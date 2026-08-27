@@ -59,7 +59,9 @@ class ProductionGateService:
     ):
         self.config = config
         self.db = db
-        self.env = env or os.environ
+        # explicit empty env must stay empty (test isolation) — only None
+        # falls back to the real process environment.
+        self.env = os.environ if env is None else dict(env)
 
     # ---- low-level checks ---------------------------------------------
     def _config_ok(self) -> bool:

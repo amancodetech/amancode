@@ -56,6 +56,8 @@ HELP_TEXT = (
     "/customer <رقم> [اسم] — تسجيل عميل جديد\n"
     "/send <رقم> <نص> — إرسال واتساب فوري\n"
     "/mode <رقم> ai|human — تبديل وضع الرد لعميل محدد\n"
+    "/quotes — عروض الأسعار بانتظار موافقتك\n"
+    "/qapprove <معرف> — اعتماد عرض وإنشاء السعر الرسمي\n"
     "/chat <رقم> [موضوع] — ابدأ محادثة ذكية استباقية مع الرقم\n"
     "\nأو اكتب بأي لغة طلباً حراً، مثال:\n"
     "\"أوقف الذكاء الاصطناعي في واتساب\"\n"
@@ -198,9 +200,48 @@ class TelegramOwnerConsole:
             return self._act_send(args)
         if cmd == "approve":
             return self._act_approve(args)
+        if cmd == "quotes":
+            return self._act_quotes()
+        if cmd == "qapprove":
+            return self._act_qapprove(args)
         if cmd == "mode":
             return self._act_mode(args)
         return f"أمر غير معروف: {cmd}\n\n" + HELP_TEXT
+
+    def _act_quotes(self) -> str:
+        flow = (self.runtime or {}).get("quote_flow")
+        if flow is None:
+            return "تدفق التسعير غير مفعّل في هذه الجلسة."
+        pending = flow.pending()
+        if not pending:
+            return "لا عروض معلّقة حالياً ✅"
+        lines = ["💰 عروض بانتظار موافقتك:"]
+        for r in pending:
+            lines.append(f"• {r['approval_id'][:12]} — {r['reason']} ({r['requested_at'][:16]})")
+        lines.append("\nللاعتماد: /qapprove <المعرف>")
+        return "\n".join(lines)
+
+    def _act_qapprove(self, args: str) -> str:
+        from ..errors import NotFoundError
+
+        flow = (self.runtime or {}).get("quote_flow")
+        if flow is None:
+            return "تدفق التسعير غير مفعّل في هذه الجلسة."
+        prefix = (args or "").strip()
+        if not prefix:
+            return "الصيغة: /qapprove <معرف الموافقة>"
+        matches = [r for r in flow.pending()
+                   if r["approval_id"].startswith(prefix)]
+        if len(matches) != 1:
+            return ("لم أجد موافقة مطابقة. استخدم /quotes لعرض المعرفات.")
+        approval_id = matches[0]["approval_id"]
+        try:
+            snapshot_id = flow.finalize(approval_id, approved_by="owner_console")
+        except (ValueError, NotFoundError) as exc:
+            return f"تعذر الاعتماد: {exc}"
+        return (f"✅ اعتُمد العرض وأُنشئ السعر الرسمي.\n"
+                f"Snapshot: {snapshot_id[:12]}…\n"
+                "سيصل العميل السعر المعتمد عند سؤاله التالي.")
 
     def _act_approve(self, args: str) -> str:
         """Compliance kit: owner tops-up today's business-initiated cap."""

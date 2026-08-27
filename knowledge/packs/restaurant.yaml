@@ -1,0 +1,48 @@
+# Knowledge Pack — restaurant (extension only)
+# Extends the Business Brain profile `restaurant` with only the NEW design
+# fields + provenance. Brain-owned fields are not repeated here. No pricing,
+# no scripts, no "must-have" claims.
+
+id: restaurant
+brain_profile_id: restaurant
+version: 1.0.0
+last_verified: 2026-08-27
+
+isic_refs:
+  - { code: "I56.10", label: "Restaurants and mobile food service activities", source: isic_rev5 }
+  - { code: "I56.30", label: "Beverage serving activities", source: isic_rev5 }
+
+digital_maturity:
+  value: low
+  note: "General baseline — most restaurants rely on social/WhatsApp for orders. Not a per-lead fact."
+  source: { name: "World Bank Enterprise Surveys (SME digital adoption baseline)", organization: "World Bank Group", url: "https://www.enterprisesurveys.org/en/data", version: "current", authority: official_statistics, confidence: medium, extraction_date: 2026-08-27, last_verified: 2026-08-27, license: "free with registration" }
+
+common_processes:
+  - { process: "Present an updated menu to customers", source: { ref: schema_org } }
+  - { process: "Take reservations and walk-in management", source: { ref: schema_org } }
+  - { process: "Handle takeaway/delivery orders", source: { ref: schema_org } }
+  - { process: "Show locations and collect reviews", source: { ref: schema_org } }
+
+common_pain_points:
+  - { pain: "Menu and operating hours scattered across social channels", source: { ref: wb_enterprise_surveys } }
+  - { pain: "Manual reservation/order handling over phone or WhatsApp", source: { ref: schema_org } }
+  - { pain: "Trust: photos and reviews not easily verifiable", source: { ref: schema_org } }
+
+decision_roles:
+  likely: ["owner", "manager"]
+  possible: ["chef_owner", "operations_lead"]
+  unknown: ["franchise_corporate"]
+  note: "ISCO-08-based priors only (likely/possible/unknown). Confirm via CRM/qualification."
+  source: { ref: isco_08 }
+
+typical_integrations:
+  - { integration: "online_menu", schema: "Menu", source: { ref: schema_org } }
+  - { integration: "reservations", schema: "Reservation", source: { ref: schema_org } }
+  - { integration: "whatsapp_ordering", schema: "OrderAction", source: { ref: schema_org } }
+  - { integration: "maps_reviews", schema: "Review", source: { ref: schema_org } }
+
+sources:
+  - { ref: isic_rev5 }
+  - { ref: schema_org }
+  - { ref: isco_08 }
+  - { ref: wb_enterprise_surveys }

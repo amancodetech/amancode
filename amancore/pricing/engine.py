@@ -16,6 +16,7 @@ from ..functions.pricing import (
     calculate_true_cost,
     validate_pricing,
 )
+from . import registry
 
 _DEFAULT_PAYMENT_PROFILE = {"percentage_fee": 0.03, "fixed_fee": 0.0}
 
@@ -42,15 +43,21 @@ class PricingEngine:
         currency = scope.get("currency") or markets.get(market, {}).get("currency", "USD")
 
         hours = scope.get("estimated_hours") or 0
+        # Approved add-ons add deterministic hours on top of the base scope.
+        for aid in scope.get("add_ons") or []:
+            hours += registry.addon_hours(self.brain, aid)
         shadow_rate = policy.get("shadow_rate", 40)
         revision_rate = policy.get("revision_reserve", 0.15)
         risk = scope.get("risk_level", "medium")
         risk_rate = policy.get("risk_reserve", 0.15) * RISK_FACTOR.get(risk, 1.0)
         external = scope.get("external_costs") or 0
         infra = scope.get("infrastructure_costs") or 0
-        markup = policy.get("markup_by_service", {}).get(service, 3.0)
+        key = registry.policy_key(self.brain, service)
+        markup = policy.get("markup_by_service", {}).get(key,
+                  policy.get("markup_by_service", {}).get(service, 3.0))
         market_mult = policy.get("market_multiplier", {}).get(market, 1.0)
-        min_mult = policy.get("minimum_approved_multiplier", {}).get(service, 1.3)
+        min_mult = policy.get("minimum_approved_multiplier", {}).get(key,
+                    policy.get("minimum_approved_multiplier", {}).get(service, 1.3))
 
         profile = self.payment_fee_profiles.get(market) or self.payment_fee_profiles.get("default") or _DEFAULT_PAYMENT_PROFILE
         rough_price = (hours * shadow_rate) * markup * market_mult

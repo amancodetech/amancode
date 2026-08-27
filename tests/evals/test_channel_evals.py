@@ -89,8 +89,9 @@ class ChannelEval(TempDirTestCase, unittest.TestCase):
                 self.assertEqual(len(self.crm.find_lead_by_whatsapp(wa_id) and [1] or []), 1, sc["id"])
             if exp.get("no_invented_price"):
                 sent = self.adapter.provider.sent[-1]["payload"] if self.adapter.provider.sent else ""
-                self.assertIn("approved quote", sent, sc["id"])
                 self.assertNotRegex(sent, r"\$\s?\d", sc["id"])
+                self.assertNotRegex(sent, r"\d+\s*USD", sc["id"])
+                self.assertNotRegex(sent, r"\d+\s*SAR", sc["id"])
             if exp.get("objection"):
                 lead = self.crm.find_lead_by_whatsapp(wa_id)
                 conv = self.crm.get_conversation_for_lead(lead["lead_id"])

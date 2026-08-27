@@ -7,18 +7,11 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from ..pricing.offer import recommendation_message, select_offer
+from ..pricing import registry
 from ..services.claim_gate import FORBIDDEN, ClaimGate
 from ..services.policy import PolicyEngine
 from ..services.risk import RiskEngine
 from .base import Agent
-
-_BASE_HOURS = {
-    "business_website_system": 20,
-    "custom_web_application": 60,
-    "business_system_mini_erp": 120,
-    "mobile_app": 100,
-}
-_COMPLEXITY_MULT = {"low": 1.0, "medium": 1.25, "high": 1.6}
 
 
 class PricingOfferAgent(Agent):
@@ -48,13 +41,15 @@ class PricingOfferAgent(Agent):
     # ---- scope ---------------------------------------------------------
     def analyze_scope(self, opportunity: dict, lead: dict, conversation: dict) -> dict:
         service = opportunity.get("service") or "business_website_system"
-        base_hours = _BASE_HOURS.get(service, 20)
+        brain = self.brain_store.current()[1] if self.brain_store else {}
+        base_hours = registry.base_hours(brain, service)
         summary = str(opportunity.get("scope_summary") or "")
         complexity = "high" if len(summary) > 120 else ("medium" if len(summary) > 40 else "low")
         facts = conversation.get("facts", {})
         integrations = len(facts.get("integrations") or []) if isinstance(facts.get("integrations"), list) else 0
         languages = max(1, len(facts.get("languages") or []) if isinstance(facts.get("languages"), list) else 1)
-        estimated_hours = round(base_hours * _COMPLEXITY_MULT.get(complexity, 1.25) * (1 + 0.10 * integrations + 0.15 * (languages - 1)))
+        complexity_mult = registry.complexity_multiplier(brain, service, complexity)
+        estimated_hours = round(base_hours * complexity_mult * (1 + 0.10 * integrations + 0.15 * (languages - 1)))
         risk_level = "high" if service in ("business_system_mini_erp", "custom_web_application", "mobile_app") or integrations > 3 else "medium"
         return {
             "service": service,

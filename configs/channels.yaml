@@ -14,6 +14,19 @@ whatsapp:
   max_payload_bytes: 8192
   cors_origin: "*"
 
+telegram:
+  # CUSTOMER channel — a SEPARATE bot from the owner console (TELEGRAM_BOT_TOKEN).
+  # Official Bot API only. ENABLED 2026-08-26 by owner decision:
+  # bot @AmanCode_help_bot, webhook registered w/ secret_token, env vars in .env.
+  mode: production               # mock | production (production gated)
+  enabled: true                  # master switch — policy DENIES sends while false
+  customer_messaging: true       # explicit customer-channel opt-in
+  api_base: https://api.telegram.org
+  max_text_length: 4096          # official Bot API single-message cap
+  signature_required: true       # X-Telegram-Bot-Api-Secret-Token, fail-closed
+  bot_token_env: TELEGRAM_CUSTOMER_BOT_TOKEN
+  webhook_secret_env: TELEGRAM_CUSTOMER_WEBHOOK_SECRET
+
 outbox:
   max_attempts: 3
   retry_backoff_seconds: 10

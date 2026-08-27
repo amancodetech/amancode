@@ -31,6 +31,27 @@ def production_overlay() -> dict:
     return dict(prod.get("environment") or {})
 
 
+def channels_overlay() -> dict:
+    """Read configs/channels.yaml (per-channel blocks)."""
+    root = Path(__file__).resolve().parents[2]
+    try:
+        return yaml.safe_load((root / "configs" / "channels.yaml")
+                              .read_text(encoding="utf-8")) or {}
+    except Exception:  # noqa: BLE001 — unreadable config means "no channels"
+        return {}
+
+
+def _telegram_cfg(tg_block: dict, enabled: bool) -> dict:
+    cfg = dict(tg_block or {})
+    cfg["mode"] = "production" if (enabled and tg_block.get("mode") == "production") \
+        else "mock"
+    cfg["environment"] = {
+        "production_enabled": bool(enabled and tg_block.get("mode") == "production"),
+        "mode": cfg["mode"],
+    }
+    return cfg
+
+
 def build_adapters() -> dict:
     """Build the channel adapter registry from configs + environment."""
     from ..channels.whatsapp import WhatsAppAdapter
@@ -54,7 +75,16 @@ def build_adapters() -> dict:
             "mode": "production" if enabled else "mock",
         },
     }
-    return {"whatsapp": WhatsAppAdapter(wa_cfg)}
+    adapters: dict = {"whatsapp": WhatsAppAdapter(wa_cfg)}
+
+    # Telegram CUSTOMER channel — only when explicitly configured in
+    # channels.yaml; sends stay policy-DENIED until enabled+customer_messaging.
+    tg_block = channels_overlay().get("telegram") or {}
+    if tg_block.get("enabled"):
+        from ..channels.telegram import TelegramAdapter
+
+        adapters["telegram"] = TelegramAdapter(_telegram_cfg(tg_block, enabled))
+    return adapters
 
 
 def build_probe_adapter(channel: str, channel_cfg: dict):
@@ -64,4 +94,8 @@ def build_probe_adapter(channel: str, channel_cfg: dict):
         from ..channels.whatsapp import WhatsAppAdapter
 
         return WhatsAppAdapter(dict(channel_cfg or {}))
+    if channel == "telegram":
+        from ..channels.telegram import TelegramAdapter
+
+        return TelegramAdapter(dict(channel_cfg or {}))
     raise KeyError(f"no probe adapter registered for channel '{channel}'")

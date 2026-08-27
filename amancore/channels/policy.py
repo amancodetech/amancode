@@ -27,6 +27,10 @@ class ChannelPolicyEngine:
     def evaluate_send(self, channel: str, message_type: str, risk_level: str = "") -> str:
         risk = risk_level or _TYPE_RISK.get(message_type, "low")
         cfg = self.channels_config.get(channel, {})
+        # explicit enablement: a channel that is not opted in for customer
+        # messaging is DENIED before any provider call (config = source of truth)
+        if cfg.get("enabled") is False or cfg.get("customer_messaging") is False:
+            return DENY
         if risk == "critical":
             return DENY
         if risk == "high":

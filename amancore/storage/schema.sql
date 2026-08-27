@@ -309,6 +309,10 @@ CREATE TABLE IF NOT EXISTS pricing_snapshots (
     approved_by TEXT,
     approved_at TEXT,
     expiration_at TEXT,
+    status TEXT NOT NULL DEFAULT 'approved',
+    scope_fingerprint TEXT,
+    superseded_at TEXT,
+    superseded_by TEXT,
     created_at TEXT NOT NULL
 );
 

@@ -9,10 +9,11 @@ import re
 from ..ids import utcnow
 from ..util import run_json
 
-JSON_FIELDS = ["facts", "preferences", "requirements", "unknowns", "decisions", "open_questions", "objections"]
+JSON_FIELDS = ["facts", "preferences", "requirements", "unknowns", "decisions", "open_questions", "objections", "working_memory"]
 _DEFAULTS = {
     "facts": {}, "preferences": {}, "requirements": {},
     "unknowns": [], "decisions": [], "open_questions": [], "objections": [],
+    "working_memory": {},
 }
 
 
@@ -26,6 +27,63 @@ def _loads(s, default):
         return v if v is not None else default
     except (json.JSONDecodeError, TypeError):
         return default
+
+
+# Deterministic scope-delta vocabulary (P0.3). Keys map to EXISTING
+# scope_fingerprint input fields in pricing.registry._SCOPE_KEYS — no new
+# fingerprint inputs are invented. A detected feature only becomes a fact when
+# an explicit addition signal is present; a plain mention (e.g. "بأي لغة؟") is
+# NOT a delta.
+SCOPE_DELTA_MAP: dict[str, tuple[str, ...]] = {
+    "booking": ("booking", "reservation", "reserve", "حجز", "احجز", "حجوزات"),
+    "payments": ("payment", "checkout", "online order", "ordering", "order online",
+                 "دفع", "بوابة دفع", "أوردر", "طلبات أونلاين", "طلب أونلاين", "أونلاين"),
+    "integrations": ("integration", "integrate", "sync", "api",
+                     "ربط", "تكامل", "اتصال"),
+    "languages": ("bilingual", "multilingual", "لغتين", "متعدد اللغات", "عدة لغات"),
+    "member_areas": ("portal", "membership", "member area", "بوابة أعضاء",
+                     "عضويات", "عضوية", "منطقة الأعضاء"),
+    "dynamic_content": ("gallery", "image gallery", "news", "blog", "معرض صور",
+                        "معرض", "أخبار", "مدونة", "صور المنتجات"),
+}
+
+# Addition signals — the message must carry one for a feature to be a delta.
+_SCOPE_ADD_RE = re.compile(
+    r"(أضيف|أضِف|أضف|كمان|نضيف|أيضاً|أيضا|زيد|إضافة|إضافة|add|also|plus|and|"
+    r"بالإضافة)", re.IGNORECASE)
+# Negation within a small window before the feature keyword => NOT a delta.
+# Word-boundary anchored so "ما" inside "كمان"/"نظام" is NOT treated as
+# negation; a standalone ما/لا/بدون/بلا/دون/without/no/not is.
+_SCOPE_NEG_RE = re.compile(
+    r"\b(ما|لا|بدون|بلا|دون|without|no|not)\b", re.IGNORECASE)
+_NEG_WINDOW = 10
+
+
+def detect_scope_delta(message: str) -> set[str]:
+    """Deterministic scope-delta detector (P0.3 / GAP-1).
+
+    Returns the set of ``_SCOPE_KEYS``-compatible fact fields the customer is
+    ADDING to the scope. Only fires when an addition signal co-occurs with a
+    feature keyword. A negated mention ("بدون حجز") is not a delta. On any
+    ambiguity the safety bias is to treat it as a delta (false positive is
+    acceptable; a false negative could leak a stale price).
+    """
+    msg = (message or "").lower()
+    if not msg or not _SCOPE_ADD_RE.search(msg):
+        return set()
+    found: set[str] = set()
+    for field, keywords in SCOPE_DELTA_MAP.items():
+        for kw in keywords:
+            idx = msg.find(kw.lower())
+            if idx == -1:
+                continue
+            # negation check on the small window right before the keyword
+            window = msg[max(0, idx - _NEG_WINDOW):idx]
+            if _SCOPE_NEG_RE.search(window):
+                break  # negated — not an addition; safety accepts the ambiguity
+            found.add(field)
+            break
+    return found
 
 
 class ConversationMemory:
@@ -99,6 +157,11 @@ def _deterministic_facts(message: str) -> dict:
         facts["problem"] = "stated"
     if re.search(r"goal|want to|increase|improve|grow|أريد أن|نزيد|ingin|meningkat", m, re.I):
         facts["desired_outcome"] = "stated"
+    # P0.3 / GAP-1 — deterministic scope-delta capture: feed the same fields
+    # that drive scope_fingerprint so a genuine scope expansion changes the
+    # fingerprint through the EXISTING path (no new inputs invented).
+    for field in detect_scope_delta(message):
+        facts[field] = True
     return facts
 
 

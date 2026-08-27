@@ -1,0 +1,50 @@
+# Knowledge Pack — ecommerce (extension only)
+# Extends the Business Brain profile `ecommerce` with only the NEW design
+# fields + provenance. Brain-owned fields are not repeated here. No pricing,
+# no scripts, no "must-have" claims.
+
+id: ecommerce
+brain_profile_id: ecommerce
+version: 1.0.0
+last_verified: 2026-08-27
+
+isic_refs:
+  - { code: "G47.91", label: "Retail sale via mail order houses or via Internet", source: isic_rev5 }
+  - { code: "G47", label: "Retail trade, except of motor vehicles and motorcycles", source: isic_rev4 }
+
+digital_maturity:
+  value: medium
+  note: "General baseline — sellers often start on Instagram/WhatsApp then seek a store. Not a per-lead fact."
+  source: { name: "World Bank Enterprise Surveys (SME digital adoption baseline)", organization: "World Bank Group", url: "https://www.enterprisesurveys.org/en/data", version: "current", authority: official_statistics, confidence: medium, extraction_date: 2026-08-27, last_verified: 2026-08-27, license: "free with registration" }
+
+common_processes:
+  - { process: "Show catalog and stock", source: { ref: schema_org } }
+  - { process: "Process cart and secure checkout", source: { ref: owasp_top10_2025 } }
+  - { process: "Manage shipping and returns", source: { ref: isic_rev5 } }
+  - { process: "Build repeat-customer relationship", source: { ref: schema_org } }
+
+common_pain_points:
+  - { pain: "Orders handled manually via DMs/WhatsApp", source: { ref: wb_enterprise_surveys } }
+  - { pain: "Buyers hesitate over payment trust and shipping complexity", source: { ref: schema_org } }
+  - { pain: "Security of payment and customer data is a top concern", source: { ref: owasp_top10_2025 } }
+
+decision_roles:
+  likely: ["owner", "sales_manager"]
+  possible: ["operations_manager", "digital_marketer"]
+  unknown: ["procurement"]
+  note: "ISCO-08-based priors only (likely/possible/unknown). Confirm via CRM/qualification."
+  source: { ref: isco_08 }
+
+typical_integrations:
+  - { integration: "payment_gateway", schema: "OrderAction", source: { ref: schema_org } }
+  - { integration: "catalog_search", schema: "Product", source: { ref: schema_org } }
+  - { integration: "shipping", schema: "Offer", source: { ref: schema_org } }
+  - { integration: "whatsapp_notifications", schema: "ContactPoint", source: { ref: schema_org } }
+
+sources:
+  - { ref: isic_rev5 }
+  - { ref: isic_rev4 }
+  - { ref: schema_org }
+  - { ref: isco_08 }
+  - { ref: wb_enterprise_surveys }
+  - { ref: owasp_top10_2025 }

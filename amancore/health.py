@@ -80,9 +80,12 @@ def run_health_checks(root: Path) -> dict[str, tuple[str, str]]:
     # security
     results["security"] = _check("security", lambda: _security(root))
 
-    # channels — generic per-channel registration (adapter-driven)
+    # channels — generic per-channel registration (adapter-driven);
+    # unconfigured channels are skipped, never silently "pass"
     cfg3 = cfg or load_config(root)
-    for _ch in ("whatsapp",):   # extend as adapters register in build_adapters()
+    for _ch in ("whatsapp", "telegram"):
+        if not cfg3.channels.get(_ch):
+            continue
         results[f"channel_config:{_ch}"] = _check(
             f"channel_config:{_ch}", lambda ch=_ch: _channel_config(cfg3, ch))
         results[f"channel_webhook:{_ch}"] = _check(
@@ -197,6 +200,10 @@ def _channel_webhook(cfg: Config, channel: str) -> str:
         adapter = build_probe_adapter(channel, w)
     except KeyError:
         raise RuntimeError(f"channel '{channel}' has no registered adapter")
+    # adapter-owned probe (channels without a Meta-style GET handshake)
+    probe = getattr(adapter, "health_probe", None)
+    if callable(probe):
+        return probe()
     result = adapter.verify_webhook("subscribe", w.get("verify_token", ""), "challenge")
     if w.get("mode") == "mock":
         return "mock webhook verifier available (production pending verification)"

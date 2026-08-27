@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-_SERVICE_FOR_OFFER = {
+from . import registry
+
+_OFFER_FOR_SERVICE = {
     "business_website_system": "website_system",
     "custom_web_application": "web_app",
     "business_system_mini_erp": "mini_erp",
@@ -24,7 +26,9 @@ def select_offer(brain: dict, qual: dict) -> dict:
     services = {s["id"]: s for s in brain.get("services", [])}
     offers = {o["id"]: o for o in brain.get("offers", [])}
     service = services.get(service_id, {"name": service_id})
-    offer_id = _SERVICE_FOR_OFFER.get(service_id, "website_system")
+    # Single source for service→offer identity (registry, not a local map).
+    offer_id = registry.offer_for_service(brain, service_id) \
+        or _OFFER_FOR_SERVICE.get(service_id, "website_system")
     offer = offers.get(offer_id, {"name": offer_id})
     return {
         "service": service_id,

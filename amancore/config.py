@@ -36,8 +36,10 @@ def load_env(path: Path, mutate_environ: bool = True) -> dict[str, str]:
     return values
 
 
-def _load_yaml(path: Path) -> dict[str, Any]:
+def _load_yaml(path: Path, optional: bool = False) -> dict[str, Any]:
     if not path.exists():
+        if optional:
+            return {}
         raise ConfigError(f"missing config file: {path}")
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     if not isinstance(data, dict):
@@ -92,7 +94,7 @@ def load_config(root: Path, mutate_environ: bool = True) -> Config:
         root=root,
         app=_load_yaml(root / "configs" / "app.yaml"),
         models=_load_yaml(root / "configs" / "models.yaml"),
-        pricing=_load_yaml(root / "configs" / "pricing.yaml"),
+        pricing=_load_yaml(root / "configs" / "pricing.yaml", optional=True),
         lead_scoring=_load_yaml(root / "configs" / "lead_scoring.yaml"),
         retention=_load_yaml(root / "configs" / "retention.yaml"),
         channels=_load_yaml(root / "configs" / "channels.yaml"),

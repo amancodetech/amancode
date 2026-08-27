@@ -1,0 +1,55 @@
+# Knowledge Pack — association_ngo (extension only)
+#
+# This pack extends the Business Brain industry profile `association_ngo`.
+# It holds ONLY the new design fields (common_processes, common_pain_points,
+# decision_roles, digital_maturity, typical_integrations, isic_refs) plus
+# provenance. Brain-owned fields (aliases, goals, typical_sections, features,
+# conversion, trust_needs, objections, relevant_services, cross_sell,
+# resources_for_followup) live in the Brain and are NOT repeated here.
+# No pricing, no scripts, no "must-have" claims.
+
+id: association_ngo
+brain_profile_id: association_ngo
+version: 1.0.0
+last_verified: 2026-08-27
+
+isic_refs:
+  - { code: "S94.9", label: "Activities of other membership organisations", source: isic_rev5 }
+  - { code: "O88", label: "Social work activities without accommodation", source: isic_rev4 }
+
+digital_maturity:
+  value: low
+  note: "General baseline only — most association/NGO web presence is informational. Not a per-lead fact; confirm via conversation facts."
+  source: { name: "World Bank Enterprise Surveys (informal/small org web adoption baseline)", organization: "World Bank Group", url: "https://www.enterprisesurveys.org/en/data", version: "current", authority: official_statistics, confidence: medium, extraction_date: 2026-08-27, last_verified: 2026-08-27, license: "free with registration" }
+
+common_processes:
+  - { process: "Publish programs and initiatives for members/donors", source: { ref: spin_selling } }
+  - { process: "Collect donations and run campaigns", source: { ref: isic_rev5 } }
+  - { process: "Register volunteers", source: { ref: schema_org } }
+  - { process: "Report impact and finances to supporters", source: { ref: isic_rev5 } }
+
+common_pain_points:
+  - { pain: "Dependence on manual donation handling and phone contact", source: { ref: wb_enterprise_surveys } }
+  - { pain: "Low digital reach limits campaigns and volunteer signup", source: { ref: wb_enterprise_surveys } }
+  - { pain: "Trust: donors want visible, credible impact reporting", source: { ref: schema_org } }
+
+decision_roles:
+  likely: ["board_leader_or_director", "fundraising_manager", "communications_officer"]
+  possible: ["volunteer_coordinator", "finance_officer"]
+  unknown: ["full_time_marketing"]
+  note: "ISCO-08-based priors only (likely/possible/unknown), never hard facts. Confirm authority via CRM/qualification."
+  source: { ref: isco_08 }
+
+typical_integrations:
+  - { integration: "donation_gateway", schema: "DonateAction", source: { ref: schema_org } }
+  - { integration: "whatsapp", schema: "ContactPoint", source: { ref: schema_org } }
+  - { integration: "volunteer_form", schema: "VolunteerAction", source: { ref: schema_org } }
+  - { integration: "newsletter", schema: "NewsArticle", source: { ref: schema_org } }
+
+sources:
+  - { ref: isic_rev5 }
+  - { ref: isic_rev4 }
+  - { ref: schema_org }
+  - { ref: isco_08 }
+  - { ref: wb_enterprise_surveys }
+  - { ref: spin_selling }

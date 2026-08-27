@@ -1,0 +1,48 @@
+# Knowledge Pack — real_estate (extension only)
+# Extends the Business Brain profile `real_estate` with only the NEW design
+# fields + provenance. Brain-owned fields are not repeated here. No pricing,
+# no scripts, no "must-have" claims.
+
+id: real_estate
+brain_profile_id: real_estate
+version: 1.0.0
+last_verified: 2026-08-27
+
+isic_refs:
+  - { code: "L68.20", label: "Renting and operating of own or leased real estate", source: isic_rev5 }
+  - { code: "L68.31", label: "Real estate agencies", source: isic_rev5 }
+
+digital_maturity:
+  value: medium
+  note: "General baseline — listings often spread across marketplaces and WhatsApp groups. Not a per-lead fact."
+  source: { name: "World Bank Enterprise Surveys (SME digital adoption baseline)", organization: "World Bank Group", url: "https://www.enterprisesurveys.org/en/data", version: "current", authority: official_statistics, confidence: medium, extraction_date: 2026-08-27, last_verified: 2026-08-27, license: "free with registration" }
+
+common_processes:
+  - { process: "Publish property listings with details and media", source: { ref: schema_org } }
+  - { process: "Capture and qualify viewing requests", source: { ref: schema_org } }
+  - { process: "Maintain accurate, up-to-date inventory", source: { ref: isic_rev5 } }
+  - { process: "Build market trust through verified information", source: { ref: schema_org } }
+
+common_pain_points:
+  - { pain: "Leads depend on brokers and WhatsApp groups", source: { ref: wb_enterprise_surveys } }
+  - { pain: "Listing data drifts and becomes outdated", source: { ref: schema_org } }
+  - { pain: "Buyers request verifiable, unretouched property info", source: { ref: schema_org } }
+
+decision_roles:
+  likely: ["owner", "sales_manager", "broker_lead"]
+  possible: ["marketing_officer", "operations_manager"]
+  unknown: ["corporate_development"]
+  note: "ISCO-08-based priors only (likely/possible/unknown). Confirm via CRM/qualification."
+  source: { ref: isco_08 }
+
+typical_integrations:
+  - { integration: "listings_search", schema: "RealEstateListing", source: { ref: schema_org } }
+  - { integration: "lead_form", schema: "Offer", source: { ref: schema_org } }
+  - { integration: "map", schema: "Place", source: { ref: schema_org } }
+  - { integration: "whatsapp", schema: "ContactPoint", source: { ref: schema_org } }
+
+sources:
+  - { ref: isic_rev5 }
+  - { ref: schema_org }
+  - { ref: isco_08 }
+  - { ref: wb_enterprise_surveys }

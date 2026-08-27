@@ -1,7 +1,7 @@
 env: development
 database_path: storage/aman_core.db
 log_level: INFO
-shadow_rate: 40
+
 
 # COST-402 — AI spend protection (all thresholds configurable, H5)
 cost:

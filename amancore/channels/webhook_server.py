@@ -101,6 +101,65 @@ def make_status_recorder(db):
     return _record_status
 
 
+def build_conversation_stack(root: Path, db, brain, crm, dispatcher,
+                             audit, shared_router=None, owner_alert=None):
+    """COM P0 wiring — the SINGLE composition point for conversation
+    intelligence. Used by build_runtime AND by production-parity tests so
+    the tested path and the live path cannot drift apart."""
+    from ..agents.sales import SalesAgent
+    from ..agents.support import SupportAgent
+    from ..channels.handover import HandoverService
+    from ..conversation import ConversationModel
+    from ..conversation.pricing_flow import QuoteFlow
+    from ..sales.conversation_memory import ConversationMemory
+    from ..sales.discovery import DiscoveryEngine
+    from ..pricing.snapshot import PricingSnapshotStore
+    from ..sales.followup import FollowupEngine
+    from ..sales.handoff import HandoffService
+    from ..sales.qualification import QualificationEngine
+    from ..services.owner_alert import send_owner_alert as _default_alert
+    from ..skills.objection_handling import ObjectionHandlingSkill
+    from ..support.cases import SupportCaseStore
+
+    owner_alert = owner_alert or _default_alert
+    memory = ConversationMemory(crm)
+
+    # COM P0-2: hybrid fact extraction — live router on the sales agent.
+    if shared_router is None:
+        from ..routing.providers import build_providers
+        from ..routing.router import ModelRouter, UsageTracker
+
+        import yaml as _yaml
+
+        with open(root / "configs" / "models.yaml") as _fh:
+            _mcfg = _yaml.safe_load(_fh)
+        shared_router = ModelRouter(_mcfg, build_providers(_mcfg),
+                                    UsageTracker(db))
+
+    sales = SalesAgent(
+        brain, crm, memory, DiscoveryEngine(), QualificationEngine(),
+        ObjectionHandlingSkill(brain), FollowupEngine(), HandoffService(dispatcher),
+        router=shared_router,
+        audit=audit, dispatcher=dispatcher,
+    )
+
+    # COM P0-4: support lane is LIVE in production.
+    support = SupportAgent(
+        brain, crm, SupportCaseStore(db), HandoverService(crm, dispatcher),
+        owner_alert=owner_alert, dispatcher=dispatcher,
+    )
+
+    # COM P0-1: policy + modes + planner — single steering source.
+    conversation = ConversationModel(root, brain)
+
+    # COM P0-3: pricing tiers — T2 estimate + owner approval + T3 snapshot.
+    quote_flow = QuoteFlow(db, crm, brain, PricingSnapshotStore(db),
+                           dispatcher=dispatcher,
+                           owner_alert=owner_alert, audit=audit)
+    return {"memory": memory, "sales": sales, "support": support,
+            "conversation": conversation, "quote_flow": quote_flow}
+
+
 def build_runtime(root: Path):
     """Assemble the live coordinator stack from configs (mirrors test wiring)."""
     from ..agents.sales import SalesAgent
@@ -163,8 +222,28 @@ def build_runtime(root: Path):
     from ..channels.router import ChannelRouter
 
     router = ChannelRouter({"whatsapp": adapter})
+
+    # Telegram CUSTOMER channel (separate bot from the owner console).
+    # Registered only when explicitly configured; sends stay DENIED by
+    # channel policy until enabled+customer_messaging are true in channels.yaml.
+    tg_block = dict(cfg.channels.get("telegram") or {})
+    tg_adapter = None
+    if tg_block.get("enabled"):
+        from ..channels.telegram import TelegramAdapter
+
+        tg_cfg = dict(tg_block)
+        if (prod_env.get("production_enabled") and prod_env.get("mode") == "production"
+                and tg_block.get("mode") == "production"):
+            tg_cfg["mode"] = "production"
+            tg_cfg["environment"] = {"production_enabled": True, "mode": "production"}
+        else:
+            tg_cfg.setdefault("environment", {"production_enabled": False,
+                                              "mode": prod_env.get("mode", "mock")})
+        tg_adapter = TelegramAdapter(tg_cfg)
+        router.register(tg_adapter)
+
     outbox = MessageOutbox(db)
-    policy = ChannelPolicyEngine(brain)
+    policy = ChannelPolicyEngine(brain, getattr(cfg, "channels", {}) or {})
     try:
         outbox_cfg = dict(cfg.channels.get("outbox") or {})
     except Exception:  # noqa: BLE001 — config drift must never kill startup
@@ -186,12 +265,15 @@ def build_runtime(root: Path):
         send_valve=valve,
     )
     crm = CRMService(db)
-    memory = ConversationMemory(crm)
-    sales = SalesAgent(
-        brain, crm, memory, DiscoveryEngine(), QualificationEngine(),
-        ObjectionHandlingSkill(brain), FollowupEngine(), HandoffService(dispatcher),
-        audit=audit, dispatcher=dispatcher,
-    )
+    # COM P0: ONE composition point for conversation intelligence — the
+    # exact stack the production-parity tests exercise.
+    stack = build_conversation_stack(root, db, brain, crm, dispatcher, audit)
+    memory = stack["memory"]
+    sales = stack["sales"]
+    support = stack["support"]
+    conversation = stack["conversation"]
+    quote_flow = stack["quote_flow"]
+
     from ..ops.cost_governor import CostGovernor
 
     cost_cfg = {}
@@ -202,13 +284,19 @@ def build_runtime(root: Path):
     governor = CostGovernor(cost_cfg)
 
     coordinator = MessageCoordinator(
-        adapter, outbox, worker, sales, crm, memory,
+        # full channel registry (router and coordinator MUST agree) — the
+        # live-verification 500 proved a router-only registration is not enough
+        ({"whatsapp": adapter} | ({"telegram": tg_adapter} if tg_adapter else {})),
+        outbox, worker, sales, crm, memory,
         HandoverService(crm, dispatcher), ExternalResponseFilter(), policy,
         IdempotencyStore(db), LanguageDetector(), LocalizationSkill(),
         PricingSnapshotStore(db), ProposalStore(db),
         owner_alert=send_owner_alert,
         audit=audit, dispatcher=dispatcher,
         cost_governor=governor,
+        conversation=conversation,
+        quote_flow=quote_flow,
+        support_agent=support,
     )
     inbox = build_inbox_runtime(db, coordinator)
 
@@ -222,7 +310,7 @@ def build_runtime(root: Path):
                 "INSERT INTO channel_messages"
                 " (direction, channel, external_user_id, lead_id, external_message_id,"
                 "  body, status, created_at, quoted_external_message_id)"
-                " VALUES (?, ?, ?, ?, ?, '', ?, ?, ?)",
+                " VALUES (?, ?, ?, ?, ?, ?, '', ?, ?)",
                 (direction, channel, external_user_id, lead_id, external_message_id,
                  body, utcnow(), quoted_external_message_id or None),
             )
@@ -269,7 +357,8 @@ def build_runtime(root: Path):
                "coordinator": coordinator,
                "inbox": inbox, "sync": runtime_inbox_sync,
                "config_channels": channels_view,
-               "cost_governor": governor}
+               "cost_governor": governor,
+               "quote_flow": quote_flow}
     return runtime
 
 
@@ -497,32 +586,42 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
             sync()
         if summary.get("replies"):
             try:
-                frm = (body.get("entry", [{}])[0].get("changes", [{}])[0]
-                       .get("value", {}).get("messages", [{}])[0].get("from", ""))
+                # channel-neutral sender lookup (was Meta-payload + legacy wa_id
+                # SQL — silently dead since the canonical migration)
+                last_in = self.runtime["db"].execute(
+                    "SELECT channel, external_user_id FROM channel_messages"
+                    " WHERE direction='in' ORDER BY id DESC LIMIT 1").fetchone()
+                frm_channel = (last_in["channel"] if last_in else "") or "unknown"
+                frm = (last_in["external_user_id"] if last_in else "") or ""
                 if frm:
                     row = self.runtime["db"].execute(
                         "SELECT body FROM channel_messages WHERE direction='out'"
-                        " AND external_user_id=? ORDER BY id DESC LIMIT 1", (frm,)).fetchone()
+                        " AND external_user_id=? AND channel=? ORDER BY id DESC LIMIT 1",
+                        (frm, frm_channel)).fetchone()
                     last = (row["body"][:300] if row else "")
                     notify_owner_console(
-                        self.runtime, "🤖 ردّيتُ على +{frm}:\n«{last}»".format(frm=frm, last=last))
-                in_row = self.runtime["db"].execute(
-                    "SELECT body FROM channel_messages WHERE direction='in'"
-                    " AND wa_id=? AND body != '' ORDER BY id DESC LIMIT 1", (frm,)).fetchone()
-                if in_row:
-                    import threading as _th
-                    from ..ops.learning import record_learning
+                        self.runtime,
+                        "🤖 ردّيتُ على {ch}:{frm}:\n«{last}»".format(
+                            ch=frm_channel, frm=frm, last=last))
+                    in_row = self.runtime["db"].execute(
+                        "SELECT body FROM channel_messages"
+                        " WHERE direction='in' AND external_user_id=? AND channel=?"
+                        " AND body != '' ORDER BY id DESC LIMIT 1",
+                        (frm, frm_channel)).fetchone()
+                    if in_row:
+                        import threading as _th
+                        from ..ops.learning import record_learning
 
-                    gov = self.runtime.get("cost_governor")
+                        gov = self.runtime.get("cost_governor")
 
-                    def _governed_learn(_frm=frm, _in=in_row["body"], _out=last):
-                        if gov is not None and not gov.allow(_frm)[0]:
-                            return
-                        record_learning(_frm, _in, _out)
-                        if gov is not None:
-                            gov.record(_frm, len(_in) + len(_out), 200)
+                        def _governed_learn(_frm=frm, _in=in_row["body"], _out=last):
+                            if gov is not None and not gov.allow(_frm)[0]:
+                                return
+                            record_learning(_frm, _in, _out)
+                            if gov is not None:
+                                gov.record(_frm, len(_in) + len(_out), 200)
 
-                    _th.Thread(target=_governed_learn, daemon=True).start()
+                        _th.Thread(target=_governed_learn, daemon=True).start()
             except Exception:  # noqa: BLE001
                 pass
         if summary.get("status") == "rejected":

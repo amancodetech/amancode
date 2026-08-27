@@ -1,0 +1,43 @@
+# Knowledge Pack — generic_business (extension only)
+# Minimal fallback pack. Extends the Brain fallback profile `generic_business`.
+# Intentionally thin: used only when no industry is detected. No pricing, no
+# scripts, no "must-have" claims.
+
+id: generic_business
+brain_profile_id: generic_business
+version: 1.0.0
+last_verified: 2026-08-27
+
+isic_refs:
+  - { code: "—", label: "varies by detected activity; no single ISIC assignment", source: isic_rev5 }
+
+digital_maturity:
+  value: low
+  note: "Conservative baseline for unspecified businesses — informational presence typical. Confirm via conversation facts."
+  source: { name: "World Bank Enterprise Surveys (SME digital adoption baseline)", organization: "World Bank Group", url: "https://www.enterprisesurveys.org/en/data", version: "current", authority: official_statistics, confidence: medium, extraction_date: 2026-08-27, last_verified: 2026-08-27, license: "free with registration" }
+
+common_processes:
+  - { process: "Establish a credible professional online presence", source: { ref: spin_selling } }
+  - { process: "Capture and respond to inquiries", source: { ref: schema_org } }
+
+common_pain_points:
+  - { pain: "No central place customers can find services and contact", source: { ref: schema_org } }
+  - { pain: "Depends on word-of-mouth and referrals", source: { ref: wb_enterprise_surveys } }
+
+decision_roles:
+  likely: ["owner"]
+  possible: ["manager"]
+  unknown: ["marketing_officer"]
+  note: "ISCO-08-based priors only (likely/possible/unknown). Confirm via CRM/qualification."
+  source: { ref: isco_08 }
+
+typical_integrations:
+  - { integration: "contact_form", schema: "ContactPoint", source: { ref: schema_org } }
+  - { integration: "whatsapp", schema: "ContactPoint", source: { ref: schema_org } }
+
+sources:
+  - { ref: isic_rev5 }
+  - { ref: schema_org }
+  - { ref: isco_08 }
+  - { ref: wb_enterprise_surveys }
+  - { ref: spin_selling }
