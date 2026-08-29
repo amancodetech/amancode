@@ -125,10 +125,13 @@ REQUIRED_ENV_BY_FEATURE = {
 
 def _feature_active(feature: str, cfg: "Config", environ) -> bool:
     if feature == "production_whatsapp":
-        try:
-            return bool(cfg.production.get("environment", {}).get("production_enabled", False))
-        except Exception:  # noqa: BLE001
+        # Graph secrets are required ONLY while WhatsApp actually rides the
+        # Graph transport (owner spec §54 rollback path). Bridge mode
+        # authenticates with the bridge tokens instead (bridge_channels).
+        if not bool(cfg.production.get("environment", {}).get("production_enabled", False)):
             return False
+        wa = dict((cfg.channels or {}).get("whatsapp") or {})
+        return str(wa.get("mode", "mock")).strip().lower() != "bridge"
     if feature == "owner_alerts_telegram":
         return environ.get("OWNER_ALERT_CHANNEL", "").strip().lower() == "telegram"
     if feature == "bridge_channels":

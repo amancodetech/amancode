@@ -1,14 +1,17 @@
 # Channel configuration (Phase 3E: WhatsApp + Website intake only)
 
+# CUTOVER 2026-08-29 (owner-directed): WhatsApp now runs on the LOCAL BRIDGE
+# (Baileys via meta-bridge, 127.0.0.1:8765) — the Meta Cloud API/Graph path
+# for WhatsApp is retired. Rollback = `mode: mock` + Graph creds restore.
 whatsapp:
-  mode: mock            # mock | sandbox | production (production gated)
-  api_version: v24.0    # current official API version at enablement time
+  mode: bridge          # bridge (Baileys, local) — graph/mock paths dormant
+  api_version: v24.0    # legacy (graph rollback only)
   base_url: https://graph.facebook.com
   inbound_burst_limit: 50
   outbound_per_minute: 10
   auto_reply_low_risk: true
   template_policy: approved_only
-  signature_required: true   # SEC-RESTORE 2026-08-26: reverted accidental disable — public endpoint MUST reject unsigned webhooks
+  signature_required: false   # bridge ingress authenticates via X-Bridge-Token (local only)
   intake_rate_per_ip_minute: 5
   intake_rate_per_email_day: 3
   max_payload_bytes: 8192
