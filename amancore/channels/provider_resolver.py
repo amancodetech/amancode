@@ -66,6 +66,11 @@ def resolve_channel_config(channel: str, channels_cfg: dict | None,
     raw_mode = str(cfg.get("mode", "mock") or "mock")
     if raw_mode not in VALID_MODES:
         raise ValueError(f"invalid {channel} mode: {raw_mode}")
+    # idempotent resolution: a config that already carries an environment
+    # overlay is ALREADY RESOLVED (e.g. a probe re-resolving a runtime
+    # config) — pass through unchanged so C1==C2==C3 parity is exact
+    if isinstance(cfg.get("environment"), dict):
+        return cfg
     glob_on = production_enabled(prod_env)
 
     if raw_mode == BRIDGE_MODE:

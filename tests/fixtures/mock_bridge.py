@@ -80,6 +80,8 @@ class MockBridge:
                 self.wfile.write(data)
 
             def _authorized(self) -> bool:
+                if outer.delay_seconds:
+                    time.sleep(outer.delay_seconds)
                 return (self.headers.get("X-Bridge-Token") or "") == outer.token
 
             def _read_body(self) -> dict:
@@ -123,8 +125,6 @@ class MockBridge:
                 outer._record("POST", self.path, body)
                 if not self._authorized():
                     return self._json(403, {"error": "unauthorized"})
-                if outer.delay_seconds:
-                    time.sleep(outer.delay_seconds)
                 if self.path == "/v1/messages/send":
                     if outer.send_status != 200:
                         return self._json(

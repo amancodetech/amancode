@@ -194,15 +194,20 @@ class BridgeTransport:
             "channel": channel, "message_ids": list(message_ids)[:50],
             "shadow": self.shadow})
 
+    # ---- probes (short-bounded; honor the configured read timeout) -------
+    def _probe_timeout(self) -> tuple[float, float]:
+        return (self.connect_timeout, min(self.read_timeout, 5.0))
+
     def health(self) -> dict:
-        return self.request("GET", "/v1/health", timeout=(2.0, 5.0))
+        return self.request("GET", "/v1/health", timeout=self._probe_timeout())
 
     def sessions(self) -> dict:
-        return self.request("GET", "/v1/sessions", timeout=(2.0, 5.0))
+        return self.request("GET", "/v1/sessions", timeout=self._probe_timeout())
 
     def reconnect(self, channel: str) -> dict:
         return self.request("POST", "/v1/session/reconnect",
-                            json_body={"channel": channel}, timeout=(2.0, 30.0))
+                            json_body={"channel": channel},
+                            timeout=(2.0, 30.0))
 
     def message_status(self, channel: str, external_message_id: str) -> dict:
         """Reconciliation hook (owner spec §45) — provider status query."""
