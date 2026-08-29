@@ -14,7 +14,6 @@ keeping the gate itself (block_unless_production_enabled) fully in force.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import yaml
@@ -41,76 +40,44 @@ def channels_overlay() -> dict:
         return {}
 
 
-def _telegram_cfg(tg_block: dict, enabled: bool) -> dict:
-    cfg = dict(tg_block or {})
-    cfg["mode"] = "production" if (enabled and tg_block.get("mode") == "production") \
-        else "mock"
-    cfg["environment"] = {
-        "production_enabled": bool(enabled and tg_block.get("mode") == "production"),
-        "mode": cfg["mode"],
-    }
-    return cfg
-
-
 def build_adapters() -> dict:
-    """Build the channel adapter registry from configs + environment."""
-    from ..channels.whatsapp import WhatsAppAdapter
+    """Build the channel adapter registry from configs + environment.
 
-    env_overlay = production_overlay()
-    enabled = bool(env_overlay.get("production_enabled")) \
-        and env_overlay.get("mode") == "production"
+    Bridge migration (owner spec §6): resolution is delegated to the central
+    provider resolver — the scheduler can never disagree with the webhook
+    runtime about which provider backs a channel."""
+    from ..channels.provider_resolver import (
+        build_channel_adapter,
+        resolve_channel_config,
+    )
 
-    wa_cfg: dict = {
-        # mock stays the default outside explicit enablement
-        "mode": "production" if enabled else os.environ.get("AMANCORE_ENV", "mock"),
-        "phone_number_id": os.environ.get("WHATSAPP_PHONE_NUMBER_ID", ""),
-        "access_token_env": "WHATSAPP_ACCESS_TOKEN",
-        "verify_token_env": "WHATSAPP_VERIFY_TOKEN",
-        "app_secret_env": "WHATSAPP_APP_SECRET",
-        "signature_required": os.environ.get("WHATSAPP_SIGNATURE_REQUIRED", "true") != "false",
-        "base_url": env_overlay.get("base_url", "https://graph.facebook.com"),
-        "api_version": env_overlay.get("api_version", "v24.0"),
-        "environment": {
-            "production_enabled": enabled,
-            "mode": "production" if enabled else "mock",
-        },
-    }
-    adapters: dict = {"whatsapp": WhatsAppAdapter(wa_cfg)}
-
-    # Telegram CUSTOMER channel — only when explicitly configured in
-    # channels.yaml; sends stay policy-DENIED until enabled+customer_messaging.
-    tg_block = channels_overlay().get("telegram") or {}
-    if tg_block.get("enabled"):
-        from ..channels.telegram import TelegramAdapter
-
-        adapters["telegram"] = TelegramAdapter(_telegram_cfg(tg_block, enabled))
-
-    # Meta family (facebook/instagram) — same gating shape as telegram.
-    for _name in ("facebook", "instagram"):
-        _block = channels_overlay().get(_name) or {}
-        if not _block.get("enabled"):
+    channels_cfg = channels_overlay()
+    prod_env = production_overlay()
+    adapters: dict = {}
+    for channel in ("whatsapp", "telegram", "facebook", "instagram"):
+        cfg = resolve_channel_config(channel, channels_cfg, prod_env)
+        if cfg is None:
             continue
-        from ..channels.meta_channels import FacebookAdapter, InstagramAdapter
-
-        adapters[_name] = (FacebookAdapter if _name == "facebook"
-                           else InstagramAdapter)(_telegram_cfg(_block, enabled))
+        adapters[channel] = build_channel_adapter(channel, cfg)
     return adapters
 
 
 def build_probe_adapter(channel: str, channel_cfg: dict):
-    """Health-check probe: adapter built from the CHANNEL's own config block
-    (mock stays mock) — never the global production overlay."""
-    if channel == "whatsapp":
-        from ..channels.whatsapp import WhatsAppAdapter
+    """Health-check probe.
 
-        return WhatsAppAdapter(dict(channel_cfg or {}))
-    if channel == "telegram":
-        from ..channels.telegram import TelegramAdapter
+    Bridge migration: the probe resolves through the SAME resolver as the
+    runtime (C1==C2==C3 parity, owner spec §38). The raw channel block is
+    passed unmodified — `mock stays mock` remains true because the resolver
+    only elevates to production under the audited production.yaml overlay,
+    which a raw test/tool block never carries."""
+    from ..channels.provider_resolver import (
+        build_channel_adapter,
+        resolve_channel_config,
+    )
 
-        return TelegramAdapter(dict(channel_cfg or {}))
-    if channel in ("facebook", "instagram"):
-        from ..channels.meta_channels import FacebookAdapter, InstagramAdapter
-
-        cls = FacebookAdapter if channel == "facebook" else InstagramAdapter
-        return cls(dict(channel_cfg or {}))
-    raise KeyError(f"no probe adapter registered for channel '{channel}'")
+    if channel not in ("whatsapp", "telegram", "facebook", "instagram"):
+        raise KeyError(f"no probe adapter registered for channel '{channel}'")
+    cfg = resolve_channel_config(channel, {channel: channel_cfg}, {})
+    if cfg is None:
+        raise KeyError(f"no probe adapter registered for channel '{channel}'")
+    return build_channel_adapter(channel, cfg)

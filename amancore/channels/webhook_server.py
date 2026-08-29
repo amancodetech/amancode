@@ -170,7 +170,6 @@ def build_runtime(root: Path):
     from ..channels.outbox import MessageOutbox, OutboxWorker
     from ..channels.policy import ChannelPolicyEngine
     from ..channels.response_filter import ExternalResponseFilter
-    from ..channels.whatsapp import WhatsAppAdapter
     from ..config import load_config
     from ..crm.service import CRMService
     from ..pricing.proposal import ProposalStore
@@ -190,26 +189,15 @@ def build_runtime(root: Path):
     cfg = load_config(root)
     db = open_database(cfg.database_path, root / "amancore" / "storage" / "schema.sql")
 
-    # Overlay owner-approved production state onto the whatsapp channel config.
-    # channels.yaml keeps mode=mock by default; only a genuine audited
-    # production enablement (production.yaml) switches the live provider.
-    wa_cfg = dict(cfg.channels.get("whatsapp", {}))
+    # Bridge migration (owner spec §6): ONE resolution point for all channels.
+    # Legacy mock/production semantics are preserved inside the resolver; only
+    # an explicit `mode: bridge` block switches a channel to the local bridge.
+    from ..channels.provider_resolver import (
+        build_channel_adapter,
+        resolve_channel_config,
+    )
+
     prod_env = (cfg.production.get("environment") or {})
-    if prod_env.get("production_enabled") and prod_env.get("mode") == "production":
-        wa_cfg["mode"] = "production"
-        wa_cfg["environment"] = {
-            "production_enabled": True,
-            "mode": "production",
-        }
-        # credentials/identity come from env (never hardcoded in yaml)
-        wa_cfg.setdefault("phone_number_id",
-                          os.environ.get("WHATSAPP_PHONE_NUMBER_ID", ""))
-        # api_version verified end-to-end live on 2026-08-24
-        wa_cfg.setdefault("api_version",
-                          os.environ.get("WHATSAPP_API_VERSION", "v21.0"))
-    else:
-        wa_cfg.setdefault("environment", {"production_enabled": False,
-                                          "mode": prod_env.get("mode", "mock")})
 
     brain = BrainStore(root / "amancore" / "business_brain")
     audit = AuditService(db)
@@ -218,53 +206,20 @@ def build_runtime(root: Path):
     from ..services.events import wire_event_persistence
 
     wire_event_persistence(dispatcher, db)
-    adapter = WhatsAppAdapter(wa_cfg)
     from ..channels.router import ChannelRouter
 
-    router = ChannelRouter({"whatsapp": adapter})
-
-    # Telegram CUSTOMER channel (separate bot from the owner console).
-    # Registered only when explicitly configured; sends stay DENIED by
-    # channel policy until enabled+customer_messaging are true in channels.yaml.
-    tg_block = dict(cfg.channels.get("telegram") or {})
-    tg_adapter = None
-    if tg_block.get("enabled"):
-        from ..channels.telegram import TelegramAdapter
-
-        tg_cfg = dict(tg_block)
-        if (prod_env.get("production_enabled") and prod_env.get("mode") == "production"
-                and tg_block.get("mode") == "production"):
-            tg_cfg["mode"] = "production"
-            tg_cfg["environment"] = {"production_enabled": True, "mode": "production"}
-        else:
-            tg_cfg.setdefault("environment", {"production_enabled": False,
-                                              "mode": prod_env.get("mode", "mock")})
-        tg_adapter = TelegramAdapter(tg_cfg)
-        router.register(tg_adapter)
-
-    # Meta family — Facebook Messenger + Instagram DM (P2-channels).
-    # Registered whenever the channel block is enabled; sends stay MOCK until
-    # production.yaml gates flip, identical to the whatsapp/telegram pattern.
-    meta_adapters: dict = {}
-    for _name in ("facebook", "instagram"):
-        _block = dict(cfg.channels.get(_name) or {})
-        if not _block.get("enabled"):
+    adapters_by_channel: dict = {}
+    for _name in ("whatsapp", "telegram", "facebook", "instagram"):
+        _cfg = resolve_channel_config(_name, cfg.channels, prod_env)
+        if _cfg is None:
             continue
-        _mcfg = dict(_block)
-        if (prod_env.get("production_enabled") and prod_env.get("mode") == "production"
-                and _block.get("mode") == "production"):
-            _mcfg["mode"] = "production"
-            _mcfg["environment"] = {"production_enabled": True, "mode": "production"}
-        else:
-            _mcfg["mode"] = "mock"
-            _mcfg["environment"] = {"production_enabled": False,
-                                             "mode": prod_env.get("mode", "mock")}
-        if _name == "facebook":
-            from ..channels.meta_channels import FacebookAdapter as _adapter_cls
-        else:
-            from ..channels.meta_channels import InstagramAdapter as _adapter_cls
-        router.register(_adapter_cls(_mcfg))
-        meta_adapters[_name] = _adapter_cls(_mcfg)
+        _adapter = build_channel_adapter(_name, _cfg)
+        adapters_by_channel[_name] = _adapter
+    adapter = adapters_by_channel["whatsapp"]
+    router = ChannelRouter(dict(adapters_by_channel))
+    tg_adapter = adapters_by_channel.get("telegram")
+    meta_adapters: dict = {k: v for k, v in adapters_by_channel.items()
+                           if k in ("facebook", "instagram")}
 
     outbox = MessageOutbox(db)
     policy = ChannelPolicyEngine(brain, getattr(cfg, "channels", {}) or {})
