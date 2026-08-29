@@ -1,7 +1,21 @@
-'use strict';
-// meta-bridge configuration — env-driven, fail-fast on missing secrets.
-
+const fs = require('node:fs');
 const path = require('node:path');
+
+// Auto-load bridge.env if present
+const envFile = path.join(__dirname, '..', '..', 'bridge.env');
+if (fs.existsSync(envFile)) {
+  const content = fs.readFileSync(envFile, 'utf8');
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const idx = trimmed.indexOf('=');
+    if (idx !== -1) {
+      const key = trimmed.slice(0, idx).trim();
+      const val = trimmed.slice(idx + 1).trim();
+      if (!process.env[key]) process.env[key] = val;
+    }
+  }
+}
 
 function required(name) {
   const v = process.env[name];

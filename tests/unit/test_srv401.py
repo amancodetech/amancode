@@ -53,9 +53,11 @@ class S3RequiredSecrets(unittest.TestCase):
                       alerts={}, production=production, insights={}, scheduler={})
 
     def test_production_without_whatsapp_secrets_listed(self):
-        missing = validate_required_env(self._cfg(True), environ={})
+        cfg = self._cfg(True)
+        cfg.channels = {"whatsapp": {"mode": "bridge"}}
+        missing = validate_required_env(cfg, environ={})
         joined = "\n".join(missing)
-        for key in ("WHATSAPP_ACCESS_TOKEN", "WHATSAPP_APP_SECRET"):
+        for key in ("AMANCORE_BRIDGE_TOKEN", "BRIDGE_INGRESS_TOKEN"):
             self.assertIn(key, joined)
 
     def test_shadow_mode_no_requirements(self):

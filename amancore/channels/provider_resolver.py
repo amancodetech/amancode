@@ -80,17 +80,12 @@ def resolve_channel_config(channel: str, channels_cfg: dict | None,
         if glob_on:
             cfg["mode"] = "production"
             cfg["environment"] = {"production_enabled": True, "mode": "production"}
-            # credentials/identity come from env (never hardcoded in yaml)
-            cfg.setdefault("phone_number_id",
-                           os.environ.get("WHATSAPP_PHONE_NUMBER_ID", ""))
-            cfg.setdefault("api_version",
-                           os.environ.get("WHATSAPP_API_VERSION", "v21.0"))
         else:
-            # legacy scheduler affordance: AMANCORE_ENV names the mock env
-            cfg.setdefault("mode", os.environ.get("AMANCORE_ENV", "mock"))
-            cfg.setdefault("environment", {
+            cfg["mode"] = "mock"
+            cfg["environment"] = {
                 "production_enabled": False,
-                "mode": (prod_env or {}).get("mode", "mock")})
+                "mode": (prod_env or {}).get("mode", "mock"),
+            }
         return cfg
 
     # telegram / facebook / instagram — same shape as the live composition root

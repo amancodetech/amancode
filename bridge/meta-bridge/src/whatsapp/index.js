@@ -18,6 +18,7 @@ const {
   fetchLatestBaileysVersion,
   DisconnectReason,
   downloadMediaMessage,
+  Browsers,
 } = require('@whiskeysockets/baileys');
 
 const log = require('../core/log');
@@ -37,9 +38,16 @@ function normalizePhone(jid) {
   return user.replace(/\D/g, '');
 }
 
-function toJid(phone) {
-  const digits = String(phone || '').replace(/\D/g, '');
+function toJid(phone, jidMap = null) {
+  const raw = String(phone || '').trim();
+  if (raw.endsWith('@s.whatsapp.net') || raw.endsWith('@lid') || raw.endsWith('@g.us')) {
+    return raw;
+  }
+  const digits = raw.replace(/\D/g, '');
   if (!digits) throw new Error('empty recipient phone');
+  if (jidMap && jidMap.has(digits)) {
+    return jidMap.get(digits);
+  }
   return `${digits}${JID_SUFFIX}`;
 }
 
@@ -75,10 +83,39 @@ class WhatsAppTransport extends EventEmitter {
     this.shadow = opts.shadow ?? config.shadow ?? false;
     this.sessionDir = opts.sessionDir ||
       path.join(config.dataDir, 'whatsapp_session');
+    this.jidMapFile = path.join(this.sessionDir, 'jid_map.json');
+    this.jidMap = new Map();
+    this._loadJidMap();
     this.sock = null;
     this._credentials = opts.credentials || null; // test seam
     this._version = opts.version || null;          // test seam
     this._expectDisconnect = false;
+  }
+
+  _loadJidMap() {
+    try {
+      if (fs.existsSync(this.jidMapFile)) {
+        const data = JSON.parse(fs.readFileSync(this.jidMapFile, 'utf8'));
+        for (const [k, v] of Object.entries(data)) {
+          this.jidMap.set(k, v);
+        }
+      }
+    } catch (e) {
+      log.warn('could not load jid_map', { error: e.message });
+    }
+  }
+
+  _saveJidMap() {
+    try {
+      const obj = Object.fromEntries(this.jidMap);
+      fs.writeFileSync(this.jidMapFile, JSON.stringify(obj, null, 2), 'utf8');
+    } catch (e) {
+      log.warn('could not save jid_map', { error: e.message });
+    }
+  }
+
+  _toJid(phone) {
+    return toJid(phone, this.jidMap);
   }
 
   async connect() {
@@ -94,9 +131,19 @@ class WhatsAppTransport extends EventEmitter {
       version,
       auth: state,
       printQRInTerminal: false,
-      browser: ['AmanCore Bridge', 'meta-bridge', '6.7.24'],
+      browser: Browsers.macOS('Desktop'),
       syncFullHistory: false,
       markOnlineOnConnect: false,
+      generateHighQualityLinkPreview: false,
+      defaultQueryTimeoutMs: 60_000,
+      connectTimeoutMs: 60_000,
+      keepAliveIntervalMs: 30_000,
+      retryRequestDelayMs: 500,
+      getMessage: async () => ({ conversation: '' }),
+      // SLOW QR rotation: the default (~20s) rotates the noise keypair
+      // mid-handshake when the phone is still "logging in" — the pairing
+      // then dies and the phone spins forever. 2 minutes per QR is safe.
+      qrTimeout: 120_000,
     });
 
     this.sock.ev.on('creds.update', saveCreds);
@@ -149,11 +196,18 @@ class WhatsAppTransport extends EventEmitter {
   }
 
   _normalizeInbound(m) {
-    const externalId = normalizePhone(m.key?.remoteJid);
+    const rawJid = m.key?.remoteJid;
+    const externalId = normalizePhone(rawJid);
     if (!externalId) return null;
-    if (!/^\d+$/.test(externalId)) return null; // ignore groups/status@broadcast
+    if (rawJid?.endsWith('@g.us') || rawJid === 'status@broadcast') return null; // ignore groups/status@broadcast
+    if (!/^\d+$/.test(externalId)) return null;
     const externalMessageId = String(m.key?.id || '');
     if (!externalMessageId) return null;
+
+    if (rawJid) {
+      this.jidMap.set(externalId, rawJid);
+      this._saveJidMap();
+    }
 
     const part = extractText(m);
     const pushName = String(m.pushName || '');
@@ -174,7 +228,7 @@ class WhatsAppTransport extends EventEmitter {
       },
       metadata: {
         transport: 'baileys',
-        wa_jid: m.key?.remoteJid,
+        wa_jid: rawJid,
       },
     };
     if (part.reply_to) {
@@ -225,7 +279,7 @@ class WhatsAppTransport extends EventEmitter {
   async sendText({ to, text, replyTo }) {
     if (this.shadow) return this._shadowHold('sendText', { to, text });
     const sock = this._requireSocket();
-    const jid = toJid(to);
+    const jid = this._toJid(to);
     const content = { text: String(text || '') };
     if (replyTo) content.quoted = await this._quoted(jid, replyTo);
     const result = await sock.sendMessage(jid, content);
@@ -238,7 +292,7 @@ class WhatsAppTransport extends EventEmitter {
   async sendMedia({ to, type, base64, caption, filename, replyTo }) {
     if (this.shadow) return this._shadowHold('sendMedia', { to, type });
     const sock = this._requireSocket();
-    const jid = toJid(to);
+    const jid = this._toJid(to);
     const buf = Buffer.from(String(base64 || ''), 'base64');
     if (!buf.length) {
       const err = new Error('empty media payload');
@@ -258,7 +312,7 @@ class WhatsAppTransport extends EventEmitter {
   async react({ to, targetMessageId, emoji }) {
     if (this.shadow) return this._shadowHold('react', { to, targetMessageId });
     const sock = this._requireSocket();
-    const jid = toJid(to);
+    const jid = this._toJid(to);
     await sock.sendMessage(jid, {
       react: { text: String(emoji || ''), key: {
         remoteJid: jid, id: String(targetMessageId), fromMe: false,
@@ -271,7 +325,7 @@ class WhatsAppTransport extends EventEmitter {
   async markRead({ to, messageIds }) {
     if (this.shadow) return this._shadowHold('markRead', { to });
     const sock = this._requireSocket();
-    const jid = toJid(to);
+    const jid = this._toJid(to);
     const keys = (messageIds || []).map(id => ({
       remoteJid: jid, id: String(id), fromMe: false,
     }));

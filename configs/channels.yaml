@@ -1,12 +1,6 @@
-# Channel configuration (Phase 3E: WhatsApp + Website intake only)
-
-# CUTOVER 2026-08-29 (owner-directed): WhatsApp now runs on the LOCAL BRIDGE
-# (Baileys via meta-bridge, 127.0.0.1:8765) — the Meta Cloud API/Graph path
-# for WhatsApp is retired. Rollback = `mode: mock` + Graph creds restore.
+# Channel configuration (WhatsApp runs via local bridge)
 whatsapp:
-  mode: bridge          # bridge (Baileys, local) — graph/mock paths dormant
-  api_version: v24.0    # legacy (graph rollback only)
-  base_url: https://graph.facebook.com
+  mode: bridge          # bridge (Baileys, local)
   inbound_burst_limit: 50
   outbound_per_minute: 10
   auto_reply_low_risk: true
@@ -31,26 +25,16 @@ telegram:
   webhook_secret_env: TELEGRAM_CUSTOMER_WEBHOOK_SECRET
 
 facebook:
-  # P2-channels (2026-08-27): Messenger DM — same Meta app as WhatsApp.
-  mode: production
+  # P3-bridge: Messenger DM via local meta-bridge
+  mode: bridge
   enabled: true
   customer_messaging: true
-  signature_required: true       # X-Hub-Signature-256, fail-closed
-  verify_token_env: META_VERIFY_TOKEN
-  app_secret_env: WHATSAPP_APP_SECRET   # one Meta app = one secret
-  access_token_env: META_PAGE_ACCESS_TOKEN
-  api_version: v21.0
 
 instagram:
-  # P2-channels: Instagram DM via the IG professional account linked to the page.
-  mode: production
+  # P4-bridge: Instagram DM via local meta-bridge
+  mode: bridge
   enabled: true
   customer_messaging: true
-  signature_required: true
-  verify_token_env: META_VERIFY_TOKEN
-  app_secret_env: WHATSAPP_APP_SECRET
-  access_token_env: META_IG_ACCESS_TOKEN
-  api_version: v21.0
 
 outbox:
   max_attempts: 3

@@ -12,6 +12,8 @@ const { BridgeError, statusToCategory } = require('./core/errors');
 const { SessionManager } = require('./sessions/manager');
 const { IngressForwarder } = require('./transport/ingress');
 const { WhatsAppTransport } = require('./whatsapp');
+const { FacebookTransport } = require('./facebook');
+const { InstagramTransport } = require('./instagram');
 const metrics = require('./metrics');
 
 const startedAt = Date.now();
@@ -36,6 +38,36 @@ function buildWhatsapp() {
   return manager;
 }
 
+function buildFacebook() {
+  const transport = new FacebookTransport(config);
+  const manager = new SessionManager('facebook', transport, {
+    baseMs: config.reconnectBaseMs,
+    maxMs: config.reconnectMaxMs,
+  });
+  transport.on('inbound', (envelope) => {
+    metrics.incr('inbound', 'facebook');
+    forwarder.enqueue(envelope);
+  });
+  transports.set('facebook', transport);
+  sessions.set('facebook', manager);
+  return manager;
+}
+
+function buildInstagram() {
+  const transport = new InstagramTransport(config);
+  const manager = new SessionManager('instagram', transport, {
+    baseMs: config.reconnectBaseMs,
+    maxMs: config.reconnectMaxMs,
+  });
+  transport.on('inbound', (envelope) => {
+    metrics.incr('inbound', 'instagram');
+    forwarder.enqueue(envelope);
+  });
+  transports.set('instagram', transport);
+  sessions.set('instagram', manager);
+  return manager;
+}
+
 const forwarder = new IngressForwarder(config);
 
 // channel factories — invoked in start() so tests can inject fakes
@@ -46,6 +78,8 @@ function registerChannel(name, factory) {
 }
 
 registerChannel('whatsapp', buildWhatsapp);
+registerChannel('facebook', buildFacebook);
+registerChannel('instagram', buildInstagram);
 
 function buildChannels() {
   for (const ch of config.channels) {
@@ -54,8 +88,6 @@ function buildChannels() {
     else log.warn('no transport factory for channel', { channel: ch });
   }
 }
-// facebook/instagram transports arrive in their own phase — sessions stay
-// absent until then, and /v1/sessions simply won't list them.
 
 // ---- router ---------------------------------------------------------------
 

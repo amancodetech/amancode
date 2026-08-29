@@ -154,12 +154,28 @@ class BridgeTransport:
 
     def send_message(self, channel: str, message: dict) -> dict:
         """Send one message through the bridge. Delivery-uncertainty aware."""
-        body = {"channel": channel, "shadow": self.shadow, "message": message}
+        # The bridge server reads `body.to` for the recipient phone number,
+        # so lift it out of the message dict into the top-level body.
+        recipient = message.pop("recipient", None) or ""
+        body = {"channel": channel, "shadow": self.shadow,
+                "to": recipient, "message": message}
         result = self.request("POST", "/v1/messages/send", json_body=body,
                               uncertainty="delivery_unknown")
-        if not isinstance(result, dict) or not result.get("accepted"):
+        if not isinstance(result, dict):
             raise BridgeError("permanent", f"bridge send refused: {result!r}"[:200])
-        return result
+        # The bridge returns {message_id, to, would_send?, shadow?} on success.
+        # A missing message_id on a non-shadow send is still valid (delivery_unknown
+        # semantics); only a hard refusal (empty dict / explicit error) is fatal.
+        if result.get("error"):
+            raise BridgeError("temporary",
+                              f"bridge send error: {result['error']}"[:200])
+        return {
+            "external_message_id": (result.get("external_message_id")
+                                    or result.get("message_id") or ""),
+            "status": "sent",
+            "would_send": result.get("would_send", False),
+            "accepted": True,
+        }
 
     def upload_media(self, data: bytes, mime: str, filename: str = "file",
                      channel: str | None = None) -> str:

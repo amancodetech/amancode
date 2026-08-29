@@ -1,22 +1,42 @@
 #!/usr/bin/env node
 'use strict';
-// One-shot pairing helper: prints the WhatsApp QR to the terminal for the
-// owner to scan (WhatsApp → Linked devices → Link a device).
-// Session credentials persist under BRIDGE_DATA_DIR/whatsapp_session —
-// pairing is a ONE-TIME action per number.
+// WhatsApp Business & Personal pairing helper:
+// Prints the WhatsApp QR to the terminal for the owner to scan.
 
 const path = require('node:path');
+const fs = require('node:fs');
 const qrcode = require('qrcode-terminal');
 
 const config = require('../src/core/config');
 const { WhatsAppTransport } = require('../src/whatsapp');
 
+// Clean session if --clean is supplied
+const sessionDir = path.join(config.dataDir, 'whatsapp_session');
+if (process.argv.includes('--clean')) {
+  try {
+    fs.rmSync(sessionDir, { recursive: true, force: true });
+    console.log('[session] cleaned prior session files');
+  } catch {}
+}
+
 const transport = new WhatsAppTransport(config);
-transport.on('status', (s) => console.log(`[status] ${s}`));
+transport.on('status', (s) => {
+  console.log(`[status] ${s}`);
+  if (s === 'CONNECTED') {
+    console.log('\n=============================================');
+    console.log('🎉 تم ربط واتساب بزنس بنجاح تام وبشكل دائم!');
+    console.log('=============================================\n');
+    setTimeout(() => {
+      process.exit(0);
+    }, 2000);
+  }
+});
+
 transport.on('qr', (qr) => {
-  console.log('\nScan this QR with the NEW WhatsApp number:\n');
+  console.log('\n📱 ================== رمز QR الجديد ==================');
+  console.log('امسح الكود من: واتساب للأعمال > الأجهزة المرتبطة > ربط جهاز\n');
   qrcode.generate(qr, { small: true });
-  console.log('\n(re-run this script if the QR expires — ~60s validity)');
+  console.log('=======================================================\n');
 });
 
 transport.connect().catch((err) => {
@@ -24,5 +44,5 @@ transport.connect().catch((err) => {
   process.exit(1);
 });
 
-// stay alive until linked; the socket stays open and will report CONNECTED
 setInterval(() => {}, 1 << 30);
+

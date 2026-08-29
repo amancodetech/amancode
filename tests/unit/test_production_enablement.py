@@ -56,8 +56,8 @@ def _ready_gate_report():
         "_root": ROOT,
     }
     secrets = {
-        "WHATSAPP_VERIFY_TOKEN": "t", "WHATSAPP_APP_SECRET": "s",
-        "WHATSAPP_ACCESS_TOKEN": "a", "WHATSAPP_PHONE_NUMBER_ID": "p",
+        "AMANCORE_BRIDGE_TOKEN": "test-token",
+        "BRIDGE_INGRESS_TOKEN": "test-ingress",
     }
     # alert transport dynamic check reads the real process environment
     os.environ["TELEGRAM_BOT_TOKEN"] = "test-token"

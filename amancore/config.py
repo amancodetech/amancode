@@ -112,26 +112,14 @@ def load_config(root: Path, mutate_environ: bool = True) -> Config:
 # ── SRV-401/S3: fail-fast on missing secrets for ENABLED integrations ────────
 # A deleted env var used to boot green and fail every send silently.
 REQUIRED_ENV_BY_FEATURE = {
-    "production_whatsapp": [
-        "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_ACCESS_TOKEN",
-        "WHATSAPP_APP_SECRET", "WHATSAPP_VERIFY_TOKEN",
-    ],
     "owner_alerts_telegram": ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"],
-    # Bridge migration (owner spec §10/§12): bridge mode is token-authenticated
-    # in BOTH directions — outbound (AmanCore→bridge) and ingress (bridge→AmanCore).
+    # Bridge mode is token-authenticated in BOTH directions:
+    # outbound (AmanCore→bridge) and ingress (bridge→AmanCore).
     "bridge_channels": ["AMANCORE_BRIDGE_TOKEN", "BRIDGE_INGRESS_TOKEN"],
 }
 
 
 def _feature_active(feature: str, cfg: "Config", environ) -> bool:
-    if feature == "production_whatsapp":
-        # Graph secrets are required ONLY while WhatsApp actually rides the
-        # Graph transport (owner spec §54 rollback path). Bridge mode
-        # authenticates with the bridge tokens instead (bridge_channels).
-        if not bool(cfg.production.get("environment", {}).get("production_enabled", False)):
-            return False
-        wa = dict((cfg.channels or {}).get("whatsapp") or {})
-        return str(wa.get("mode", "mock")).strip().lower() != "bridge"
     if feature == "owner_alerts_telegram":
         return environ.get("OWNER_ALERT_CHANNEL", "").strip().lower() == "telegram"
     if feature == "bridge_channels":

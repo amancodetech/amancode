@@ -7,13 +7,26 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "qr": "node scripts/qr-pair.js",
+    "qr-live": "node scripts/qr-live.js",
+    "pair-code": "node scripts/pair-code.js",
+    "fb:session": "node scripts/fb-session.js",
+    "fb:login": "node scripts/fb-login.js",
+    "fb:browser": "node scripts/fb-browser-login.js",
+    "ig:session": "node scripts/ig-session.js",
+    "ig:login": "node scripts/ig-login.js",
+    "ig:browser": "node scripts/ig-browser-login.js"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "6.7.24",
-    "qrcode-terminal": "0.12.0"
+    "instagram-private-api": "^1.46.1",
+    "puppeteer": "^25.9.0",
+    "qrcode": "^1.5.4",
+    "qrcode-terminal": "0.12.0",
+    "ws3-fca": "^3.5.2"
   }
 }

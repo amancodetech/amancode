@@ -40,111 +40,6 @@ class MockWhatsAppProvider:
         return {"provider_message_id": f"mock-{new_id()}", "status": "sent"}
 
 
-class GraphWhatsAppProvider:
-    """Official WhatsApp Cloud API provider (Graph API). Config-driven version.
-
-    SAFETY: refuses to send unless production_enabled is explicitly true AND
-    mode == 'production'. Credentials alone never unlock external sends.
-    """
-
-    def __init__(self, config: dict):
-        self.config = config
-        self.base_url = config.get("base_url", "https://graph.facebook.com").rstrip("/")
-        self.version = config.get("api_version", "v24.0")
-        self.phone_number_id = config.get("phone_number_id")
-        self.access_token = os.environ.get(config.get("access_token_env", "WHATSAPP_ACCESS_TOKEN"), "")
-
-    MEDIA_TYPES = ("image", "audio", "video", "document", "sticker")
-
-    def upload_media(self, data: bytes, mime: str, filename: str = "file") -> str:
-        """Upload media to Cloud API; returns media_id. Gated like sends."""
-        block_unless_production_enabled(self.config)
-        if not (self.phone_number_id and self.access_token):
-            raise RuntimeError("whatsapp provider not configured (phone_number_id/access_token)")
-        url = f"{self.base_url}/{self.version}/{self.phone_number_id}/media"
-        resp = requests.post(
-            url,
-            headers={"Authorization": f"Bearer {self.access_token}"},
-            files={"file": (filename, data, mime)},
-            data={"messaging_product": "whatsapp", "type": mime},
-            timeout=120,
-        )
-        if resp.status_code != 200:
-            raise RuntimeError(f"whatsapp media upload failed: {resp.status_code} {resp.text[:200]}")
-        return resp.json()["id"]
-
-    def download_media(self, media_id: str) -> tuple[bytes, str]:
-        """Download media bytes by id; returns (data, mime). Read-only, ungated."""
-        if not self.access_token:
-            raise RuntimeError("whatsapp provider not configured (access_token)")
-        url = f"{self.base_url}/{self.version}/{media_id}"
-        resp = requests.get(url, headers={"Authorization": f"Bearer {self.access_token}"}, timeout=60)
-        if resp.status_code != 200:
-            raise RuntimeError(f"whatsapp media lookup failed: {resp.status_code}")
-        dl_url = resp.json().get("url")
-        if not dl_url:
-            raise RuntimeError("whatsapp media url missing")
-        dl = requests.get(dl_url, headers={"Authorization": f"Bearer {self.access_token}"}, timeout=120)
-        if dl.status_code != 200:
-            raise RuntimeError(f"whatsapp media download failed: {dl.status_code}")
-        return dl.content, dl.headers.get("Content-Type", "application/octet-stream")
-
-    def send(self, recipient: str, message_type: str, payload) -> dict:
-        block_unless_production_enabled(self.config)
-        if not (self.phone_number_id and self.access_token):
-            raise RuntimeError("whatsapp provider not configured (phone_number_id/access_token)")
-        url = f"{self.base_url}/{self.version}/{self.phone_number_id}/messages"
-        headers = {"Authorization": f"Bearer {self.access_token}", "Content-Type": "application/json"}
-        body = {"messaging_product": "whatsapp", "to": recipient}
-        if isinstance(payload, dict) and payload.get("_reply_to"):
-            body["context"] = {"message_id": payload.pop("_reply_to")}
-        if message_type == "template":
-            body["type"] = "template"
-            body["template"] = payload  # {name, language:{code}, components:[]}
-        elif message_type in self.MEDIA_TYPES and isinstance(payload, dict):
-            # {id|link, caption?, filename?} — official media message shape
-            body["type"] = message_type
-            section = {}
-            if payload.get("id"):
-                section["id"] = payload["id"]
-            elif payload.get("link"):
-                section["link"] = payload["link"]
-            else:
-                raise RuntimeError("media payload requires id or link")
-            for k in ("caption", "filename"):
-                if payload.get(k):
-                    section[k] = payload[k]
-            body[message_type] = section
-        else:
-            text_body = payload if isinstance(payload, str) else payload.get("body", "")
-            # W4: hard WhatsApp cap — clamp at the single choke point
-            body["type"] = "text"
-            body["text"] = {"body": str(text_body)[:4096]}
-        resp = requests.post(url, json=body, headers=headers, timeout=30)
-        if resp.status_code != 200:
-            from .wa_errors import classify_graph_error
-
-            raise classify_graph_error(resp.status_code, resp.text[:500],
-                                       resp.headers.get("Retry-After"))
-        data = resp.json()
-        return {"provider_message_id": data.get("messages", [{}])[0].get("id"), "status": "sent"}
-
-    def send_raw(self, body: dict) -> dict:
-        """Reactions / read receipts / any official pre-built payload."""
-        block_unless_production_enabled(self.config)
-        if not (self.phone_number_id and self.access_token):
-            raise RuntimeError("whatsapp provider not configured (phone_number_id/access_token)")
-        url = f"{self.base_url}/{self.version}/{self.phone_number_id}/messages"
-        headers = {"Authorization": f"Bearer {self.access_token}", "Content-Type": "application/json"}
-        resp = requests.post(url, json=body, headers=headers, timeout=30)
-        if resp.status_code != 200:
-            from .wa_errors import classify_graph_error
-
-            raise classify_graph_error(resp.status_code, resp.text[:500],
-                                       resp.headers.get("Retry-After"))
-        return {"delivered": True}
-
-
 class WhatsAppAdapter(ChannelAdapter):
     channel = "whatsapp"
 
@@ -154,10 +49,7 @@ class WhatsAppAdapter(ChannelAdapter):
             os.environ.get(config.get("verify_token_env", "WHATSAPP_VERIFY_TOKEN"), ""),
             os.environ.get(config.get("app_secret_env", "WHATSAPP_APP_SECRET"), ""),
         )
-        mode = config.get("mode", "mock")
-        if provider is None:
-            provider = MockWhatsAppProvider() if mode == "mock" else GraphWhatsAppProvider(config)
-        self.provider = provider
+        self.provider = provider or MockWhatsAppProvider()
 
     # ---- webhook ------------------------------------------------------
     def verify_webhook(self, mode: str, token: str, challenge: str) -> dict:
@@ -272,6 +164,11 @@ class WhatsAppAdapter(ChannelAdapter):
 
     # ---- send ---------------------------------------------------------
     def send(self, recipient: str, message_type: str, payload) -> dict:
+        if self.config.get("mode") in ("production", "sandbox"):
+            block_unless_production_enabled(self.config)
+        if message_type == "text":
+            text_body = payload if isinstance(payload, str) else (payload or {}).get("body", "")
+            payload = str(text_body)[:4096]
         return self.provider.send(recipient, message_type, payload)
 
     def react(self, recipient: str, message_id: str, emoji: str) -> dict:

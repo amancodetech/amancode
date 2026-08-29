@@ -1,11 +1,264 @@
 'use strict';
-// Facebook private transport (facebook-chat-api) — arrives in its own phase.
-// Reserved surface only; the server does not register a session for it yet.
+// Facebook Messenger transport for local meta-bridge (owner spec §18/§22).
+//
+// Platform specifics live ONLY inside this module.
+// Emits:
+//   'status' (CONNECTED | CONNECTING | AUTH_REQUIRED | DISCONNECTED, { error? })
+//   'inbound' (normalized bridge envelope)
 
-class FacebookTransport {
-  constructor() {
-    throw new Error('facebook transport lands in the facebook phase (spec §20)');
+const fs = require('node:fs');
+const path = require('node:path');
+const { EventEmitter } = require('node:events');
+const log = require('../core/log');
+const { BridgeError } = require('../core/errors');
+
+function normalizeId(id) {
+  return String(id || '').replace(/[^A-Za-z0-9_\-]/g, '');
+}
+
+function extractText(m) {
+  if (typeof m === 'string') return { type: 'text', text: m };
+  const text = m.body || m.text || '';
+  const replyTo = m.messageReply?.messageID || m.replyTo || undefined;
+  return { type: 'text', text: String(text), reply_to: replyTo };
+}
+
+class FacebookTransport extends EventEmitter {
+  constructor(config, opts = {}) {
+    super();
+    this.config = config;
+    this.shadow = opts.shadow ?? config.shadow ?? false;
+    this.sessionDir = opts.sessionDir ||
+      path.join(config.dataDir, 'facebook_session');
+    this.appStateFile = path.join(this.sessionDir, 'appstate.json');
+    this.api = null;
+    this._driver = opts.driver || null; // test seam for faking FB driver in tests
+    this._expectDisconnect = false;
+    this._stopListening = null;
+  }
+
+  async connect() {
+    this._expectDisconnect = false;
+    fs.mkdirSync(this.sessionDir, { recursive: true });
+
+    // Test seam: inject fake driver if provided
+    if (this._driver) {
+      this.api = await this._driver({
+        appStateFile: this.appStateFile,
+        sessionDir: this.sessionDir,
+      });
+      this._setupListener();
+      this.emit('status', 'CONNECTED');
+      return;
+    }
+
+    if (!fs.existsSync(this.appStateFile)) {
+      log.warn('facebook appstate missing', {
+        channel: 'facebook',
+        file: this.appStateFile,
+        hint: 'place facebook session in appstate.json or run fb login script',
+      });
+      this.emit('status', 'AUTH_REQUIRED', {
+        error: 'appstate.json missing — Facebook session required',
+      });
+      return;
+    }
+
+    let appState;
+    try {
+      const raw = fs.readFileSync(this.appStateFile, 'utf8');
+      appState = JSON.parse(raw);
+    } catch (err) {
+      log.error('invalid facebook appstate.json', { error: err.message });
+      this.emit('status', 'AUTH_REQUIRED', {
+        error: `invalid appstate.json: ${err.message}`,
+      });
+      return;
+    }
+
+    try {
+      let loginFn;
+      try {
+        const mod = require('ws3-fca');
+        loginFn = mod.login || mod;
+      } catch {
+        try {
+          const mod = require('facebook-chat-api');
+          loginFn = mod.login || mod;
+        } catch {
+          try {
+            const mod = require('@xaviabot/fca-unofficial');
+            loginFn = mod.login || mod;
+          } catch {
+            log.warn('facebook library not installed', {
+              channel: 'facebook',
+              hint: 'npm install ws3-fca in meta-bridge',
+            });
+            this.emit('status', 'AUTH_REQUIRED', {
+              error: 'facebook transport driver not installed',
+            });
+            return;
+          }
+        }
+      }
+
+      await new Promise((resolve, reject) => {
+        loginFn({ appState }, { logLevel: 'silent', listenEvents: true }, (err, api) => {
+          if (err) return reject(err);
+          this.api = api;
+          this._setupListener();
+          this.emit('status', 'CONNECTED');
+          resolve();
+        });
+      });
+    } catch (err) {
+      log.error('facebook connection failed', { error: err.message });
+      const isAuth = /login|auth|session|cookie/i.test(err.message || '');
+      this.emit('status', isAuth ? 'AUTH_REQUIRED' : 'DISCONNECTED', {
+        error: err.message,
+      });
+    }
+  }
+
+  _setupListener() {
+    if (!this.api || (typeof this.api.listenMqtt !== 'function' && typeof this.api.listen !== 'function')) {
+      return;
+    }
+    const listenFn = this.api.listenMqtt ? this.api.listenMqtt.bind(this.api)
+      : this.api.listen.bind(this.api);
+
+    this._stopListening = listenFn((err, message) => {
+      if (err) {
+        log.error('facebook listener error', { error: err.message });
+        return;
+      }
+      if (!message || message.type !== 'message') return;
+      try {
+        const env = this._normalizeInbound(message);
+        if (env) this.emit('inbound', env);
+      } catch (e) {
+        log.error('facebook inbound normalize failed', { error: e.message });
+      }
+    });
+  }
+
+  _normalizeInbound(m) {
+    const senderId = normalizeId(m.senderID || m.from || m.author);
+    if (!senderId) return null;
+    const mid = String(m.messageID || m.id || '');
+    if (!mid) return null;
+
+    const part = extractText(m);
+    const ts = m.timestamp
+      ? new Date(Number(m.timestamp)).toISOString()
+      : new Date().toISOString();
+
+    return {
+      channel: 'facebook',
+      event_type: 'message.received',
+      external_message_id: mid,
+      account_id: 'primary',
+      sender: {
+        external_id: senderId,
+        name: String(m.senderName || ''),
+      },
+      timestamp: ts,
+      message: {
+        type: 'text',
+        text: part.text || '',
+      },
+      metadata: {
+        transport: 'private',
+        thread_id: String(m.threadID || senderId),
+      },
+    };
+  }
+
+  async disconnect() {
+    this._expectDisconnect = true;
+    if (this._stopListening && typeof this._stopListening === 'function') {
+      try { this._stopListening(); } catch { /* best effort */ }
+      this._stopListening = null;
+    }
+    if (this.api && typeof this.api.logout === 'function') {
+      try { await new Promise(r => this.api.logout(r)); } catch { /* best effort */ }
+    }
+    this.api = null;
+    this.emit('status', 'DISCONNECTED');
+  }
+
+  _requireApi() {
+    if (!this.api) {
+      const err = new BridgeError('facebook session not connected', 'auth_required', 401);
+      throw err;
+    }
+    return this.api;
+  }
+
+  // ---- outbound surface (AmanCore-facing) -------------------------------
+
+  async sendText({ to, text, replyTo }) {
+    if (this.shadow) return this._shadowHold('sendText', { to, text });
+    const api = this._requireApi();
+    const threadId = normalizeId(to);
+    if (!threadId) throw new BridgeError('empty recipient thread id', 'invalid_request', 400);
+
+    const msgObj = { body: String(text || '') };
+    if (replyTo) msgObj.replyToMessage = String(replyTo);
+
+    return new Promise((resolve, reject) => {
+      api.sendMessage(msgObj, threadId, (err, info) => {
+        if (err) {
+          const cat = /rate|limit/i.test(err.message) ? 'rate_limited' : 'temporary';
+          return reject(new BridgeError(err.message, cat, 500));
+        }
+        resolve({
+          external_message_id: info?.messageID || info?.id || `mid-${Date.now()}`,
+          to: threadId,
+        });
+      });
+    });
+  }
+
+  async sendMedia({ to, type, caption }) {
+    if (this.shadow) return this._shadowHold('sendMedia', { to, type });
+    throw new BridgeError('facebook bridge carries text only in phase 3', 'invalid_request', 400);
+  }
+
+  async react({ to, targetMessageId, emoji }) {
+    if (this.shadow) return this._shadowHold('react', { to, targetMessageId });
+    const api = this._requireApi();
+    return new Promise((resolve, reject) => {
+      if (typeof api.setMessageReaction !== 'function') {
+        return resolve({ external_message_id: String(targetMessageId) });
+      }
+      api.setMessageReaction(String(emoji || ''), String(targetMessageId), (err) => {
+        if (err) return reject(new BridgeError(err.message, 'temporary', 500));
+        resolve({ external_message_id: String(targetMessageId) });
+      });
+    });
+  }
+
+  async markRead({ to }) {
+    if (this.shadow) return this._shadowHold('markRead', { to });
+    const api = this._requireApi();
+    const threadId = normalizeId(to);
+    return new Promise((resolve) => {
+      if (typeof api.markAsRead !== 'function') return resolve({ read: 1 });
+      api.markAsRead(threadId, () => resolve({ read: 1 }));
+    });
+  }
+
+  _shadowHold(op, args) {
+    log.info('shadow hold (would_send)', {
+      channel: 'facebook', op, to: args.to || undefined,
+    });
+    return {
+      would_send: true,
+      shadow: true,
+      external_message_id: null,
+    };
   }
 }
 
-module.exports = { FacebookTransport };
+module.exports = { FacebookTransport, normalizeId, extractText };

@@ -2,7 +2,8 @@ import copy
 import unittest
 from pathlib import Path
 
-from amancore.channels.whatsapp import GraphWhatsAppProvider, WhatsAppAdapter
+from amancore.channels.bridge_whatsapp import BridgeWhatsAppProvider
+from amancore.channels.whatsapp import WhatsAppAdapter
 from amancore.errors import ProductionNotEnabledError
 from amancore.production.gate import ProductionGateService
 
@@ -33,8 +34,8 @@ READY_CONFIG = {
 }
 
 SECRETS = {
-    "WHATSAPP_VERIFY_TOKEN": "t", "WHATSAPP_APP_SECRET": "s",
-    "WHATSAPP_ACCESS_TOKEN": "a", "WHATSAPP_PHONE_NUMBER_ID": "p",
+    "AMANCORE_BRIDGE_TOKEN": "test-bridge-token",
+    "BRIDGE_INGRESS_TOKEN": "test-ingress-token",
 }
 
 
@@ -88,8 +89,7 @@ class ProductionGateTest(unittest.TestCase):
 
     def test_secrets_presence(self):
         gate = ProductionGateService(MOCK_PRODUCTION_CONFIG, env={
-            "WHATSAPP_VERIFY_TOKEN": "t", "WHATSAPP_APP_SECRET": "s",
-            "WHATSAPP_ACCESS_TOKEN": "a", "WHATSAPP_PHONE_NUMBER_ID": "p",
+            "AMANCORE_BRIDGE_TOKEN": "t", "BRIDGE_INGRESS_TOKEN": "s",
         })
         self.assertTrue(gate._secrets_present())
         gate2 = ProductionGateService(MOCK_PRODUCTION_CONFIG, env={})
@@ -97,7 +97,7 @@ class ProductionGateTest(unittest.TestCase):
 
     def test_assert_send_allowed_blocks_when_disabled(self):
         gate = ProductionGateService(MOCK_PRODUCTION_CONFIG, env={
-            "WHATSAPP_ACCESS_TOKEN": "secret-token-123", "WHATSAPP_PHONE_NUMBER_ID": "111",
+            "AMANCORE_BRIDGE_TOKEN": "secret-token-123", "BRIDGE_INGRESS_TOKEN": "111",
         })
         with self.assertRaises(ProductionNotEnabledError):
             gate.assert_production_send_allowed()
@@ -110,16 +110,13 @@ class ProductionGateTest(unittest.TestCase):
         with self.assertRaises(ProductionNotEnabledError):
             ProductionGateService(cfg).assert_production_send_allowed()
 
-    def test_graph_provider_blocked_even_with_credentials(self):
+    def test_bridge_provider_blocked_even_with_credentials(self):
         """Safety rule: credentials alone never unlock external sends."""
-        provider = GraphWhatsAppProvider({
+        provider = BridgeWhatsAppProvider({
             "mode": "production",
-            "production_enabled": False,
-            "phone_number_id": "111",
-            "base_url": "https://graph.facebook.com",
-            "api_version": "v24.0",
+            "environment": {"production_enabled": False, "mode": "production"},
+            "bridge": {"base_url": "http://127.0.0.1:8765", "token_env": "AMANCORE_BRIDGE_TOKEN"},
         })
-        provider.access_token = "EA-fake-token"
         with self.assertRaises(ProductionNotEnabledError):
             provider.send("5511", "text", "hello")
 
