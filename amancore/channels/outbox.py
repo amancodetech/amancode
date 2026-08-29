@@ -210,6 +210,18 @@ class MessageOutbox:
             )
             return "queued"
 
+    def mark_uncertain(self, message_id: str, reason: str) -> None:
+        """Owner spec §15: a send whose delivery state is UNKNOWN (e.g. bridge
+        timeout after the request left the process) lands in the EXISTING
+        `uncertain` state — reconciliation territory, never a blind retry."""
+        self.db.execute(
+            "UPDATE message_outbox SET status = 'uncertain', claimed_at = NULL, "
+            "claim_token = NULL, failure_reason = ? WHERE message_id = ?",
+            ((reason or "")[:200], message_id),
+        )
+        self.db.commit()
+        log.warning("outbox.uncertain mid=%s reason=%s", message_id, (reason or "")[:120])
+
     def cancel(self, message_id: str) -> None:
         self.db.execute("UPDATE message_outbox SET status = 'cancelled' WHERE message_id = ?", (message_id,))
         self.db.commit()
@@ -312,6 +324,16 @@ class OutboxWorker:
                     category, retry_in = classify(exc)
                 except Exception:  # noqa: BLE001 — misbehaving adapter falls back to generic
                     category, retry_in = None, None
+            # Owner spec §15/§44: unknown delivery state (send timeout) →
+            # the existing `uncertain` state. NO retry, NO dead — the send
+            # may have reached the platform; reconciliation decides later.
+            if category == "delivery_unknown":
+                self.outbox.mark_uncertain(
+                    message["message_id"], f"[delivery_unknown] {exc}")
+                self._emit("message.failed", message)
+                self._audit("channel.uncertain", channel, result=str(exc))
+                return {"message_id": message["message_id"],
+                        "status": "uncertain", "reason": "delivery_unknown"}
             from .wa_errors import FAST_DEAD_CATEGORIES, RETRYABLE_CATEGORIES
 
             dead_now = False

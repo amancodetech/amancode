@@ -12,8 +12,13 @@ from __future__ import annotations
 
 import re
 
-RETRYABLE_CATEGORIES = {"rate_limited", "provider"}
-FAST_DEAD_CATEGORIES = {"auth", "bad_recipient"}
+RETRYABLE_CATEGORIES = {"rate_limited", "provider", "temporary"}
+FAST_DEAD_CATEGORIES = {"auth", "bad_recipient", "permanent",
+                        "invalid_request", "not_found"}
+# Bridge taxonomy (owner spec §43/§15): "delivery_unknown" is handled
+# separately by OutboxWorker — it maps to the outbox `uncertain` state
+# (never retried blindly), so it is deliberately absent from both sets.
+BRIDGE_ONLY_CATEGORIES = {"delivery_unknown"}
 
 _BAD_RECIPIENT_CODES = {131026, 131030, 131047, 131049, 470}
 _AUTH_CODES = {190}
