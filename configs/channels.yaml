@@ -54,3 +54,27 @@ outbox:
   retry_backoff_seconds: 10
   claim_mode: atomic          # OUT-202: ACTIVE since 2026-08-24 (kills C1+C4)
   stale_after_seconds: 300    # processing rows older than this get reclaimed
+
+# ── Bridge migration (owner spec §8): mode ≠ transport ──────────────────────
+# Switching a channel above to `mode: bridge` routes it through the local
+# meta-bridge using THIS transport selection. AmanCore never sees the
+# transport internals; `shadow: true` = full real path, no external delivery.
+# Rollback = `mode: graph` (whatsapp) / declared mode + restart. NOTHING here
+# is active until a channel block declares `mode: bridge`.
+providers:
+  whatsapp:
+    transport: baileys          # pinned major version inside the bridge
+    base_url: http://127.0.0.1:8765
+    token_env: AMANCORE_BRIDGE_TOKEN
+    shadow: false
+  facebook:
+    transport: private          # facebook-chat-api session inside the bridge
+    base_url: http://127.0.0.1:8765
+    token_env: AMANCORE_BRIDGE_TOKEN
+    shadow: false
+  instagram:
+    transport: realtime         # browser_fallback when realtime is unstable
+    browser_fallback: true
+    base_url: http://127.0.0.1:8765
+    token_env: AMANCORE_BRIDGE_TOKEN
+    shadow: false

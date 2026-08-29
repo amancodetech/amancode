@@ -117,6 +117,9 @@ REQUIRED_ENV_BY_FEATURE = {
         "WHATSAPP_APP_SECRET", "WHATSAPP_VERIFY_TOKEN",
     ],
     "owner_alerts_telegram": ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"],
+    # Bridge migration (owner spec §10/§12): bridge mode is token-authenticated
+    # in BOTH directions — outbound (AmanCore→bridge) and ingress (bridge→AmanCore).
+    "bridge_channels": ["AMANCORE_BRIDGE_TOKEN", "BRIDGE_INGRESS_TOKEN"],
 }
 
 
@@ -128,6 +131,10 @@ def _feature_active(feature: str, cfg: "Config", environ) -> bool:
             return False
     if feature == "owner_alerts_telegram":
         return environ.get("OWNER_ALERT_CHANNEL", "").strip().lower() == "telegram"
+    if feature == "bridge_channels":
+        return any(
+            dict((cfg.channels or {}).get(ch) or {}).get("mode") == "bridge"
+            for ch in ("whatsapp", "telegram", "facebook", "instagram"))
     return False
 
 

@@ -83,13 +83,21 @@ def run_health_checks(root: Path) -> dict[str, tuple[str, str]]:
     # channels — generic per-channel registration (adapter-driven);
     # unconfigured channels are skipped, never silently "pass"
     cfg3 = cfg or load_config(root)
-    for _ch in ("whatsapp", "telegram"):
+    for _ch in ("whatsapp", "telegram", "facebook", "instagram"):
         if not cfg3.channels.get(_ch):
             continue
         results[f"channel_config:{_ch}"] = _check(
             f"channel_config:{_ch}", lambda ch=_ch: _channel_config(cfg3, ch))
         results[f"channel_webhook:{_ch}"] = _check(
             f"channel_webhook:{_ch}", lambda ch=_ch: _channel_webhook(cfg3, ch))
+        # Bridge migration (owner spec §33): distinct process/session states —
+        # only relevant when the channel actually resolves to mode: bridge
+        results[f"bridge_process:{_ch}"] = _check(
+            f"bridge_process:{_ch}",
+            lambda ch=_ch: _bridge_state(cfg3, ch, want="process"))
+        results[f"bridge_session:{_ch}"] = _check(
+            f"bridge_session:{_ch}",
+            lambda ch=_ch: _bridge_state(cfg3, ch, want="session"))
     results["channel_policy"] = _check("channel_policy", lambda: _channel_policy(store))
     results["message_outbox"] = _check("message_outbox", lambda: _message_outbox(db))
     results["website_intake"] = _check("website_intake", lambda: _website_intake(db))
@@ -186,13 +194,51 @@ def _channel_config(cfg: Config, channel: str) -> str:
     provider details stay inside the channel's own config block."""
     w = cfg.channels.get(channel, {})
     mode = w.get("mode", "mock")
-    if mode not in ("mock", "sandbox", "production"):
+    if mode not in ("mock", "sandbox", "production", "bridge"):
         raise RuntimeError(f"invalid {channel} mode: {mode}")
-    return f"mode={mode}" + (f" api_version={w.get('api_version')}"
-                             if w.get("api_version") else "")
+    extra = f" transport={w.get('bridge', {}).get('transport')}" \
+        if mode == "bridge" else ""
+    shadow = " shadow=ON" if (w.get("bridge") or {}).get("shadow") else ""
+    return (f"mode={mode}{extra}{shadow}"
+            + (f" api_version={w.get('api_version')}"
+               if w.get("api_version") else ""))
+
+
+def _bridge_state(cfg: Config, channel: str, want: str) -> str:
+    """Bridge process/session health (owner spec §33) — states are DISTINCT:
+    process UP/DOWN and session CONNECTED/AUTH_REQUIRED/... never collapse
+    into one 'bridge down'. Skips (passes inertly) for non-bridge modes."""
+    from .channels.provider_resolver import resolve_channel_config
+    from .channels.bridge_transport import bridge_health_probe
+
+    block = cfg.channels.get(channel, {})
+    if block.get("mode") != "bridge":
+        return "skipped (mode != bridge)"
+    resolved = resolve_channel_config(channel, cfg.channels,
+                                      cfg.production.get("environment") or {})
+    if resolved is None:
+        raise RuntimeError(f"channel '{channel}' disabled but mode=bridge")
+    state = bridge_health_probe(resolved)
+    if want == "process":
+        if state["process"] != "UP":
+            raise RuntimeError(f"bridge process DOWN: {state['detail']}")
+        return f"bridge UP ({state['detail']})"
+    if state["process"] != "UP":
+        raise RuntimeError(f"session unknown — bridge process DOWN: "
+                           f"{state['detail']}")
+    session = state["session"]
+    if session == "AUTH_REQUIRED":
+        raise RuntimeError("session AUTH_REQUIRED — re-pair the bridge device")
+    if session == "CONNECTED":
+        return "session CONNECTED"
+    if session == "UNKNOWN":
+        raise RuntimeError("session state UNKNOWN: bridge up but no session report")
+    return f"session {session}"
 
 
 def _channel_webhook(cfg: Config, channel: str) -> str:
+    import os as _os
+
     from .ops.scheduler_adapter import build_probe_adapter
 
     w = cfg.channels.get(channel, {})
@@ -204,11 +250,18 @@ def _channel_webhook(cfg: Config, channel: str) -> str:
     probe = getattr(adapter, "health_probe", None)
     if callable(probe):
         return probe()
-    result = adapter.verify_webhook("subscribe", w.get("verify_token", ""), "challenge")
-    if w.get("mode") == "mock":
+    # verify against the CONFIGURED env token (verify_token_env), not a raw
+    # yaml value — the raw `verify_token` key never carries the secret
+    token_env = w.get("verify_token_env", "META_VERIFY_TOKEN")
+    result = adapter.verify_webhook(
+        "subscribe", _os.environ.get(token_env, ""), "challenge")
+    # judge by the RESOLVED adapter mode (raw blocks say 'production' while
+    # the resolver keeps them mock until the audited overlay flips)
+    mode = (getattr(adapter, "config", {}) or {}).get("mode", "mock")
+    if mode == "mock":
         return "mock webhook verifier available (production pending verification)"
     if not result.get("verified"):
-        raise RuntimeError("verify token not configured")
+        raise RuntimeError(f"verify token not configured (env {token_env})")
     return "webhook verified"
 
 

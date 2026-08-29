@@ -550,3 +550,48 @@ CREATE TABLE IF NOT EXISTS channel_ai_settings (
     enabled INTEGER NOT NULL DEFAULT 1,
     updated_at TEXT NOT NULL
 );
+
+-- ── Bridge migration (owner spec §40) — additive only ────────────────────────
+-- Ownership: AmanCore owns business state; the bridge owns platform session
+-- state (secrets stay in bridge session dirs, NEVER in these tables);
+-- the browser agent owns temporary runtime state.
+
+CREATE TABLE IF NOT EXISTS channel_accounts (
+    channel TEXT NOT NULL,              -- whatsapp | facebook | instagram
+    account_id TEXT NOT NULL,           -- platform account identity
+    display_name TEXT,
+    transport TEXT,                     -- baileys | private | realtime | browser
+    mode TEXT,                          -- bridge | graph | mock
+    created_at TEXT,
+    updated_at TEXT,
+    PRIMARY KEY (channel, account_id)
+);
+
+CREATE TABLE IF NOT EXISTS provider_health (
+    channel TEXT NOT NULL,
+    component TEXT NOT NULL,            -- bridge_process | bridge_session | browser_agent
+    state TEXT NOT NULL,                -- UP | DOWN | CONNECTED | AUTH_REQUIRED | ...
+    detail TEXT,
+    checked_at TEXT,
+    PRIMARY KEY (channel, component)
+);
+
+CREATE TABLE IF NOT EXISTS browser_tasks (
+    task_id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,              -- facebook (extensible)
+    task_type TEXT NOT NULL,            -- publish_post | publish_story | read_insights | ads_prepare
+    payload TEXT NOT NULL DEFAULT '{}', -- JSON task spec (no secrets)
+    status TEXT NOT NULL DEFAULT 'QUEUED',
+    -- QUEUED CLAIMED STARTING AUTH_CHECK EXECUTING VERIFYING
+    -- SUCCEEDED FAILED AUTH_REQUIRED TIMEOUT UNCERTAIN
+    attempts INTEGER NOT NULL DEFAULT 0,
+    result TEXT,                        -- JSON structured result / evidence
+    failure_step TEXT,
+    failure_detail TEXT,
+    screenshot_ref TEXT,
+    created_at TEXT,
+    updated_at TEXT,
+    finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_browser_tasks_status ON browser_tasks(status);
+CREATE INDEX IF NOT EXISTS idx_provider_health_state ON provider_health(state);
