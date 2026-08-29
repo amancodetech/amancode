@@ -1,0 +1,628 @@
+# AmanCore Business Brain v1 — seed (immutable).
+# Derived from AMANCORE_BUSINESS_STRATEGY_v1.2.md (source of truth).
+# This is Versioned Business Configuration, NOT CRM/operational state.
+
+company:
+  name: AmanCore
+  type: Digital Solutions Company for Businesses
+  positioning: Digital business systems for growing companies
+  brand_voice: {tone: professional, style: clear-outcome-focused}
+  languages: [id, ar, en]
+
+services:
+  - id: business_website_system
+    name: Business Website System
+    type: core
+    delivery_model: standardized
+    offer_id: website_system
+  - id: custom_web_application
+    name: Custom Web Application
+    type: core
+    delivery_model: custom_quote
+    offer_id: web_app
+  - id: business_system_mini_erp
+    name: Business System / Mini-ERP
+    type: premium
+    delivery_model: custom_quote
+    offer_id: mini_erp
+  - id: mobile_app
+    name: Mobile App
+    type: premium
+    delivery_model: custom_quote
+    offer_id: mobile_app
+  - id: ecommerce_store
+    name: E-commerce Store
+    type: core
+    delivery_model: standardized
+    offer_id: ecommerce_store
+  - id: ai_automation_suite
+    name: AI & Automation Suite
+    type: premium
+    delivery_model: custom_quote
+    offer_id: ai_automation
+
+offers:
+  - id: presence_starter
+    name: Business Presence Starter
+    tier: entry
+  - id: website_system
+    name: Business Website System
+    tier: core
+  - id: web_app
+    name: Custom Web Application
+    tier: core
+  - id: mini_erp
+    name: Business System / Mini-ERP
+    tier: premium
+  - id: mobile_app
+    name: Mobile App
+    tier: premium
+  - id: care_plan
+    name: Care Plan
+    tier: recurring
+  - id: ecommerce_store
+    name: E-commerce Store
+    tier: core
+  - id: ai_automation
+    name: AI & Automation Suite
+    tier: premium
+
+pricing_policy:
+  shadow_rate: 40
+  markup_by_service:
+    website_standard: 2.5
+    web_app: 3.5
+    business_system: 4.0
+    mobile: 3.0
+  minimum_approved_multiplier:
+    website_standard: 1.30
+    web_app: 1.50
+    business_system: 1.70
+    mobile: 1.50
+  market_multiplier:
+    indonesia: 1.0
+    malaysia: 1.2
+    gcc: 1.5
+    singapore: 2.0
+  revision_reserve: 0.15
+  risk_reserve: 0.15
+
+# Pricing profiles — the SINGLE source of per-service pricing parameters
+# (base hours, complexity factors, policy key). All deterministic; the LLM
+# never reads or writes here. Prices derive from these + pricing_policy.
+pricing_profiles:
+  business_website_system:
+    policy_key: website_standard
+    base_hours: 20
+    complexity_mult: {low: 1.0, medium: 1.25, high: 1.6}
+    public_band: true
+    approval_required_above: 0
+    minimum_margin: 1.3
+  custom_web_application:
+    policy_key: web_app
+    base_hours: 60
+    complexity_mult: {low: 1.0, medium: 1.25, high: 1.6}
+    public_band: true
+    approval_required_above: 0
+    minimum_margin: 1.5
+  business_system_mini_erp:
+    policy_key: business_system
+    base_hours: 120
+    complexity_mult: {low: 1.0, medium: 1.25, high: 1.6}
+    public_band: true
+    approval_required_above: 0
+    minimum_margin: 1.7
+  mobile_app:
+    policy_key: mobile
+    base_hours: 100
+    complexity_mult: {low: 1.0, medium: 1.25, high: 1.6}
+    public_band: true
+    approval_required_above: 0
+    minimum_margin: 1.5
+  ecommerce_store:
+    policy_key: website_standard
+    base_hours: 70
+    complexity_mult: {low: 1.0, medium: 1.25, high: 1.6}
+    public_band: true
+    approval_required_above: 0
+    minimum_margin: 1.3
+  ai_automation_suite:
+    policy_key: business_system
+    base_hours: 80
+    complexity_mult: {low: 1.0, medium: 1.25, high: 1.6}
+    public_band: true
+    approval_required_above: 0
+    minimum_margin: 1.7
+
+# Add-ons — owner-approved optional components with deterministic hours and
+# explicit compatibility. The engine never guesses eligibility.
+add_ons:
+  - id: whatsapp_integration
+    name: WhatsApp Integration
+    base_hours: 8
+    compatible_with: [business_website_system, ecommerce_store, custom_web_application]
+    incompatible_with: []
+    requires: []
+  - id: whatsapp_ordering
+    name: WhatsApp Ordering
+    base_hours: 16
+    compatible_with: [ecommerce_store, business_website_system]
+    incompatible_with: [mobile_app]
+    requires: [whatsapp_integration]
+  - id: whatsapp_notifications
+    name: WhatsApp Notifications
+    base_hours: 10
+    compatible_with: [ecommerce_store, custom_web_application, business_website_system]
+    incompatible_with: []
+    requires: [whatsapp_integration]
+  - id: booking_system
+    name: Booking System
+    base_hours: 14
+    compatible_with: [business_website_system, custom_web_application]
+    incompatible_with: [mobile_app]
+    requires: []
+  - id: payment_gateway
+    name: Payment Gateway
+    base_hours: 12
+    compatible_with: [ecommerce_store, custom_web_application]
+    incompatible_with: [business_website_system]
+    requires: []
+  - id: custom_dashboard
+    name: Custom Dashboard
+    base_hours: 30
+    compatible_with: [custom_web_application, business_system_mini_erp]
+    incompatible_with: [business_website_system, mobile_app]
+    requires: []
+  - id: ai_chatbot
+    name: AI Chatbot
+    base_hours: 24
+    compatible_with: [business_website_system, ecommerce_store, custom_web_application]
+    incompatible_with: []
+    requires: []
+  - id: multilingual
+    name: Multilingual Support
+    base_hours: 6
+    compatible_with: [business_website_system, ecommerce_store, custom_web_application]
+    incompatible_with: []
+    requires: []
+  - id: lead_crm
+    name: Lead CRM
+    base_hours: 18
+    compatible_with: [business_system_mini_erp, custom_web_application]
+    incompatible_with: [business_website_system]
+    requires: []
+  - id: care_plan
+    name: Care Plan (recurring)
+    base_hours: 0
+    compatible_with: [business_website_system, ecommerce_store, business_system_mini_erp]
+    incompatible_with: []
+    requires: []
+
+# T1 public starting ranges — DERIVED from pricing_policy via PricingEngine
+# (gcc market, medium complexity, standard hours). Owner may override numbers
+# freely; conversation layer only ever quotes what lives here.
+price_bands_public:
+  website:
+    low: 1500
+    high: 4200
+    currency: USD
+    market: gcc
+    basis: medium_complexity
+    scope_summary: "موقع تعريفي متكامل متعدد الصفحات"
+    inclusions: ["التصميم والتطوير", "تعدد اللغات", "إدارة محتوى أساسية", "واتساب"]
+    exclusions: ["التكاملات المخصصة", "البوابة الإلكترونية"]
+    mini_scope:
+      low: 450
+      high: 1200
+      currency: USD
+      market: gcc
+      basis: low_complexity
+      hint: "موقع تعريفي من صفحة إلى ثلاث صفحات"
+  ecommerce:
+    low: 5100
+    high: 14800
+    currency: USD
+    market: gcc
+    basis: medium_complexity
+    scope_summary: "متجر إلكتروني متكامل"
+  mobile:
+    low: 6600
+    high: 25800
+    currency: USD
+    market: gcc
+    basis: medium_complexity
+    scope_summary: "تطبيق جوال"
+  business_system:
+    low: 12100
+    high: 42600
+    currency: USD
+    market: gcc
+    basis: medium_complexity
+    scope_summary: "نظام أعمال / Mini-ERP"
+  automation:
+    low: 8100
+    high: 28400
+    currency: USD
+    market: gcc
+    basis: medium_complexity
+    scope_summary: "ذكاء اصطناعي وأتمتة"
+
+market_profiles:
+
+  indonesia: {language: id, currency: IDR}
+  gcc: {language: ar, currency: USD}
+  malaysia: {language: en, currency: MYR}
+  singapore: {language: en, currency: SGD}
+
+icp:
+  primary: Indonesian SME service/trading companies (10-100 employees)
+  secondary: Cross-border trading/export companies (Indonesia-GCC-Malaysia)
+  opportunistic: clinics, real estate, restaurants, startups, etc.
+
+sales_policy:
+  methodology: consultative_selling
+  qualification: BANT
+  discount_rule: reduce_scope_before_reduce_price
+  payment_schedule: ["50% upfront", "50% on delivery"]
+
+negotiation_rules:
+  golden_rule: reduce_scope_before_reduce_price
+  escalation_below_minimum: true
+
+faqs: []
+
+# Industry knowledge packs — the ONLY authoritative source for industry
+# behavior in conversations (ConversationPolicy holds strategy, not facts).
+industry_profiles:
+  association_ngo:
+    aliases: [جمعية, جمعيات, خيرية, تعاون, association, ngo, charity, foundation, nonprofit, non-profit, yayasan]
+    goals: [نشر البرامج والمبادرات, جمع التبرعات, تسجيل المتطوعين, الشفافية مع الداعمين]
+    typical_sections: [الرئيسية, من نحن, برامجنا, كيف تتبرع, احتياجات المستفيدين, الأخبار, تواصل معنا]
+    features: [بوابة تبرع إلكترونية, تقارير تأثير دورية, نموذج تطوع, تعدد اللغات]
+    conversion: [زر تبرع بارز في كل صفحة, زر واتساب مباشر]
+    trust_needs: [شفافية التقارير المالية, حماية خصوصية بيانات المستفيدين]
+    objections: [«ميزانيتنا تبرعات محدودة», «نريد سهولة تحديث المحتوى بأنفسنا»]
+    relevant_services: [business_website_system, care_plan]
+    cross_sell: [whatsapp_integration, care_plan]
+    resources_for_followup: [قائمة تحقق تجهيز محتوى موقع الجمعية, نموذج صفحة تبرع ناجحة]
+  restaurant:
+    aliases: [مطعم, مطاعم, كافيه, مقهى, restaurant, cafe, coffee shop, food service, restoran]
+    goals: [عرض القائمة بشكل شهي, حجز الطاولات, طلبات التوصيل, بناء جمهور دائم]
+    typical_sections: [الرئيسية, قائمة الطعام, الحجز, الفروع, آراء العملاء, تواصل معنا]
+    features: [منيو رقمي بأسعار محدثة, حجز طاولات أونلاين, طلب وتوصيل, معرض صور الأطباق]
+    conversion: [زر اطلب الآن ثابت, واتساب للطلبات السريعة]
+    trust_needs: [صور حقيقية للأطباق, تقييمات موثوقة]
+    objections: [«عندنا حسابات إنستغرام تكفينا», «العميل يكلمنا واتساب مباشرة»]
+    relevant_services: [business_website_system, ecommerce_store]
+    cross_sell: [booking_system, whatsapp_ordering]
+    resources_for_followup: [دليل تصوير أطباق للموقع, قائمة تحقق إطلاق منيو رقمي]
+  real_estate:
+    aliases: [عقارات, عقاري, real estate, real estate agency, realty, property, properties, realestate]
+    goals: [عرض العقارات المتاحة, جذب استفسارات جادة, بناء ثقة السوق, تسريع المبيعات]
+    typical_sections: [الرئيسية, العقارات المتاحة, تفاصيل العقار, من نحن, اطلب معاينة, تواصل معنا]
+    features: [بحث وفلترة متقدمة, خريطة مواقع, معرض صور لكل عقار, نموذج طلب معاينة]
+    conversion: [زر احجز معاينة في كل عقار, واتساب فوري للعقار المعروض]
+    trust_needs: [بيانات عقارية دقيقة ومحدثة, صور حقيقية غير مؤثرة]
+    objections: [«نبيع عبر وسطاء ومجموعات واتساب», «المشاريع قليلة حالياً»]
+    relevant_services: [business_website_system, custom_web_application]
+    cross_sell: [lead_crm, whatsapp_inquiries]
+    resources_for_followup: [قائمة حقول بيانات العقار التي تسرع البيع, نموذج صفحة عقار عالي التحويل]
+  ecommerce:
+    aliases: [متجر, تجارة إلكترونية]
+    goals: [بيع أونلاين على مدار الساعة, سلة شراء سهلة, ثقة الدفع والتوصيل, تنمية العملاء الدائمين]
+    typical_sections: [الرئيسية, المنتجات, السلة والدفع, الشحن والإرجاع, تواصل معنا]
+    features: [كتالوج منتجات وبحث, بوابة دفع آمنة, إدارة مخزون أساسية, كوبونات وعروض]
+    conversion: [زر اشترِ الآن واضح, إشعار الطلب عبر واتساب]
+    trust_needs: [سياسة إرجاع واضحة, دفع آمن ومعروف]
+    objections: [«نبيع عبر إنستغرام وواتساب», «الشحن معقد في منطقتنا»]
+    relevant_services: [ecommerce_store, custom_web_application]
+    cross_sell: [care_plan, whatsapp_notifications]
+    resources_for_followup: [قائمة تحقق جاهزة المتجر للإطلاق, دليل كتابة صفحة منتج تبيع]
+  clinic_healthcare:
+    aliases: [عيادة, عيادات, مركز طبي, مستشفى, clinic]
+    goals: [حجز المواعيد أونلاين, تعريف بالخدمات والأطباء, تقليل الاتصالات الهاتفية, ثقة المريض]
+    typical_sections: [الرئيسية, خدماتنا, الأطباء, حجز موعد, أسئلة شائعة, تواصل معنا]
+    features: [حجز مواعيد مع تأكيد, ملفات الخدمات الطبية, نبذة الأطباء, تذكير المواعيد]
+    conversion: [زر احجز موعدك ثابت, واتساب للاستفسار السريع]
+    trust_needs: [مظهر طبي نظيف ومهني, خصوصية بيانات المريض]
+    objections: [«الحجز عندنا هاتفياً ويكفي», «المعلومات الطبية حساسة»]
+    relevant_services: [business_website_system, custom_web_application]
+    cross_sell: [booking_system, whatsapp_integration]
+    resources_for_followup: [قائمة تحقق خصوصية بيانات المرضى للمواقع, نموذج رحلة حجز موعد]
+  construction:
+    aliases: [مقاولات, إنشاءات, مقاول, شركة مقاولات, construction]
+    goals: [عرض المشاريع المنفذة, الفوز بعطاءات, بناء مصداقية مؤسسية, جذب شركاء]
+    typical_sections: [الرئيسية, من نحن, مشاريعنا, خدماتنا, شهادات وجودة, تواصل معنا]
+    features: [معرض مشاريع بصور قبل/بعد, تحميل ملفات الشركة, شهادات ISO وشركاء, نموذج طلب عرض]
+    conversion: [نموذج طلب دراسة مشروع, اتصال مباشر بقسم التطوير]
+    trust_needs: [أرقام ومقاييس تنفيذ حقيقية, صور ميدانية موثقة]
+    objections: [«عملنا كله علاقات وعطاءات», «لا نحتاج تسويق»]
+    relevant_services: [business_website_system, business_system_mini_erp]
+    cross_sell: [care_plan, lead_crm]
+    resources_for_followup: [هيكل ملف شركة مقاولات الفائز بالعطاءات, قائمة أدلة المصداقية]
+  education:
+    aliases: [مدرسة, مدارس, جامعة, أكاديمية, معهد, school, academy]
+    goals: [استقطاب الطلاب والتسجيل, تواصل أولياء الأمور, عرض البرامج والرسوم, سمعة المؤسسة]
+    typical_sections: [الرئيسية, عن المؤسسة, البرامج والمراحل, التسجيل, الحياة الطلابية, تواصل معنا]
+    features: [نموذج تسجيل أونلاين, تقويم أكاديمي وأخبار, معرض أنشطة, بوابة أولياء أمور]
+    conversion: [زر سجل الآن خلال فترة القبول, تحميل دليل القبول]
+    trust_needs: [اعتمادات وتراخيص ظاهرة, نتائج وإحصائيات حقيقية]
+    objections: [«التسجيل عندنا ورقياً منذ سنوات», «المحتوى يتغير كل فصل»]
+    relevant_services: [business_website_system, custom_web_application]
+    cross_sell: [care_plan, booking_system]
+    resources_for_followup: [تقويم محتوى المدرسة السنوي, قائمة تحقق فترة قبول الطلاب]
+  consulting:
+    aliases: [استشارات, استشاري, consulting]
+    goals: [إظهار الخبرة والتخصص, جذب عملاء B2B, تحويل الزائر لاستشارة مدفوعة]
+    typical_sections: [الرئيسية, خدماتنا الاستشارية, من نحن, دراسات حالة, المدونة, تواصل معنا]
+    features: [صفحات خبرة لكل خدمة, دراسات حالة موثقة, حجز جلسة تعريفية, نشرة بريدية]
+    conversion: [احجز استشارتك المجانية الأولى, نموذج تشخيص سريع]
+    trust_needs: [سمعات وخبرات مسماة, نتائج عملاء سابقة]
+    objections: [«عملنا كله إحالات وشبكة علاقات», «المدونة وقت طويل»]
+    relevant_services: [business_website_system, ai_automation_suite]
+    cross_sell: [booking_system, whatsapp_integration]
+    resources_for_followup: [هيكل دراسة حالة مقنع, قائمة تحقق صفحة خدمة استشارية]
+  law:
+    aliases: [محاماة, محامي, مكتب محاماة, قانوني, law firm]
+    goals: [إظهار التخصص القانوني, طلبات استشارة مؤهلة, سرية وثقة كاملة]
+    typical_sections: [الرئيسية, مجالات ممارستنا, فريق المحامين, المقالات القانونية, استشارة, تواصل معنا]
+    features: [صفحات لكل تخصص قانوني, نموذج طلب استشارة بسرية, مقالات قانونية مبسطة, نبذة الفريق وتراخيصهم]
+    conversion: [زر احجز استشارة قانونية, خط ساخن واتساب مؤكد السرية]
+    trust_needs: [أرقام ترخيص وظاهرة, لغة قانونية دقيقة لكن مفهومة]
+    objections: [«الأمانة عندنا صوتية», «القانون لا يُسوّق»]
+    relevant_services: [business_website_system, care_plan]
+    cross_sell: [booking_system, whatsapp_integration]
+    resources_for_followup: [قائمة تحقق أخلاقيات النشر القانوني, هيكل صفحة تخصص قانوني]
+  logistics:
+    aliases: [شحن, لوجستيك, نقل, تخليص, logistics, shipping]
+    goals: [تتبع الشحنات للعميل, تسعير سريع, عقود B2B, تغطية جغرافية واضحة]
+    typical_sections: [الرئيسية, خدمات الشحن, تتبع الشحنة, اطلب سعراً, شبكتنا, تواصل معنا]
+    features: [تتبع شحنة برقم الطلب, نموذج تسعير فوري, تغطية المدن والموانئ, بوابة عملاء]
+    conversion: [تتبع شحنتك في الصدارة, اطلب عرض سعر خلال دقيقة]
+    trust_needs: [مواعيد التسليم الواقعية, وضوح الرسوم]
+    objections: [«عملاؤنا يطلبون التتبع بواتساب», «أنظمتنا القديمة متشابكة»]
+    relevant_services: [custom_web_application, business_system_mini_erp]
+    cross_sell: [ai_automation_suite, whatsapp_notifications]
+    resources_for_followup: [قائمة نقاط تكامل تتبع الشحنات, نموذج صفحة تسعير شحن]
+  manufacturing:
+    aliases: [مصنع, مصانع, تصنيع, manufacturing, factory]
+    goals: [عرض الخطوط والقدرات, جذب عقود توريد, كتالوج منتجات صناعية, سمعة جودة]
+    typical_sections: [الرئيسية, من نحن, قدراتنا الإنتاجية, المنتجات, الجودة والشهادات, تواصل معنا]
+    features: [كتالوج منتجات بمواصفات PDF, قدرة إنتاج ومواصفات الآلات, طلب عرض سعر كميات, معمل الجودة]
+    conversion: [اطلب عرض سعر للكمية, تحميل كتالوج المواصفات]
+    trust_needs: [شهادات جودة ظاهرة, مواصفات دقيقة غير مبالغ فيها]
+    objections: [«عملاؤنا معروفون ولا نحتاج موقع», «مواصفاتنا معقدة للنشر»]
+    relevant_services: [business_website_system, business_system_mini_erp]
+    cross_sell: [care_plan, lead_crm]
+    resources_for_followup: [هيكل كتالوج مصنع رقمي, قائمة شهادات الجودة للعرض]
+  technology_startup:
+    aliases: [شركة تقنية, ستارت اب, تطبيق ناشئ, startup, saas]
+    goals: [شرح المنتج التقني ببساطة, تجربة مجانية أو demo, جذب مستخدمين ومستثمرين]
+    typical_sections: [الرئيسية, المنتج, كيف يعمل, الأسعار, المدونة, ابدأ الآن]
+    features: [صفحة هبوط بعرض قيمة واحد, فيديو/معاينة تفاعلية, خطة أسعار واضحة, تسجيل مبكر waitlist]
+    conversion: [زر جرّبه مجاناً, حجز عرض توضيحي]
+    trust_needs: [لغة خالية من الحشو التقني, دليل اجتماعي حقيقي]
+    objections: [«لدينا landing page مؤقتة», «المنتج يتغير كل شهر»]
+    relevant_services: [custom_web_application, mobile_app]
+    cross_sell: [ai_automation_suite, care_plan]
+    resources_for_followup: [قائمة تحقق إطلاق Product Hunt, هيكل صفحة تسعير SaaS]
+  professional_services:
+    aliases: [خدمات مهنية, مكتب هندسي, تصميم داخلي, تدريب, services firm]
+    goals: [عرض الخدمات باحتراف, طلبات عروض مؤهلة, بناء portfolio حي]
+    typical_sections: [الرئيسية, خدماتنا, أعمالنا, عن الفريق, اطلب عرض سعر, تواصل معنا]
+    features: [معرض أعمال مصنف, نموذج طلب عرض مفصل, شهادات العملاء, مدونة خبرة]
+    conversion: [اطلب عرض سعر مخصص, واتساب مباشر للفريق]
+    trust_needs: [أعمال حقيقية بإذن العملاء, فريق مسمى بتخصصاته]
+    objections: [«معرض أعمالنا على درايف», «العملاء يعرفونا شخصياً»]
+    relevant_services: [business_website_system, ecommerce_store]
+    cross_sell: [care_plan, booking_system]
+    resources_for_followup: [قالب صفحة خدمة موحد, قائمة تحقق نقل معرض الأعمال]
+  generic_business:
+    aliases: []
+    fallback: true
+    goals: [حضور رقمي احترافي, جذب عملاء جدد, سهولة تواصل]
+    typical_sections: [الرئيسية, خدماتنا, من نحن, أعمالنا, تواصل معنا]
+    features: [نموذج تواصل, معرض أعمال, صفحة خدمات مفصلة]
+    conversion: [زر تواصل واتساب, نموذج استفسار]
+    trust_needs: [معلومات تواصل واضحة]
+    objections: []
+    relevant_services: [business_website_system]
+    cross_sell: [care_plan]
+    resources_for_followup: [قائمة تحقق محتوى موقع الأعمال]
+# P1-final §4 — single objection taxonomy of record (12 rows).
+# Golden-rule ladder ONLY: value -> scope-reduce -> phased -> smallest-tier.
+# Every row is a prior/playbook; CRM + Brain remain the truth for prices/approvals.
+objections:
+  - id: price_high
+    objection: "The price is high"
+    intent: price_sensitivity
+    signals:
+      en: ["expensive", "too pricey", "costly", "out of budget"]
+      ar: ["غالي", "غالية", "مكلف", "سعر مرتفع"]
+    customer_concern: {ar: "هل القيمة تستحق هذا المبلغ؟", en: "Is the value worth this amount?"}
+    recommended_strategy: scope-reduce
+    allowed_direction: {ar: "اعرض خفض النطاق قبل أي لمسة للسعر، وأبرز مكونات القيمة الحقيقية", en: "Offer scope reduction before touching price; surface the real value components"}
+    forbidden: {ar: "لا خصم ولا تعديل رقم ولا وعود بأسعار خاصة", en: "No discounts, no number edits, no special-price promises"}
+    owner_escalation_requirement: "request below minimum approved price"
+    statement_kind: RECOMMENDATION
+    source: {ref: golden_rule_ladder+internal_sales_priors.v1}
+  - id: need_think
+    objection: "I need to think"
+    intent: hesitation
+    signals:
+      en: ["need to think", "let me think", "i will consider"]
+      ar: ["أفكر", "سأفكر", "احتاج وقت للتفكير", "أفكر وارجع لك"]
+    customer_concern: {ar: "قلق من قرار غير مستكمل معلوماته", en: "Fear of an under-informed decision"}
+    recommended_strategy: value
+    allowed_direction: {ar: "اسأل عن العائق الوحيد الأهم ثم زد يقيناً بمعلومة عملية واحدة", en: "Ask about the single main blocker; add one practical certainty"}
+    forbidden: {ar: "لا تضغط بمنطق الندرة ولا تكرر نفس السؤال", en: "No scarcity pressure, no repeated identical question"}
+    owner_escalation_requirement: ""
+    statement_kind: RECOMMENDATION
+    source: {ref: golden_rule_ladder+internal_sales_priors.v1}
+  - id: have_developer
+    objection: "I already have a developer"
+    intent: comparison
+    signals:
+      en: ["already have a developer", "our developer", "work with a developer"]
+      ar: ["عندي مطور", "عندنا مطور", "مبرمج", "لدينا مبرمج", "نتعامل مع مبرمج"]
+    customer_concern: {ar: "ما الذي ستضيفونه فوق ما لديّ؟", en: "What do you add over what I have?"}
+    recommended_strategy: value
+    allowed_direction: {ar: "اسأل أين الفجوة ثم اعرض التكامل لا الاستبدال", en: "Probe the gap; position complement not replacement"}
+    forbidden: {ar: "لا تنقد جهة أخرى ولا تدّع تفوقاً مطلقاً", en: "Never disparage others or claim absolute superiority"}
+    owner_escalation_requirement: ""
+    statement_kind: RECOMMENDATION
+    source: {ref: golden_rule_ladder+internal_sales_priors.v1}
+  - id: want_simpler
+    objection: "I want something simpler"
+    intent: scope
+    signals:
+      en: ["simpler", "keep it simple", "too much for us"]
+      ar: ["أبسط", "أسهل", "بسيط أكثر", "أكثر من احتياجنا"]
+    customer_concern: {ar: "التشغيل اليومي يبدو مرهقاً", en: "Daily operations feel heavy"}
+    recommended_strategy: scope-reduce
+    allowed_direction: {ar: "اقترح قلب واحداً يستحق البقاء ثم أضف ما تبقى لاحقاً كمراحل", en: "Propose one core to keep now; phase the rest later"}
+    forbidden: {ar: "لا تحذف متطلبات قانونية أو أمان حفظاً لبساطة الشكل", en: "No dropping legal/security essentials for simplicity"}
+    owner_escalation_requirement: ""
+    statement_kind: RECOMMENDATION
+    source: {ref: golden_rule_ladder+internal_sales_priors.v1}
+  - id: want_discount
+    objection: "I want a discount"
+    intent: price
+    signals:
+      en: ["discount", "any cheaper option?", "best price you can do"]
+      ar: ["خصم", "تخفيض", "ارخص", "سعر خاص"]
+    customer_concern: {ar: "تخفيض التكلفة دون فقدان الجوهر", en: "Cut cost without losing essence"}
+    recommended_strategy: scope-reduce
+    allowed_direction: {ar: "ابدأ من أصغر نطاق رسمي وأنزل السعر عبر النطاق فقط", en: "Start from smallest official tier; move price only via scope"}
+    forbidden: {ar: "يُمنع إصدار أي نسبة خصم من الجهة الذكية مهما كانت الصيغة", en: "The assistant may never issue any discount in any phrasing"}
+    owner_escalation_requirement: "any discount decision (owner-only)"
+    statement_kind: RECOMMENDATION
+    source: {ref: golden_rule_ladder+internal_sales_priors.v1}
+  - id: need_faster
+    objection: "I need it faster"
+    intent: timeline
+    signals:
+      en: ["faster delivery", "shorter timeline", "can we speed up"]
+      ar: ["أسرع", "بحاجة أسرع", "تقصير المدة", "تسريع التنفيذ"]
+    customer_concern: {ar: "موعد إطلاق مضغوط", en: "Tight launch date"}
+    recommended_strategy: phased
+    allowed_direction: {ar: "اقترح إطلاق مرحلة أولى حقيقية بدل وعد بتقصير كل شيء", en: "Propose a real first-phase launch instead of promising everything sooner"}
+    forbidden: {ar: "يُمنع تثبيت أي تاريخ أو وعد إنجاز", en: "No dates or completion promises whatsoever"}
+    owner_escalation_requirement: "impossible deadline"
+    statement_kind: RECOMMENDATION
+    source: {ref: golden_rule_ladder+internal_sales_priors.v1}
+  - id: see_value
+    objection: "I do not see the value yet"
+    intent: value_clarity
+    signals:
+      en: ["what is the value", "why worth it", "how does this help my business"]
+      ar: ["ما القيمة", "وين الفايدة", "كيف يساعدني عملي", "ماذا سوف أستفيد"]
+    customer_concern: {ar: "رباط النتيجة بالمال والحياة اليومية", en: "Connecting outcome to money and daily reality"}
+    recommended_strategy: value
+    allowed_direction: {ar: "اربط بالمخرج التجاري الذي طلب بنفسه بصياغته هو", en: "Reflect HIS OWN stated business outcome back"}
+    forbidden: {ar: "لا عروض أسعار دفاعية ولا مبالغة نتائج", en: "No defensive price talk, no outcome exaggeration"}
+    owner_escalation_requirement: ""
+    statement_kind: RECOMMENDATION
+    source: {ref: golden_rule_ladder+internal_sales_priors.v1}
+  - id: just_prices
+    objection: "Just send me your price list"
+    intent: shopping_comparator
+    signals:
+      en: ["price list", "just send prices", "send me your rates"]
+      ar: ["قائمة أسعار", "أرسل الأسعار", "كم عندكم الأسعار", "بس ابعث أسعارك"]
+    customer_concern: {ar: "يقارن بسرعة ويحتاج مرجعاً صادقاً للبدء", en: "Fast comparison; needs an honest anchor first"}
+    recommended_strategy: value
+    allowed_direction: {ar: "اذكر النطاق العام المعلن فقط مع ربطه بالنطاق والخطوة التالية", en: "State ONLY the public starting range, tied to scope and next step"}
+    forbidden: {ar: "يُمنع اختراع قائمة أسعار أو خصومات ولاء", en: "No inventing price lists or loyalty discounts"}
+    owner_escalation_requirement: "final price requires owner"
+    statement_kind: RECOMMENDATION
+    source: {ref: golden_rule_ladder+internal_sales_priors.v1}
+  - id: comparing_vendors
+    objection: "Another vendor quoted less"
+    intent: comparison
+    signals:
+      en: ["another vendor", "other company said", "competitor quoted"]
+      ar: ["عرض آخر أقل", "شركة ثانية قالت", "المنافس عرض", "عرضوا سعر أفضل"]
+    customer_concern: {ar: "مصاريف مخيفة بالإضافة إلى الخوف من سوء التنفيذ", en: "Cost anxiety plus execution-risk fear"}
+    recommended_strategy: value
+    allowed_direction: {ar: "اسأل ماذا يشمل عرضهم ثم قارن التغطية والاستمرارية بأمانة", en: "Ask what their quote covers; compare coverage honestly"}
+    forbidden: {ar: "لا تسخّف عرض المنافس ولا تدّعي معرفة تفاصيله", en: "No belittling rivals; never pretend to know their details"}
+    owner_escalation_requirement: ""
+    statement_kind: RECOMMENDATION
+    source: {ref: golden_rule_ladder+internal_sales_priors.v1}
+  - id: need_management_approval
+    objection: "Management must approve"
+    intent: approval_chain
+    signals:
+      en: ["management approval", "my boss decides", "need sign-off"]
+      ar: ["تحتاج موافقة الإدارة", "المدير هو من يقرر", "موافقة المسؤول", "الإدارة توافق"]
+    customer_concern: {ar: "ينتقل القرار خارج دائرة المفاوض", en: "Decision sits outside negotiator authority"}
+    recommended_strategy: phased
+    allowed_direction: {ar: "سلّمه ملخص قرار موجزاً يحمله للجهة الصانعة مع نقطة واحدة تبدأ بها", en: "Hand him a short decision brief to carry up, with ONE starting point"}
+    forbidden: {ar: "لا تجاوز جهته ولا اتفاقات جانبية مع أحد آخر", en: "Never bypass his chain or side-deal with anyone else"}
+    owner_escalation_requirement: ""
+    statement_kind: RECOMMENDATION
+    source: {ref: decision_roles_pack+internal_sales_priors.v1}
+  - id: not_ready
+    objection: "Not ready to start right now"
+    intent: timing_hesitation
+    signals:
+      en: ["not ready", "next quarter maybe", "later on"]
+      ar: ["غير جاهز", "مو جاهز الآن", "بعد فترة", "الربع القادم ربما"]
+    customer_concern: {ar: "طاقة استيعاب داخلية شاغلة قبل التوسع", en: "Internal bandwidth before expansion"}
+    recommended_strategy: phased
+    allowed_direction: {ar: "اجعل الزمن اعتماده هو الخطوة الأولى المجانية للجانبين ثم تحقق دورياً بلطف", en: "Offer a tiny zero-cost readiness step; follow up gently on a cadence"}
+    forbidden: {ar: "لا حدود زمنية ملزمة ولا تخزين وعود خاصة", en: "No binding dates, no hoarded special promises"}
+    owner_escalation_requirement: ""
+    statement_kind: RECOMMENDATION
+    source: {ref: golden_rule_ladder+internal_sales_priors.v1}
+  - id: trust_security_concern
+    objection: "Concerned about data security"
+    intent: trust_security
+    signals:
+      en: ["data security", "is my data safe", "who accesses our data"]
+      ar: ["أمان البيانات", "هل بياناتنا محمية", "خصوصية العملاء عندنا", "من يشاهد بياناتنا"]
+    customer_concern: {ar: "خطر التسريب ومسؤولية الامتثال", en: "Leak risk and compliance liability"}
+    recommended_strategy: value
+    allowed_direction: {ar: "اشرح الممارسات العامة بحذر بدون تكييف ذاتي على الامتثال، وحول التفاصيل للأخصائي", en: "Describe general practices carefully WITHOUT compliance self-assertions; route specifics to specialist"}
+    forbidden: {ar: 'يُمنع إطلاقاً عبارة "متوافقون مع" أو شهادات غير مملوكة', en: "'We are compliant with X' is absolutely forbidden"}
+    owner_escalation_requirement: "specific compliance/legal assertions"
+    statement_kind: RECOMMENDATION
+    source: {ref: golden_rule_ladder+internal_sales_priors.v1}
+
+brand_voice:
+
+brand_voice:
+  tone: professional
+  style: clear
+  languages: [id, ar, en]
+
+approved_claims:
+  - "AmanCore builds multilingual business websites and custom web applications"
+  - "AmanCore delivers integrated website, WhatsApp and AI automation solutions"
+
+forbidden_claims:
+  - "We guarantee revenue growth"
+  - "We have served 100+ clients"
+  - "Certified by any external organization"
+
+claims_requiring_verification: []
+
+portfolio: []
+case_studies: []
+
+policies:
+  consent_before_marketing: true
+  data_minimization: true
+
+agent_policies:
+  final_price: owner_only
+  business_brain_write: owner_orchestrator_only
+  publish_content: claim_gate_required
+  outbound: policy_required
+
+decision_policies:
+  price_approval: owner_only
+  discount: owner_only
+  refund: owner_only
+  legal: escalate_to_owner
