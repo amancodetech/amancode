@@ -37,6 +37,21 @@ MAX_BODY_BYTES = 1_000_000
 _STATUS_RANK = {"processing": 1, "sent": 2, "delivered": 3, "read": 4}
 
 
+def bridge_ingress_authorized(headers) -> bool:
+    """Constant-time X-Bridge-Token check against BRIDGE_INGRESS_TOKEN.
+
+    Fail-closed: an unset env var rejects everything (loud misconfiguration
+    beats silent bypass) — same posture as signature_required."""
+    import hmac as _hmac
+
+    expected = os.environ.get("BRIDGE_INGRESS_TOKEN", "")
+    supplied = (headers.get("X-Bridge-Token")
+                or headers.get("x-bridge-token") or "")
+    if not expected or not supplied:
+        return False
+    return _hmac.compare_digest(str(supplied).strip(), expected)
+
+
 def make_status_recorder(db):
     """OUT-204 (C3): delivery receipts keep outbox + inbox rows truthful.
 
@@ -591,6 +606,8 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
         from urllib.parse import parse_qs, urlparse
 
         parsed = urlparse(self.path)
+        if parsed.path == "/bridge/inbound":
+            return self._bridge_inbound()
         inbox, action = self._inbox_route(parsed.path)
         if inbox is not None:
             return self._inbox_post(inbox, action)
@@ -667,6 +684,81 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
             self._send(403, json.dumps(summary).encode("utf-8"), "application/json")
             return
         self._send(200, json.dumps(summary).encode("utf-8"), "application/json")
+
+    # ── local bridge ingress (owner spec §12) ───────────────────────────
+
+    def _bridge_inbound(self) -> None:
+        """POST /bridge/inbound — the meta-bridge pushes normalized envelopes.
+
+        Auth: X-Bridge-Token (constant-time vs BRIDGE_INGRESS_TOKEN env).
+        ACK contract (NEVER an ambiguous 200):
+          200 {"accepted":true,"event_id":...,"duplicate":false|true}
+          400 {"accepted":false,"retryable":false,"error_code":"INVALID_ENVELOPE"}
+          403 {"accepted":false,"retryable":false,"error_code":"UNAUTHORIZED"}
+          500 {"accepted":false,"retryable":true,"error_code":"TEMPORARY_UNAVAILABLE"}
+        """
+        _ack = self._send_json
+        if not bridge_ingress_authorized(self.headers):
+            return _ack(403, {"accepted": False, "retryable": False,
+                              "error_code": "UNAUTHORIZED"})
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            length = -1
+        if not 0 < length <= MAX_BODY_BYTES:
+            return _ack(400, {"accepted": False, "retryable": False,
+                              "error_code": "BAD_CONTENT_LENGTH"})
+        raw = self.rfile.read(length)
+        try:
+            body = json.loads(raw.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            return _ack(400, {"accepted": False, "retryable": False,
+                              "error_code": "MALFORMED_JSON"})
+        if isinstance(body, list):
+            accepted, responses = 0, []
+            for item in body:
+                accepted += self._bridge_envelope_ack(item, responses)
+            sync = self.runtime.get("sync")
+            if sync and accepted:
+                sync()
+            return _ack(200, {"accepted": True, "batch": responses})
+        responses: list = []
+        ok = self._bridge_envelope_ack(body, responses)
+        if not ok:
+            code = (responses[-1] or {}).get("error_code")
+            status = 400 if code in ("INVALID_ENVELOPE", "UNKNOWN_CHANNEL",
+                                     "MALFORMED_JSON") else 500
+            return _ack(status, responses[-1])
+        sync = self.runtime.get("sync")
+        if sync:
+            sync()
+        return _ack(200, responses[-1])
+
+    def _bridge_envelope_ack(self, envelope: dict, responses: list) -> bool:
+        """Normalize one envelope + run it through the shared intake.
+        Appends the ACK dict to `responses`; returns True when accepted."""
+        from .bridge_envelope import EnvelopeError, normalize_envelope
+
+        try:
+            event = normalize_envelope(envelope)
+        except EnvelopeError as exc:
+            responses.append({"accepted": False, "retryable": False,
+                              "error_code": exc.error_code,
+                              "detail": str(exc)[:160]})
+            return False
+        try:
+            ack = self.runtime["coordinator"].handle_bridge_event(event)
+        except Exception as exc:  # noqa: BLE001 — mapped to retryable ACK
+            log.error("bridge.inbound processing failed: %s", exc)
+            responses.append({"accepted": False, "retryable": True,
+                              "error_code": "TEMPORARY_UNAVAILABLE"})
+            return False
+        responses.append(ack)
+        return bool(ack.get("accepted"))
+
+    def _send_json(self, status: int, payload: dict) -> None:
+        self._send(status, json.dumps(payload).encode("utf-8"),
+                   "application/json")
 
     # ── private owner inbox ─────────────────────────────────────────────
 

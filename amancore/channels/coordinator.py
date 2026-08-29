@@ -375,40 +375,10 @@ class MessageCoordinator:
         summary = {"received": len(events), "processed": 0, "duplicates": 0,
                    "replies": 0, "handoffs": 0, "optouts": 0, "support": 0}
         for event in events:
-            if event.event_type == "message.reaction":
-                if self.reaction_recorder is not None:
-                    try:
-                        self.reaction_recorder(event.payload)
-                        summary["processed"] += 1
-                    except Exception:  # noqa: BLE001 — reactions never break intake
-                        pass
-                continue
-            if event.event_type != "message.received":
-                if event.event_type in _STATUS_EVENTS and self.status_recorder is not None:
-                    try:
-                        self.status_recorder(
-                            event.payload.get("external_message_id"),
-                            event.payload.get("status",
-                                              event.event_type.rsplit(".", 1)[-1]),
-                            event.payload.get("recipient_external_user_id")
-                            or event.actor_id,
-                        )
-                    except Exception:  # noqa: BLE001 — status sync must never break intake
-                        pass
-                continue
-            if event.idempotency_key and self.idem.check(event.idempotency_key) is not None:
-                summary["duplicates"] += 1
-                continue
-            # OUT-203: key is stored AFTER successful processing — a crash
-            # mid-pipeline must not permanently swallow the customer message.
-            result = self._process_inbound(InboundMessage.from_event(event))
-            if event.idempotency_key:
-                try:
-                    op = f"inbound_{event.channel}"
-                    self.idem.store(event.idempotency_key, op, "processed")
-                except Exception:  # noqa: BLE001 — dedup best-effort, DB index is the hard gate
-                    pass
-            summary["processed"] += 1
+            frag = self._intake_single_event(event, summary)
+            summary["processed"] += frag.get("processed", 0)
+            summary["duplicates"] += frag.get("duplicates", 0)
+            result = frag.get("result") or {}
             summary["replies"] += 1 if result.get("reply_sent") else 0
             summary["handoffs"] += 1 if result.get("handoff") else 0
             summary["optouts"] += 1 if result.get("optout") else 0
@@ -420,6 +390,81 @@ class MessageCoordinator:
         if ev is not None:
             ev.set()
         return summary
+
+    # ---- bridge intake (owner spec §5/§12) ------------------------------
+    def handle_bridge_event(self, event) -> dict:
+        """Local-bridge push entry — the SAME shared intake as webhook events.
+
+        Bridge migration: no second intake pipeline. The normalized
+        CanonicalEvent from /bridge/inbound flows through the identical
+        idempotency → _process_inbound → drain path. Returns the explicit
+        ACK contract the bridge depends on (accepted / duplicate / retryable).
+        """
+        summary: dict = {}
+        try:
+            frag = self._intake_single_event(event, summary)
+            duplicate = bool(frag.get("duplicate"))
+        except Exception as exc:  # noqa: BLE001 — mapped to retryable ACK
+            log.error("bridge.intake_failed event=%s err=%s",
+                      getattr(event, "event_id", "?"), exc)
+            return {"accepted": False, "retryable": True,
+                    "error_code": "TEMPORARY_UNAVAILABLE"}
+        self.worker.drain(limit=10)
+        ev = getattr(self, "_typing_stop", None)
+        if ev is not None:
+            ev.set()
+        ack = {"accepted": True, "event_id": getattr(event, "event_id", ""),
+               "duplicate": duplicate}
+        if isinstance(frag.get("result"), dict):
+            ack.update({k: v for k, v in frag["result"].items()
+                        if k in ("reply_sent", "handoff", "optout", "support")})
+        return ack
+
+    def _intake_single_event(self, event, summary: dict) -> dict:
+        """Process ONE CanonicalEvent (shared webhook/bridge intake).
+
+        Returns a fragment dict: counters to fold into the caller's summary
+        and optionally {"result": <process result>} for received messages.
+        """
+        frag: dict = {"duplicate": False}
+        if event.event_type == "message.reaction":
+            if self.reaction_recorder is not None:
+                try:
+                    self.reaction_recorder(event.payload)
+                    frag["processed"] = 1
+                except Exception:  # noqa: BLE001 — reactions never break intake
+                    pass
+            return frag
+        if event.event_type != "message.received":
+            if event.event_type in _STATUS_EVENTS and self.status_recorder is not None:
+                try:
+                    self.status_recorder(
+                        event.payload.get("external_message_id"),
+                        event.payload.get("status",
+                                          event.event_type.rsplit(".", 1)[-1]),
+                        event.payload.get("recipient_external_user_id")
+                        or event.actor_id,
+                    )
+                    frag["processed"] = 1
+                except Exception:  # noqa: BLE001 — status sync must never break intake
+                    pass
+            return frag
+        if event.idempotency_key and self.idem.check(event.idempotency_key) is not None:
+            frag["duplicates"] = 1
+            frag["duplicate"] = True
+            return frag
+        # OUT-203: key is stored AFTER successful processing — a crash
+        # mid-pipeline must not permanently swallow the customer message.
+        result = self._process_inbound(InboundMessage.from_event(event))
+        if event.idempotency_key:
+            try:
+                op = f"inbound_{event.channel}"
+                self.idem.store(event.idempotency_key, op, "processed")
+            except Exception:  # noqa: BLE001 — dedup best-effort, DB index is the hard gate
+                pass
+        frag["processed"] = 1
+        frag["result"] = result
+        return frag
 
     def handle_whatsapp_webhook(self, body, headers=None,
                                 raw_body: bytes | None = None) -> dict:
