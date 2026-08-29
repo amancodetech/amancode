@@ -47,3 +47,5 @@ cookies/
 
 # runtime state (DBs, metrics, logs) — never version-controlled
 storage/
+bridge.env
+bridge_data/

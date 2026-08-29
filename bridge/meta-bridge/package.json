@@ -1,0 +1,19 @@
+{
+  "name": "meta-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AmanCore local meta-bridge: WhatsApp (Baileys) / Facebook / Instagram local transports. Platform SDKs live ONLY here — never in the AmanCore core.",
+  "type": "commonjs",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "6.7.24",
+    "qrcode-terminal": "0.12.0"
+  }
+}
