@@ -242,6 +242,30 @@ def build_runtime(root: Path):
         tg_adapter = TelegramAdapter(tg_cfg)
         router.register(tg_adapter)
 
+    # Meta family — Facebook Messenger + Instagram DM (P2-channels).
+    # Registered whenever the channel block is enabled; sends stay MOCK until
+    # production.yaml gates flip, identical to the whatsapp/telegram pattern.
+    meta_adapters: dict = {}
+    for _name in ("facebook", "instagram"):
+        _block = dict(cfg.channels.get(_name) or {})
+        if not _block.get("enabled"):
+            continue
+        _mcfg = dict(_block)
+        if (prod_env.get("production_enabled") and prod_env.get("mode") == "production"
+                and _block.get("mode") == "production"):
+            _mcfg["mode"] = "production"
+            _mcfg["environment"] = {"production_enabled": True, "mode": "production"}
+        else:
+            _mcfg["mode"] = "mock"
+            _mcfg["environment"] = {"production_enabled": False,
+                                             "mode": prod_env.get("mode", "mock")}
+        if _name == "facebook":
+            from ..channels.meta_channels import FacebookAdapter as _adapter_cls
+        else:
+            from ..channels.meta_channels import InstagramAdapter as _adapter_cls
+        router.register(_adapter_cls(_mcfg))
+        meta_adapters[_name] = _adapter_cls(_mcfg)
+
     outbox = MessageOutbox(db)
     policy = ChannelPolicyEngine(brain, getattr(cfg, "channels", {}) or {})
     try:
@@ -286,7 +310,8 @@ def build_runtime(root: Path):
     coordinator = MessageCoordinator(
         # full channel registry (router and coordinator MUST agree) — the
         # live-verification 500 proved a router-only registration is not enough
-        ({"whatsapp": adapter} | ({"telegram": tg_adapter} if tg_adapter else {})),
+        ({"whatsapp": adapter} | ({"telegram": tg_adapter} if tg_adapter else {})
+         | meta_adapters),
         outbox, worker, sales, crm, memory,
         HandoverService(crm, dispatcher), ExternalResponseFilter(), policy,
         IdempotencyStore(db), LanguageDetector(), LocalizationSkill(),
@@ -447,6 +472,61 @@ def resolve_client_key(headers, peer_addr: str | None, trust_proxy: bool) -> str
             return cf_ip.strip()
     return peer_addr or "?"
 
+_PRIVACY_PAGE = """<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AmanCode — سياسة الخصوصية / Privacy Policy</title>
+<style>body{font-family:system-ui,Segoe UI,Arial,sans-serif;max-width:820px;margin:auto;padding:24px;line-height:1.7;color:#1c2333}h1{color:#0b63c5}.en{direction:ltr;text-align:left;border-top:2px solid #e3e8f0;margin-top:28px;padding-top:16px}</style></head><body>
+<h1>سياسة الخصوصية — AmanCode</h1>
+<p>آخر تحديث / Last updated: 2026-08-27</p>
+
+<h2>ما نجمعه</h2>
+<p>يدير مساعد «AmanCode» محادثات المبيعات عبر واتساب وماسنجر وإنستغرام وتليجرام. عند تواصلك معنا نُخزّن:</p>
+<ul>
+<li>مُعرِّف الحساب الذي تستخدمه للتواصل (رقم الواتساب، مُعرّف مسنجر/إنستغرام، معرّف تيليجرام).</li>
+<li>محتوى الرسائل التي ترسلها لنا والردود المُولّدة لمساعدتك.</li>
+<li>توقيتات المحادثة وبعض تفاصيل الطلب مثل نوع المشروع لتجهيز عرض السعر.</li>
+</ul>
+
+<h2>كيف نستخدم البيانات</h2>
+<p>لاستخدامها حصراً في: تجهيز عروض الأسعار، متابعة طلباتك، دعم ما بعد التسليم، وتحسين جودة الردود. لا نبيع بياناتك ولا نشاركها مع أي طرف ثالث لأغراض إعلانية.</p>
+
+<h2>مكان التخزين والاحتفاظ</h2>
+<p>تُحفظ البيانات على خوادمنا الخاصة مشفّرة أثناء النقل. نحتفظ بمحتوى المحادثة خلال فترة نشاط التعامل، وبعدها يُحذف تلقائياً حسب جدول الاستبقاء الدوري.</p>
+
+<h2>حقوقك</h2>
+<p>يمكنك في أي وقت طلب نسخة من بياناتك أو تصحيحها أو <strong>حذفها نهائياً</strong> عبر مراسلتنا على نفس القناة بكلمة «حذف بياناتي»، أو مراسلة البريد أدناه.</p>
+<p>البريد: <a href="mailto:amancode.tech@gmail.com">amancode.tech@gmail.com</a></p>
+
+<div class="en">
+<h2>Privacy Policy — AmanCode</h2>
+<p><strong>Data we collect:</strong> your channel account identifier (WhatsApp number / Messenger or Instagram ID / Telegram ID), the messages you send us, our generated replies, and basic request details such as project type for quotations.</p>
+<p><strong>Use:</strong> solely to prepare quotes, follow up on your requests, provide support, and improve response quality. We never sell your data or share it with third parties for advertising.</p>
+<p><strong>Storage &amp; retention:</strong> data is stored on our own servers, encrypted in transit, and auto-deleted per retention schedule once the business relationship ends.</p>
+<p><strong>Your rights:</strong> request access, correction, or permanent deletion any time via the same channel or by email below.</p>
+<p>Contact: <a href="mailto:amancode.tech@gmail.com">amancode.tech@gmail.com</a></p>
+</div></body></html>"""
+
+_DATA_DELETION_PAGE = """<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AmanCode — حذف البيانات / Data Deletion</title>
+<style>body{font-family:system-ui,Segoe UI,Arial,sans-serif;max-width:820px;margin:auto;padding:24px;line-height:1.7;color:#1c2333}h1{color:#0b63c5}.en{direction:ltr;text-align:left;border-top:2px solid #e3e8f0;margin-top:28px;padding-top:16px}</style></head><body>
+<h1>حذف بياناتك — AmanCode</h1>
+
+<h2>طريقة الحذف</h2>
+<ol>
+<li>أرسل كلمة <strong>«حذف بياناتي»</strong> إلى صفحتنا/حسابنا على أي قناة تواصلت منها (واتساب، ماسنجر، إنستغرام، تليجرام)؛ أو</li>
+<li>راسلنا بريداً على <a href="mailto:amancode.tech@gmail.com">amancode.tech@gmail.com</a> من حسابك المرتبط بالتواصل السابق.</li>
+</ol>
+<p>سنحذف نهائياً خلال 72 ساعة: مُعرِّف حسابك، كل رسائلك المخزنة، سجل المحادثة المرتبط به، وأي معطيات اشتقناها منه، ونؤكد لك الحذف عبر القناة نفسها.</p>
+
+<div class="en">
+<h2>Data Deletion Instructions</h2>
+<ol><li>Message our page/account on any channel you previously used (WhatsApp, Messenger, Instagram, Telegram) with the text “delete my data” in Arabic or English; or</li><li>Email amancode.tech@gmail.com from your linked account.</li></ol>
+<p>All stored identifiers, messages, conversation history and derived records tied to your account are permanently erased within 72 hours, and we confirm back on the same channel.</p>
+</div></body></html>"""
+
 class WebhookRequestHandler(BaseHTTPRequestHandler):
     server_version = "AmanCoreWebhook/1.0"
 
@@ -526,6 +606,10 @@ class WebhookRequestHandler(BaseHTTPRequestHandler):
         if parsed.path == "/health":
             self._send(200, b"ok")
             return
+        if parsed.path == "/privacy":
+            return self._send_html(200, _PRIVACY_PAGE)
+        if parsed.path == "/data-deletion":
+            return self._send_html(200, _DATA_DELETION_PAGE)
         channel = self._webhook_channel(parsed.path)
         if channel is not None:
             qs = parse_qs(parsed.query)

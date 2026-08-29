@@ -33,36 +33,54 @@ class WhatsAppSendError(RuntimeError):
 
 
 def classify_graph_error(http_status: int, body: str = "",
-                         retry_after_header: str | None = None) -> WhatsAppSendError:
-    """Map a failed Graph response to a typed WhatsAppSendError."""
+                         retry_after_header: str | None = None,
+                         label: str = "whatsapp",
+                         include_body: bool = False) -> WhatsAppSendError:
+    """Map a failed Graph response to a typed WhatsAppSendError.
+
+    label:       provider identity for messages ("whatsapp" default keeps
+                 legacy failure_reason strings byte-identical; Meta channels
+                 pass "meta" so facebook/instagram rows aren't mislabeled).
+    include_body: append a sanitized error.message snippet to the message
+                 (Meta providers only — precise Graph diagnostics like
+                 "(#100) Param recipient[id] must be a valid ID").
+    """
     code = None
     m = re.search(r'"code"\s*:\s*(\d+)', body or "")
     if m:
         code = int(m.group(1))
+    detail = ""
+    if include_body:
+        mm = re.search(r'"message"\s*:\s*"((?:[^"\\]|\\.)*)"', body or "")
+        if mm:
+            # strip potential secrets; Graph error bodies never carry tokens,
+            # but be defensive — keep alphanumerics/punct, clamp length.
+            msg = re.sub(r"[^\x20-\x7e]", " ", mm.group(1))[:120]
+            detail = f": {msg}"
 
     if http_status == 401 or (code in _AUTH_CODES):
-        return WhatsAppSendError("auth", f"whatsapp auth failed ({http_status}, code={code})",
+        return WhatsAppSendError("auth", f"{label} auth failed ({http_status}, code={code})",
                                  http_status, code)
 
     if http_status == 400 and code is not None and code in _BAD_RECIPIENT_CODES:
         return WhatsAppSendError("bad_recipient",
-                                 f"whatsapp bad recipient (code={code})",
+                                 f"{label} bad recipient (code={code}){detail}",
                                  http_status, code)
 
     if http_status == 429:
         wait = _parse_retry_after(retry_after_header)
-        return WhatsAppSendError("rate_limited", "whatsapp rate limited (429)",
+        return WhatsAppSendError("rate_limited", f"{label} rate limited (429)",
                                  http_status, code, retry_after_seconds=wait)
 
     if http_status >= 500:
-        return WhatsAppSendError("provider", f"whatsapp provider error ({http_status})",
+        return WhatsAppSendError("provider", f"{label} provider error ({http_status}){detail}",
                                  http_status, code)
 
     # 4xx we don't recognize: treat as provider-transient EXCEPT known-fast-dead codes
     if code in _BAD_RECIPIENT_CODES:
-        return WhatsAppSendError("bad_recipient", f"whatsapp bad recipient (code={code})",
+        return WhatsAppSendError("bad_recipient", f"{label} bad recipient (code={code})",
                                  http_status, code)
-    return WhatsAppSendError("provider", f"whatsapp send failed ({http_status})",
+    return WhatsAppSendError("provider", f"{label} send failed ({http_status}){detail}",
                              http_status, code)
 
 

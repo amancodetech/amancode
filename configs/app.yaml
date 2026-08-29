@@ -15,6 +15,7 @@ cost:
 # Compliance kit (post-2026-08-24 WABA-ban guardrails)
 compliance:
   warmup_tiers: [50, 250, 1000]   # daily ALL-outbound ceilings; advance manually
-  warmup_tier: 0                  # current tier index — raise only after clean weeks
+    # P2-channels (2026-08-27): owner-directed tier advance — FB/IG launch + backlog consumed Tier0
+  warmup_tier: 1                  # current tier index — raise only after clean weeks
   auto_send_cap: 50               # business-initiated/day before manual approval
   approved_templates: {}          # name → {language, body}; EMPTY ⇒ no initiations

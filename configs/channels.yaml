@@ -27,6 +27,28 @@ telegram:
   bot_token_env: TELEGRAM_CUSTOMER_BOT_TOKEN
   webhook_secret_env: TELEGRAM_CUSTOMER_WEBHOOK_SECRET
 
+facebook:
+  # P2-channels (2026-08-27): Messenger DM — same Meta app as WhatsApp.
+  mode: production
+  enabled: true
+  customer_messaging: true
+  signature_required: true       # X-Hub-Signature-256, fail-closed
+  verify_token_env: META_VERIFY_TOKEN
+  app_secret_env: WHATSAPP_APP_SECRET   # one Meta app = one secret
+  access_token_env: META_PAGE_ACCESS_TOKEN
+  api_version: v21.0
+
+instagram:
+  # P2-channels: Instagram DM via the IG professional account linked to the page.
+  mode: production
+  enabled: true
+  customer_messaging: true
+  signature_required: true
+  verify_token_env: META_VERIFY_TOKEN
+  app_secret_env: WHATSAPP_APP_SECRET
+  access_token_env: META_IG_ACCESS_TOKEN
+  api_version: v21.0
+
 outbox:
   max_attempts: 3
   retry_backoff_seconds: 10

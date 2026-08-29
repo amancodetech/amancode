@@ -84,6 +84,16 @@ def build_adapters() -> dict:
         from ..channels.telegram import TelegramAdapter
 
         adapters["telegram"] = TelegramAdapter(_telegram_cfg(tg_block, enabled))
+
+    # Meta family (facebook/instagram) — same gating shape as telegram.
+    for _name in ("facebook", "instagram"):
+        _block = channels_overlay().get(_name) or {}
+        if not _block.get("enabled"):
+            continue
+        from ..channels.meta_channels import FacebookAdapter, InstagramAdapter
+
+        adapters[_name] = (FacebookAdapter if _name == "facebook"
+                           else InstagramAdapter)(_telegram_cfg(_block, enabled))
     return adapters
 
 
@@ -98,4 +108,9 @@ def build_probe_adapter(channel: str, channel_cfg: dict):
         from ..channels.telegram import TelegramAdapter
 
         return TelegramAdapter(dict(channel_cfg or {}))
+    if channel in ("facebook", "instagram"):
+        from ..channels.meta_channels import FacebookAdapter, InstagramAdapter
+
+        cls = FacebookAdapter if channel == "facebook" else InstagramAdapter
+        return cls(dict(channel_cfg or {}))
     raise KeyError(f"no probe adapter registered for channel '{channel}'")
