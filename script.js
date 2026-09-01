@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════
-   AMANCORE — interactions + trilingual i18n
+   AMANCODE — interactions + trilingual i18n
    ═══════════════════════════════════════════ */
 "use strict";
 
@@ -9,9 +9,9 @@ document.documentElement.classList.add("js");
 /* ── WhatsApp number (owner updates this one place) ── */
 const WHATSAPP_NUMBER = "6281234567890"; // TODO(owner): ganti dengan nomor WhatsApp bisnis
 const WA_TEXT = {
-  id: "Halo AmanCore, saya ingin konsultasi tentang kebutuhan digital bisnis saya.",
-  en: "Hello AmanCore, I would like to consult about my business's digital needs.",
-  ar: "مرحبًا AmanCore، أرغب في استشارة حول الاحتياجات الرقمية لعملي التجاري."
+  id: "Halo AmanCode, saya ingin konsultasi tentang kebutuhan digital bisnis saya.",
+  en: "Hello AmanCode, I would like to consult about my business's digital needs.",
+  ar: "مرحبًا AmanCode، أرغب في استشارة حول الاحتياجات الرقمية لعملي التجاري."
 };
 
 /* ── translations ── */
@@ -31,9 +31,15 @@ const I18N = {
     hero_p3: "Skema pembayaran jelas: 50% di muka, 50% serah terima",
     hero_card1: "Website & Web App",
     hero_card2: "Mini-ERP & Mobile",
+    hero_mock_arch: "Sistem Bisnis Digital",
+    hero_mock_status: "Sistem Aktif",
+    hero_mock_perf: "Indeks Performa",
+    hero_mock_mod1: "Platform Web",
+    hero_mock_mod2: "Cloud ERP",
+    hero_mock_mod3: "Otomasi AI",
 
     svc_eyebrow: "Layanan Kami",
-    svc_title: "Empat pilar solusi digital AmanCore",
+    svc_title: "Empat pilar solusi digital AmanCode",
     svc_sub: "Dari kehadiran digital pertama hingga sistem operasional terintegrasi — dibangun sesuai skala bisnis Anda.",
     tier_core: "Inti", tier_premium: "Premium", tier_entry: "Tahap Awal", tier_care: "Berkelanjutan",
     svc1_title: "Business Website System",
@@ -69,7 +75,7 @@ const I18N = {
     proc4_t: "Serah Terima", proc4_d: "Peluncuran, pelatihan singkat penggunaan, dan dokumentasi serah terima.",
     proc5_t: "Care Plan", proc5_d: "Perawatan dan penyempurnaan berkelanjutan melalui paket Care Plan bertingkat.",
 
-    why_eyebrow: "Kenapa AmanCore",
+    why_eyebrow: "Kenapa AmanCode",
     why_title: "Fokus pada satu hal: sistem yang benar-benar bekerja untuk bisnis Anda",
     why1: "Website bisnis multibahasa dan aplikasi web kustom, dibangun dengan standar profesional.",
     why2: "Solusi terintegrasi: website, WhatsApp, dan otomasi AI dalam satu kesatuan.",
@@ -82,7 +88,7 @@ const I18N = {
     cta_sub: "Konsultasi awal gratis via WhatsApp. Balasan cepat pada jam kerja (WITA).",
     cta_whatsapp_btn: "Chat via WhatsApp",
     cta_email: "Kirim Email",
-    cta_note: "AmanCore — melayani bisnis di Indonesia & pasar lintas negara"
+    cta_note: "AmanCode — melayani bisnis di Indonesia & pasar lintas negara"
   },
 
   en: {
@@ -100,9 +106,15 @@ const I18N = {
     hero_p3: "Clear payment terms: 50% upfront, 50% on delivery",
     hero_card1: "Website & Web App",
     hero_card2: "Mini-ERP & Mobile",
+    hero_mock_arch: "Digital Systems",
+    hero_mock_status: "System Active",
+    hero_mock_perf: "Performance Index",
+    hero_mock_mod1: "Web Platforms",
+    hero_mock_mod2: "Cloud ERP",
+    hero_mock_mod3: "AI Automations",
 
     svc_eyebrow: "Our Services",
-    svc_title: "The four pillars of AmanCore digital solutions",
+    svc_title: "The four pillars of AmanCode digital solutions",
     svc_sub: "From your first digital presence to fully integrated operating systems — built to match the scale of your business.",
     tier_core: "Core", tier_premium: "Premium", tier_entry: "Entry", tier_care: "Recurring",
     svc1_title: "Business Website System",
@@ -138,7 +150,7 @@ const I18N = {
     proc4_t: "Handover", proc4_d: "Launch, a short training session, and complete handover documentation.",
     proc5_t: "Care Plan", proc5_d: "Ongoing maintenance and improvement through tiered Care Plans.",
 
-    why_eyebrow: "Why AmanCore",
+    why_eyebrow: "Why AmanCode",
     why_title: "Focused on one thing: systems that truly work for your business",
     why1: "Multilingual business websites and custom web applications, built to professional standards.",
     why2: "Integrated solutions: website, WhatsApp and AI automation as one whole.",
@@ -151,7 +163,7 @@ const I18N = {
     cta_sub: "Free initial consultation via WhatsApp. Fast replies during working hours (WITA).",
     cta_whatsapp_btn: "Chat on WhatsApp",
     cta_email: "Send an Email",
-    cta_note: "AmanCore — serving businesses in Indonesia & cross-border markets"
+    cta_note: "AmanCode — serving businesses in Indonesia & cross-border markets"
   },
 
   ar: {
@@ -169,9 +181,15 @@ const I18N = {
     hero_p3: "شروط دفع واضحة: 50% مقدمًا و50% عند التسليم",
     hero_card1: "المواقع وتطبيقات الويب",
     hero_card2: "Mini-ERP وتطبيقات الجوال",
+    hero_mock_arch: "الأنظمة الرقمية",
+    hero_mock_status: "النظام متصل",
+    hero_mock_perf: "مؤشر الأداء",
+    hero_mock_mod1: "منصات الويب",
+    hero_mock_mod2: "Cloud ERP",
+    hero_mock_mod3: "أتمتة الذكاء الاصطناعي",
 
     svc_eyebrow: "خدماتنا",
-    svc_title: "أربع ركائز لحلول AmanCore الرقمية",
+    svc_title: "أربع ركائز لحلول AmanCode الرقمية",
     svc_sub: "من أول حضور رقمي إلى أنظمة تشغيل متكاملة — مبنية على مقاس عملك.",
     tier_core: "أساسي", tier_premium: "متقدم", tier_entry: "بداية", tier_care: "مستمر",
     svc1_title: "نظام موقع الأعمال",
@@ -207,7 +225,7 @@ const I18N = {
     proc4_t: "التسليم", proc4_d: "الإطلاق مع تدريب قصير على الاستخدام وتوثيق كامل للتسليم.",
     proc5_t: "خطة الرعاية", proc5_d: "صيانة وتحسينات مستمرة عبر خطط رعاية متدرجة.",
 
-    why_eyebrow: "لماذا AmanCore",
+    why_eyebrow: "لماذا AmanCode",
     why_title: "تركيز واحد: أنظمة تعمل حقًا من أجل عملك",
     why1: "مواقع أعمال متعددة اللغات وتطبيقات ويب مخصصة بمعايير مهنية.",
     why2: "حلول متكاملة: الموقع وواتساب وأتمتة الذكاء الاصطناعي كوحدة واحدة.",
@@ -220,7 +238,7 @@ const I18N = {
     cta_sub: "استشارة أولى مجانية عبر واتساب. رد سريع خلال ساعات العمل (WITA).",
     cta_whatsapp_btn: "الدردشة على واتساب",
     cta_email: "أرسل بريدًا",
-    cta_note: "AmanCore — نخدم الأعمال في إندونيسيا والأسواق العابرة للحدود"
+    cta_note: "AmanCode — نخدم الأعمال في إندونيسيا والأسواق العابرة للحدود"
   }
 };
 
@@ -235,13 +253,13 @@ function applyLang(lang) {
   });
   htmlEl.setAttribute("lang", lang);
   htmlEl.setAttribute("dir", lang === "ar" ? "rtl" : "ltr");
-  document.title = lang === "ar" ? "AmanCore — أنظمة الأعمال الرقمية"
-                 : lang === "en" ? "AmanCore — Digital Business Systems"
-                 : "AmanCore — Sistem Bisnis Digital";
+  document.title = lang === "ar" ? "AmanCode — أنظمة الأعمال الرقمية"
+                 : lang === "en" ? "AmanCode — Digital Business Systems"
+                 : "AmanCode — Sistem Bisnis Digital";
   document.querySelectorAll(".lang-btn").forEach(b =>
     b.classList.toggle("active", b.dataset.lang === lang));
   updateWaLinks(lang);
-  localStorage.setItem("amancore_lang", lang);
+  localStorage.setItem("amancode_lang", lang);
 }
 
 function updateWaLinks(lang) {
@@ -250,8 +268,9 @@ function updateWaLinks(lang) {
   });
 }
 
-document.querySelectorAll(".lang-btn").forEach(btn => {
-  btn.addEventListener("click", () => applyLang(btn.dataset.lang));
+// lang buttons
+document.querySelectorAll(".lang-btn").forEach(b => {
+  b.addEventListener("click", () => applyLang(b.dataset.lang));
 });
 
 /* ── mobile nav ── */
@@ -280,4 +299,4 @@ if ("IntersectionObserver" in window) {
 }
 
 /* ── init ── */
-applyLang(localStorage.getItem("amancore_lang") || "id");
+applyLang(localStorage.getItem("amancode_lang") || localStorage.getItem("amancore_lang") || "id");
