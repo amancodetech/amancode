@@ -1113,7 +1113,8 @@ def inbox_send_message(inbox, wa_id: str, text: str, media: dict | None = None,
                 capture_output=True,
             )
             if proc.returncode == 0 and os.path.exists(ogg_path):
-                raw = open(ogg_path, "rb").read()
+                with open(ogg_path, "rb") as f:
+                    raw = f.read()
                 mime = "audio/ogg"
                 filename = filename.rsplit(".", 1)[0] + ".ogg"
             else:

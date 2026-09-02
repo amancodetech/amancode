@@ -120,7 +120,7 @@ class ResponsePlanner:
             extra_cats = []
             resume_note = True
         else:
-            category = None
+            category = wm.get("service_category") or None
             extra_cats = []
 
         industry = wm.get("industry") \

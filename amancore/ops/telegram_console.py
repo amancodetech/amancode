@@ -109,10 +109,9 @@ def business_context() -> str:
     if _BIZ_CACHE_TEXT:
         return _BIZ_CACHE_TEXT[0]
     try:
-        import yaml
-
         root = Path(__file__).resolve().parents[2]
-        brain = yaml.safe_load(open(root / "amancore" / "business_brain" / "data" / "v1.yaml"))
+        with open(root / "amancore" / "business_brain" / "data" / "v1.yaml", encoding="utf-8") as f:
+            brain = yaml.safe_load(f)
         lines = [f"Company: {brain['company']['name']} — {brain['company']['positioning']}"]
         lines.append("Packages we offer:")
         for o in brain.get("offers", []):
@@ -435,7 +434,8 @@ class TelegramOwnerConsole:
         import yaml
 
         root = __import__("pathlib").Path(__file__).resolve().parents[2]
-        cfg = yaml.safe_load(open(root / "configs" / "models.yaml"))
+        with open(root / "configs" / "models.yaml", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
         from ..routing.providers import build_providers
 
         # P1-final §2 — DeepSeek removed: follow the live text chain primary.
@@ -1220,14 +1220,14 @@ class TelegramOwnerConsole:
             return "تعذر استلام الملف الصوتي."
         try:
             get_file_url = _API.format(token=self.token, method="getFile")
-            req = urllib.request.urlopen(f"{get_file_url}?file_id={file_id}", timeout=15)
-            finfo = json.load(req)
+            with urllib.request.urlopen(f"{get_file_url}?file_id={file_id}", timeout=15) as req:
+                finfo = json.load(req)
             file_path = (finfo.get("result") or {}).get("file_path")
             if not file_path:
                 return "تعذر تحميل التسجيل الصوتي من تيليجرام."
             download_url = f"https://api.telegram.org/file/bot{self.token}/{file_path}"
-            audio_req = urllib.request.urlopen(download_url, timeout=30)
-            audio_bytes = audio_req.read()
+            with urllib.request.urlopen(download_url, timeout=30) as audio_req:
+                audio_bytes = audio_req.read()
 
             from ..voice.processor import VoiceNoteProcessor
             processor = VoiceNoteProcessor()

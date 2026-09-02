@@ -28,7 +28,8 @@ def _flash():
     import yaml
 
     root = Path(__file__).resolve().parents[2]
-    cfg = yaml.safe_load(open(root / "configs" / "models.yaml"))
+    with open(root / "configs" / "models.yaml", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
     from ..routing.providers import build_providers
 
     # P1-final §2 — DeepSeek removed: follow the live text chain primary.
