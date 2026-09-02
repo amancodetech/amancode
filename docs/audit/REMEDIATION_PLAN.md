@@ -1,4 +1,4 @@
-# AMANCORE — PRODUCTION REMEDIATION PLAN & RECOVERY ROADMAP
+# AMANCODE — PRODUCTION REMEDIATION PLAN & RECOVERY ROADMAP
 
 > **الإصدار:** 1.0 · **التاريخ:** 2026-08-24 · **الحالة:** معتمد للتنفيذ
 > **المدخل:** [تدقيق الإنتاج 2026-08-24](./PRODUCTION_AUDIT_2026-08-24.md) — D+ / NOT READY · 8C / 16H / 14M / 4L

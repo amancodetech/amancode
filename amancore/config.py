@@ -49,7 +49,7 @@ def _load_yaml(path: Path, optional: bool = False) -> dict[str, Any]:
 
 @dataclass
 class Config:
-    """Loaded AmanCore configuration."""
+    """Loaded AmanCode configuration."""
 
     root: Path
     app: dict[str, Any] = field(default_factory=dict)
@@ -114,8 +114,8 @@ def load_config(root: Path, mutate_environ: bool = True) -> Config:
 REQUIRED_ENV_BY_FEATURE = {
     "owner_alerts_telegram": ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"],
     # Bridge mode is token-authenticated in BOTH directions:
-    # outbound (AmanCore→bridge) and ingress (bridge→AmanCore).
-    "bridge_channels": ["AMANCORE_BRIDGE_TOKEN", "BRIDGE_INGRESS_TOKEN"],
+    # outbound (AmanCode→bridge) and ingress (bridge→AmanCode).
+    "bridge_channels": ["AMANCODE_BRIDGE_TOKEN", "BRIDGE_INGRESS_TOKEN"],
 }
 
 

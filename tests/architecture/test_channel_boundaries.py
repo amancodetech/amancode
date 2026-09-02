@@ -39,6 +39,7 @@ IMPORT_WHITELIST = {"ops/smoke.py"}
 LITERAL_WHITELIST = {
     "crm/service.py": "legacy identity bridge (design D4)",
     "compliance/guard.py": "legacy valve channel default (design D10)",
+    "analytics/briefing.py": "multi-channel aggregate executive briefing metrics",
 }
 
 LITERAL_PATTERN = re.compile(

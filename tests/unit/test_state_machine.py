@@ -1,6 +1,6 @@
 import unittest
 
-from amancore.errors import AmanCoreError
+from amancore.errors import AmanCodeError
 from amancore.sales.state_machine import can_transition, transition
 
 
@@ -13,7 +13,7 @@ class StateMachineTest(unittest.TestCase):
         self.assertEqual(transition("qualification", "recommended"), "offer_recommended")
 
     def test_new_to_won_invalid(self):
-        with self.assertRaises(AmanCoreError):
+        with self.assertRaises(AmanCodeError):
             transition("new", "won")
 
     def test_owner_override(self):

@@ -1,7 +1,7 @@
 # Knowledge Layer — Source Registry (v1)
 #
 # Single reference for every external source cited by the knowledge packs.
-# Internal AmanCore facts/pricing/claims are NOT listed here: they live in the
+# Internal AmanCode facts/pricing/claims are NOT listed here: they live in the
 # Business Brain and are authoritative regardless of this registry.
 #
 # A pack's per-field `source` block may reference a source by `name` from this

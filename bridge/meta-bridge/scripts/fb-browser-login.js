@@ -43,6 +43,7 @@ async function main() {
       '--disable-setuid-sandbox',
       '--disable-gpu',
       '--disable-dev-shm-usage',
+      '--dns-result-order=ipv4first',
     ],
   };
   try {
@@ -53,57 +54,83 @@ async function main() {
     process.exit(1);
   }
 
+  const defaultBusinessUrl = 'https://business.facebook.com/latest/inbox/all?asset_id=1318320251359371&business_id=1582931449996932';
+  const targetUrl = process.argv[2] || process.env.FB_LOGIN_URL || defaultBusinessUrl;
+  console.log(`🌐 Navigating directly to Meta Business Suite Inbox:\n   ${targetUrl}\n`);
+
   const page = (await browser.pages())[0] || (await browser.newPage());
-  await page.goto('https://www.facebook.com/', { waitUntil: 'domcontentloaded' });
+  try {
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  } catch (err) {
+    console.log(`⚠️ Navigation note: ${err.message}. You can navigate manually in the opened Chrome window.`);
+  }
 
-  console.log('\n⏳ Waiting for you to complete login in the browser...');
+  const readline = require('node:readline');
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
-  // Poll for cookies every 2 seconds
-  const pollInterval = setInterval(async () => {
+  console.log('====================================================');
+  console.log('🌐 Meta Business Suite Inbox is OPEN in Chrome!');
+  console.log('👉 1. Log in to your Facebook / Business account.');
+  console.log('👉 2. Make sure you are inside the AmanCode Business Inbox:');
+  console.log('      (Page Asset ID: 1318320251359371 | Business ID: 1582931449996932)');
+  console.log('👉 3. When you see your conversations, press [ENTER] here in the terminal:');
+  console.log('====================================================\n');
+
+  rl.question('👉 Press [ENTER] when ready to capture and save the Business session: ', async () => {
     try {
-      const url = page.url();
-      const cookies = await page.cookies();
-      const cUser = cookies.find(c => c.name === 'c_user');
-      const xs = cookies.find(c => c.name === 'xs');
+      const client = await page.target().createCDPSession();
+      const { cookies: allCookies } = await client.send('Network.getAllCookies');
 
-      if (cUser && xs && !url.includes('login') && !url.includes('checkpoint') && !url.includes('two_factor')) {
-        clearInterval(pollInterval);
-        console.log('\n⏳ Finalizing Facebook session cookies (3 seconds)...');
-        await new Promise(r => setTimeout(r, 3000));
+      const cUser = allCookies.find(c => c.name === 'c_user');
+      const iUser = allCookies.find(c => c.name === 'i_user');
+      const xs = allCookies.find(c => c.name === 'xs');
 
-        const finalCookies = await page.cookies();
-        console.log(`\n🎉 Logged in successfully as user ID: ${cUser.value}`);
+      const activeId = iUser?.value || cUser?.value;
 
-        const appState = finalCookies.map(c => ({
-          key: c.name,
-          value: c.value,
-          domain: c.domain.replace(/^\./, ''),
-          path: c.path,
-          hostOnly: !c.domain.startsWith('.'),
-          creation: new Date().toISOString(),
-          lastAccessed: new Date().toISOString(),
-        }));
-
-        fs.mkdirSync(sessionDir, { recursive: true });
-        fs.writeFileSync(appStateFile, JSON.stringify(appState, null, 2), 'utf8');
-        console.log(`💾 AppState saved to: ${appStateFile}`);
-
-        await browser.close();
-        console.log('\n✅ Facebook session is ready! Restarting meta-bridge...');
-        process.exit(0);
+      if (!activeId || !xs) {
+        console.error('\n❌ Could not find active login cookies (c_user/i_user/xs). Please make sure you are logged in.');
+        try { await browser.close(); } catch {}
+        process.exit(1);
       }
-    } catch (e) {
-      // ignore
-    }
-  }, 2000);
 
-  // Timeout after 5 minutes
-  setTimeout(async () => {
-    clearInterval(pollInterval);
-    console.log('\n⏱️ Login timed out after 5 minutes.');
-    try { await browser.close(); } catch {}
-    process.exit(1);
-  }, 300000);
+      const appState = allCookies.map(c => ({
+        key: c.name,
+        value: c.value,
+        domain: c.domain.replace(/^\./, ''),
+        path: c.path,
+        hostOnly: !c.domain.startsWith('.'),
+        creation: new Date().toISOString(),
+        lastAccessed: new Date().toISOString(),
+      }));
+
+      fs.mkdirSync(sessionDir, { recursive: true });
+      fs.writeFileSync(appStateFile, JSON.stringify(appState, null, 2), 'utf8');
+
+      const metaInfo = {
+        page_id: '1318320251359371',
+        business_id: '1582931449996932',
+        asset_id: '1318320251359371',
+        active_user_id: activeId,
+        inbox_url: defaultBusinessUrl,
+        captured_at: new Date().toISOString(),
+      };
+      fs.writeFileSync(path.join(sessionDir, 'business_meta.json'), JSON.stringify(metaInfo, null, 2), 'utf8');
+
+      console.log(`\n🎉 Logged in successfully! Captured ${appState.length} cookies across domains.`);
+      console.log(`🏢 Business Account ID: 1582931449996932`);
+      console.log(`📄 Page Asset ID: 1318320251359371 (AmanCode)`);
+      console.log(`🆔 Active ID: ${activeId} ${iUser ? '(Page Profile)' : '(User Profile)'}`);
+      console.log(`💾 AppState saved to: ${appStateFile}`);
+
+      await browser.close();
+      console.log('\n✅ Meta Business Suite session is ready! Restarting meta-bridge...');
+      process.exit(0);
+    } catch (e) {
+      console.error('\n❌ Error capturing session:', e.message);
+      try { await browser.close(); } catch {}
+      process.exit(1);
+    }
+  });
 }
 
 main().catch(err => {

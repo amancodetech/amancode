@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Backup the AmanCore SQLite database using the sqlite backup API."""
+"""Backup the AmanCode SQLite database using the sqlite backup API."""
 from __future__ import annotations
 
 import sqlite3

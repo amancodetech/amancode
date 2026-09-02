@@ -1,4 +1,4 @@
-"""AmanCore Foundation health/readiness check (local)."""
+"""AmanCode Foundation health/readiness check (local)."""
 
 from __future__ import annotations
 
@@ -389,7 +389,7 @@ def _alert_transport(cfg: Config) -> str:
 
 
 def print_health_report(results: dict[str, tuple[str, str]]) -> int:
-    print("AMANCORE FOUNDATION HEALTH")
+    print("AMANCODE FOUNDATION HEALTH")
     print("-" * 40)
     failed = 0
     for name, (status, detail) in results.items():

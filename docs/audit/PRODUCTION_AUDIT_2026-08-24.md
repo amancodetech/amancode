@@ -1,4 +1,4 @@
-# AMANCORE — COMPREHENSIVE PRODUCTION AUDIT
+# AMANCODE — COMPREHENSIVE PRODUCTION AUDIT
 
 > **التاريخ:** 2026-08-24 · **النطاق:** النظام الكامل (WhatsApp + AI Agent + DB + UI + Security)
 > **الحالة العامة:** D+ · **جاهزية الإنتاج:** NOT READY

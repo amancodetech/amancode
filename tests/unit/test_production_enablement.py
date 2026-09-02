@@ -56,7 +56,7 @@ def _ready_gate_report():
         "_root": ROOT,
     }
     secrets = {
-        "AMANCORE_BRIDGE_TOKEN": "test-token",
+        "AMANCODE_BRIDGE_TOKEN": "test-token",
         "BRIDGE_INGRESS_TOKEN": "test-ingress",
     }
     # alert transport dynamic check reads the real process environment

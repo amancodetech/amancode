@@ -152,7 +152,7 @@ class QualityGuard:
 
         # 10 — P1-1 §1.3: common brand misspelling in outbound = advisory
         # only (republish phrasing); never a hard block.
-        for wrong in ("amancode",):
+        for wrong in ("amancore", "amancor"):
             if wrong in lower:
                 advisories.append(f"brand_spelling_advisory:{wrong}")
                 break

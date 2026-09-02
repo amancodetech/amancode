@@ -209,7 +209,7 @@ input{{width:100%;padding:.6rem;border:1px solid #c9a86a;border-radius:6px;margi
 button{{width:100%;padding:.6rem;background:#101c30;color:#c9a86a;border:0;border-radius:6px;font-size:1rem;cursor:pointer}}
 .err{{color:#b00020;font-size:.85rem;margin-bottom:.6rem}}
 </style></head><body><form method="post" action="{action}">
-<h1>🔒 AmanCore Inbox</h1>
+<h1>🔒 AmanCode Inbox</h1>
 {error}
 <input type="password" name="password" placeholder="كلمة المرور" autofocus required autocomplete="current-password">
 <button type="submit">دخول</button></form></body></html>"""
@@ -223,7 +223,7 @@ def render_login_page(action_path: str, error: str = "") -> str:
 _INBOX_PAGE = """<!DOCTYPE html>
 <html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="robots" content="noindex,nofollow"><title>AmanCore Inbox</title>
+<meta name="robots" content="noindex,nofollow"><title>AmanCode Inbox</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💬</text></svg>">
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
@@ -304,7 +304,7 @@ audio{{max-width:250px;height:38px}}
 </style></head><body>
 <aside id="leadsPanel"><div class="panel-head">💬 المحادثات</div><div id="leads"><div class="empty">لا محادثات بعد</div></div></aside>
 <main id="chatArea">
-<header><button id="back" type="button" title="عودة">←</button><span id="who">AmanCore Inbox</span><form method="post" action="{logout}"><button>خروج ⏻</button></form></header>
+<header><button id="back" type="button" title="عودة">←</button><span id="who">AmanCode Inbox</span><form method="post" action="{logout}"><button>خروج ⏻</button></form></header>
 <div id="log"><div class="empty">اختر محادثة من القائمة لعرض الرسائل</div></div>
 <div id="replybar"><span class="q"></span><button type="button">✕</button></div>
 <form id="composer">

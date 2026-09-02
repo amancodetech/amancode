@@ -68,6 +68,15 @@ jobs:
   production.check:
     enabled: true
     cron: "0 9 * * *"
+  content.autopilot:
+    enabled: true
+    cron: "0 19 * * *"        # daily at 19:00 (7:00 PM)
+  executive.briefing:
+    enabled: true
+    cron: "0 21 * * *"        # daily at 21:00 (9:00 PM)
+  consultation.reminders:
+    enabled: true
+    cron: "*/5 * * * *"       # checks every 5 minutes for 60m and 15m reminders
 
 alert:
   channel: auto               # auto picks telegram/email when creds exist, else log fallback

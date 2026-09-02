@@ -51,3 +51,5 @@ bridge.env
 bridge_data/
 bridge/meta-bridge/qr.png
 bridge/meta-bridge/qr-live.html
+configs/*secret*.json
+*.mp4

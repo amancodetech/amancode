@@ -102,8 +102,16 @@ class FacebookTransport extends EventEmitter {
         }
       }
 
+      const loginOpts = {};
+      const hasIUser = appState.some(c => (c.key || c.name) === 'i_user');
+      const pageID = !hasIUser ? (process.env.FACEBOOK_PAGE_ID || this.options?.pageID) : undefined;
+      if (pageID) {
+        loginOpts.pageID = String(pageID);
+        log.info('facebook attaching to pageID', { pageID });
+      }
+
       await new Promise((resolve, reject) => {
-        loginFn({ appState }, { logLevel: 'silent', listenEvents: true }, (err, api) => {
+        loginFn({ appState }, loginOpts, (err, api) => {
           if (err) return reject(err);
           this.api = api;
           this._setupListener();
@@ -124,22 +132,62 @@ class FacebookTransport extends EventEmitter {
     if (!this.api || (typeof this.api.listenMqtt !== 'function' && typeof this.api.listen !== 'function')) {
       return;
     }
-    const listenFn = this.api.listenMqtt ? this.api.listenMqtt.bind(this.api)
-      : this.api.listen.bind(this.api);
 
-    this._stopListening = listenFn((err, message) => {
+    const onEvent = (err, message) => {
       if (err) {
         log.error('facebook listener error', { error: err.message });
+        if (this.api && typeof this.api.listen === 'function' && !this._triedHttpListen) {
+          this._triedHttpListen = true;
+          log.info('facebook falling back to HTTP listener');
+          try {
+            this._stopListening = this.api.listen(onEvent);
+          } catch (e) {
+            log.error('facebook fallback listen failed', { error: e.message });
+          }
+        }
         return;
       }
-      if (!message || message.type !== 'message') return;
+      if (!message) return;
+
+      log.info('facebook raw event', {
+        type: message.type,
+        threadID: message.threadID,
+        senderID: message.senderID,
+        has_body: Boolean(message.body),
+      });
+
+      const isMessage = message.type === 'message' ||
+        message.type === 'message_reply' ||
+        message.type === 'pages_messaging' ||
+        (message.body && typeof message.body === 'string');
+
+      if (!isMessage) return;
+
       try {
         const env = this._normalizeInbound(message);
-        if (env) this.emit('inbound', env);
+        if (env) {
+          log.info('facebook inbound enqueued to bridge', {
+            mid: env.external_message_id,
+            from: env.sender.external_id,
+            thread: env.metadata.thread_id,
+          });
+          this.emit('inbound', env);
+        }
       } catch (e) {
         log.error('facebook inbound normalize failed', { error: e.message });
       }
-    });
+    };
+
+    const listenFn = this.api.listenMqtt ? this.api.listenMqtt.bind(this.api)
+      : this.api.listen.bind(this.api);
+
+    try {
+      this._stopListening = listenFn(onEvent);
+    } catch (e) {
+      if (this.api.listen) {
+        this._stopListening = this.api.listen(onEvent);
+      }
+    }
   }
 
   _normalizeInbound(m) {
@@ -195,7 +243,7 @@ class FacebookTransport extends EventEmitter {
     return this.api;
   }
 
-  // ---- outbound surface (AmanCore-facing) -------------------------------
+  // ---- outbound surface (AmanCode-facing) -------------------------------
 
   async sendText({ to, text, replyTo }) {
     if (this.shadow) return this._shadowHold('sendText', { to, text });
@@ -204,20 +252,42 @@ class FacebookTransport extends EventEmitter {
     if (!threadId) throw new BridgeError('empty recipient thread id', 'invalid_request', 400);
 
     const msgObj = { body: String(text || '') };
-    if (replyTo) msgObj.replyToMessage = String(replyTo);
+    const replyMid = replyTo ? String(replyTo) : undefined;
 
-    return new Promise((resolve, reject) => {
-      api.sendMessage(msgObj, threadId, (err, info) => {
-        if (err) {
-          const cat = /rate|limit/i.test(err.message) ? 'rate_limited' : 'temporary';
-          return reject(new BridgeError(err.message, cat, 500));
-        }
-        resolve({
-          external_message_id: info?.messageID || info?.id || `mid-${Date.now()}`,
-          to: threadId,
+    try {
+      let info;
+      if (typeof api.sendMessage === 'function') {
+        info = await new Promise((resolve, reject) => {
+          let resolved = false;
+          const timer = setTimeout(
+            () => { if (!resolved) { resolved = true; reject(new Error('sendMessage timed out (30s)')); } }, 30000);
+          const done = (err, val) => {
+            if (!resolved) {
+              resolved = true;
+              clearTimeout(timer);
+              if (err) reject(err);
+              else resolve(val);
+            }
+          };
+          try {
+            const res = api.sendMessage(msgObj, threadId, (err, val) => done(err, val), replyMid);
+            if (res && typeof res.then === 'function') {
+              res.then((val) => done(null, val)).catch((err) => done(err));
+            }
+          } catch (e) {
+            done(e);
+          }
         });
-      });
-    });
+      }
+      return {
+        external_message_id: info?.messageID || info?.id || `mid-${Date.now()}`,
+        to: threadId,
+      };
+    } catch (err) {
+      log.error('facebook sendMessage failed', { error: err.message, to: threadId });
+      const cat = /rate|limit/i.test(err.message) ? 'rate_limited' : 'temporary';
+      throw new BridgeError(err.message, cat, 500);
+    }
   }
 
   async sendMedia({ to, type, caption }) {

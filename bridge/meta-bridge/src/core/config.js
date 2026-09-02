@@ -35,13 +35,13 @@ const config = {
   port: Number(process.env.BRIDGE_PORT || 8765),
   host: process.env.BRIDGE_HOST || '127.0.0.1',
 
-  // AmanCore -> bridge auth (checked on every request)
-  bridgeToken: required('AMANCORE_BRIDGE_TOKEN'),
-  // bridge -> AmanCore auth (sent on every /bridge/inbound call)
+  // AmanCode -> bridge auth (checked on every request)
+  bridgeToken: required('AMANCODE_BRIDGE_TOKEN'),
+  // bridge -> AmanCode auth (sent on every /bridge/inbound call)
   ingressToken: required('BRIDGE_INGRESS_TOKEN'),
 
-  // AmanCore webhook server base (ingress target)
-  amancoreBaseUrl: process.env.AMANCORE_BASE_URL || 'http://127.0.0.1:8010',
+  // AmanCode webhook server base (ingress target)
+  amancodeBaseUrl: process.env.AMANCODE_BASE_URL || 'http://127.0.0.1:8010',
 
   // durable spool for outbound ingress events (one JSON file per event)
   dataDir: process.env.BRIDGE_DATA_DIR ||
@@ -67,6 +67,9 @@ const config = {
   ingressRetryMaxMs: Number(process.env.BRIDGE_INGRESS_RETRY_MAX_MS || 60000),
 
   logLevel: process.env.BRIDGE_LOG_LEVEL || 'info',
+
+  // browser path for facebook browser transport
+  browserPath: process.env.BROWSER_PATH || '/usr/bin/google-chrome',
 };
 
 module.exports = config;

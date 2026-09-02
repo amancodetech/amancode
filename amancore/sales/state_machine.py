@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..errors import AmanCoreError
+from ..errors import AmanCodeError
 
 STATES = [
     "new", "contacted", "engaged", "discovery", "qualification",
@@ -29,7 +29,7 @@ TRANSITIONS: dict[str, dict[str, str]] = {
 OWNER_OVERRIDES = {"won", "lost"}
 
 
-class InvalidTransition(AmanCoreError):
+class InvalidTransition(AmanCodeError):
     pass
 
 

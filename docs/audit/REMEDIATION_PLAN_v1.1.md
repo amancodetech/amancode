@@ -1,4 +1,4 @@
-# AMANCORE — PRODUCTION REMEDIATION PLAN v1.1
+# AMANCODE — PRODUCTION REMEDIATION PLAN v1.1
 
 > **الإصدار:** 1.1 (مُراجَعة ومُصلَّدة في المكان — Final In-Place Review) · **التاريخ:** 2026-08-24 · **الحالة:** انظر [Final Review Status](#final-review-status) أسفل الوثيقة
 > **المدخلات:** [PRODUCTION_AUDIT_2026-08-24.md](./PRODUCTION_AUDIT_2026-08-24.md) · [REMEDIATION_PLAN.md](./REMEDIATION_PLAN.md) (v1.0 — سجل تاريخي، غير معدَّل)

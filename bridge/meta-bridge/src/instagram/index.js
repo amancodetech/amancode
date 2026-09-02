@@ -77,32 +77,16 @@ class InstagramTransport extends EventEmitter {
     }
 
     try {
-      let IgApiClient;
-      try {
-        const mod = require('instagram-private-api');
-        IgApiClient = mod.IgApiClient;
-      } catch {
-        log.warn('instagram library not installed', {
-          channel: 'instagram',
-          hint: 'npm install instagram-private-api in meta-bridge',
-        });
-        this.emit('status', 'AUTH_REQUIRED', {
-          error: 'instagram transport driver not installed',
-        });
-        return;
-      }
-
-      const ig = new IgApiClient();
-      if (sessionState.cookies) {
-        const cookieStr = typeof sessionState.cookies === 'string'
-          ? sessionState.cookies : JSON.stringify(sessionState.cookies);
-        await ig.state.deserializeCookieJar(cookieStr);
-      }
-      if (sessionState.deviceString) {
-        ig.state.generateDevice(sessionState.deviceString);
-      }
-
-      this.api = ig;
+      this.api = {
+        type: 'web_session',
+        username: sessionState.username,
+        cookieHeader: Array.isArray(sessionState.cookies?.cookies)
+          ? sessionState.cookies.cookies.map(c => `${c.key}=${c.value}`).join('; ')
+          : '',
+        csrfToken: Array.isArray(sessionState.cookies?.cookies)
+          ? (sessionState.cookies.cookies.find(c => c.key === 'csrftoken')?.value || '')
+          : '',
+      };
       this._setupListener();
       this.emit('status', 'CONNECTED');
     } catch (err) {
@@ -125,6 +109,110 @@ class InstagramTransport extends EventEmitter {
           log.error('instagram inbound normalize failed', { error: e.message });
         }
       });
+      return;
+    }
+
+    if (this.api.type === 'web_session') {
+      const myPk = String(this.api.username || '');
+      const cookieHeader = this.api.cookieHeader;
+      const csrfToken = this.api.csrfToken;
+      const seenMessageIds = new Set();
+      let seeded = false;
+
+      const pollInbox = async () => {
+        if (!this.api || this._expectDisconnect) return;
+        try {
+          const res = await fetch('https://www.instagram.com/api/v1/direct_v2/inbox/?persistentBadging=true&folder=&limit=10&thread_message_limit=10', {
+            headers: {
+              'cookie': cookieHeader,
+              'x-csrftoken': csrfToken,
+              'x-ig-app-id': '936619743392459',
+              'x-asbd-id': '129477',
+              'sec-fetch-dest': 'empty',
+              'sec-fetch-mode': 'cors',
+              'sec-fetch-site': 'same-origin',
+              'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'x-requested-with': 'XMLHttpRequest',
+              'referer': 'https://www.instagram.com/direct/inbox/',
+            },
+          });
+
+          if (res.status === 401 || res.status === 403) {
+            this.emit('status', 'AUTH_REQUIRED', { error: `HTTP ${res.status}` });
+            return;
+          }
+
+          const data = await res.json();
+          const threads = data?.inbox?.threads || [];
+
+          for (const thread of threads) {
+            const items = thread.items || [];
+            for (const item of items) {
+              const itemId = String(item.item_id || '');
+              const senderId = String(item.user_id || '');
+
+              if (!itemId) continue;
+              if (senderId === myPk) {
+                seenMessageIds.add(itemId);
+                continue;
+              }
+
+              if (seenMessageIds.has(itemId)) continue;
+              seenMessageIds.add(itemId);
+
+              if (!seeded) {
+                // First poll: seed seen IDs
+                continue;
+              }
+
+              let text = '';
+              if (item.item_type === 'text' && item.text) {
+                text = item.text;
+              } else if (item.item_type === 'link' && item.link?.text) {
+                text = item.link.text;
+              } else if (item.text) {
+                text = item.text;
+              } else {
+                continue;
+              }
+
+              const env = {
+                channel: 'instagram',
+                event_type: 'message.received',
+                external_message_id: itemId,
+                account_id: 'primary',
+                sender: {
+                  external_id: senderId,
+                  name: thread.thread_title || senderId,
+                },
+                timestamp: new Date(Number(item.timestamp) > 1e12 ? Number(item.timestamp) : Number(item.timestamp) / 1000).toISOString(),
+                message: {
+                  type: 'text',
+                  text,
+                },
+                metadata: {
+                  transport: 'web_polling',
+                  thread_id: thread.thread_id,
+                },
+              };
+
+              log.info('instagram inbound message detected', {
+                mid: itemId,
+                from: senderId,
+                text_len: text.length,
+              });
+              this.emit('inbound', env);
+            }
+          }
+          seeded = true;
+        } catch (err) {
+          log.warn('instagram inbox poll error', { error: err.message });
+        }
+      };
+
+      pollInbox();
+      const interval = setInterval(pollInbox, 3000);
+      this._stopPolling = () => clearInterval(interval);
     }
   }
 
@@ -178,7 +266,7 @@ class InstagramTransport extends EventEmitter {
     return this.api;
   }
 
-  // ---- outbound surface (AmanCore-facing) -------------------------------
+  // ---- outbound surface (AmanCode-facing) -------------------------------
 
   async sendText({ to, text, replyTo }) {
     if (this.shadow) return this._shadowHold('sendText', { to, text });
@@ -187,6 +275,52 @@ class InstagramTransport extends EventEmitter {
     if (!threadId) throw new BridgeError('empty recipient thread id', 'invalid_request', 400);
 
     const body = String(text || '').slice(0, 1000); // spec §18 max 1000 for IG
+
+    if (api.type === 'web_session') {
+      try {
+        const form = new URLSearchParams();
+        form.append('text', body);
+        form.append('action', 'send_item');
+        form.append('client_context', `${Date.now()}_${Math.floor(Math.random() * 100000)}`);
+        if (threadId.includes('_') || threadId.length > 20) {
+          form.append('thread_ids', JSON.stringify([threadId]));
+        } else {
+          form.append('recipient_users', JSON.stringify([[threadId]]));
+        }
+
+        const res = await fetch('https://www.instagram.com/api/v1/direct_v2/threads/broadcast/text/', {
+          method: 'POST',
+          headers: {
+            'cookie': api.cookieHeader,
+            'x-csrftoken': api.csrfToken,
+            'x-ig-app-id': '936619743392459',
+            'x-asbd-id': '129477',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'same-origin',
+            'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'x-requested-with': 'XMLHttpRequest',
+            'referer': 'https://www.instagram.com/direct/inbox/',
+            'content-type': 'application/x-www-form-urlencoded',
+          },
+          body: form.toString(),
+        });
+
+        const data = await res.json();
+        if (data.status !== 'ok') {
+          throw new Error(data.message || 'Instagram send failed');
+        }
+
+        const payload = data.payload || {};
+        return {
+          external_message_id: payload.item_id || `ig-${Date.now()}`,
+          to: threadId,
+        };
+      } catch (err) {
+        const cat = /rate|limit|block/i.test(err.message) ? 'rate_limited' : 'temporary';
+        throw new BridgeError(err.message, cat, 500);
+      }
+    }
 
     if (typeof api.sendMessage === 'function') {
       return new Promise((resolve, reject) => {

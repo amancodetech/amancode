@@ -1,5 +1,5 @@
 'use strict';
-// Error taxonomy mirroring AmanCore's BridgeError categories (spec §43).
+// Error taxonomy mirroring AmanCode's BridgeError categories (spec §43).
 
 const CATEGORIES = Object.freeze([
   'auth_required',      // bridge or upstream session is not authenticated

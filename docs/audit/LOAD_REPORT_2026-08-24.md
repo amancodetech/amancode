@@ -39,7 +39,7 @@ latency as expected (p50 ≈ 1×/2× profile).
    numbers in ~3h → permanent WABA disable. Fixes:
    - `cfg.database_path` now honors `DATABASE_PATH` env (root cause)
    - `Database` refuses opening production `aman_core.db` when
-     `LOAD_MOCK_LLM`/`AMANCORE_ISOLATED` set (last-line guard, test-proven)
+     `LOAD_MOCK_LLM`/`AMANCODE_ISOLATED` set (last-line guard, test-proven)
    - inbox sync INSERT made idempotent (`ON CONFLICT DO NOTHING`) — the
      unique index surfaced a real TOCTOU race under concurrency
 4. **Thread growth:** capped naturally (~43 incl. per-request), no runaway.

@@ -122,7 +122,7 @@ class ProposalGenerator:
         terms = terms or {}
         snapshot_result = snapshot.get("calculated_result", {})
         body = {
-            "Executive Summary": f"AmanCore proposes to deliver the {offer.get('service_name', 'solution')} for this project.",
+            "Executive Summary": f"AmanCode proposes to deliver the {offer.get('service_name', 'solution')} for this project.",
             "Client Problem": opportunity.get("scope_summary", _OWNER_REQUIRED),
             "Proposed Solution": offer.get("service_name", _OWNER_REQUIRED),
             "Scope": ", ".join(scope.get("included", [])) or _OWNER_REQUIRED,

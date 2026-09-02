@@ -20,7 +20,8 @@ JOB_TYPES = (
     "analytics.daily", "analytics.weekly", "analytics.monthly",
     "insights.daily", "insights.weekly", "insights.monthly",
     "retention.cleanup", "database.backup", "backup.verify", "backup.restore_test",
-    "health.check", "production.check",
+    "health.check", "production.check", "content.autopilot",
+    "executive.briefing", "consultation.reminders",
 )
 
 
@@ -251,6 +252,35 @@ class JobRegistry:
             report = ProductionGateService(production).check()
             return {"verdict": report["verdict"], "production_enabled": report["production_enabled"]}
 
+        def _autopilot():
+            from ..content.autopilot import ContentAutopilotEngine
+            engine = ContentAutopilotEngine(db=self.db)
+            return engine.run_daily_autopilot()
+
+        def _executive_briefing():
+            from ..analytics.briefing import ExecutiveBriefingService
+            service = ExecutiveBriefingService(self.db, config=cfg.analytics if hasattr(cfg, "analytics") else None)
+            text = service.format_telegram_briefing()
+            # Send to Telegram owner if configured
+            token = os.environ.get("TELEGRAM_BOT_TOKEN")
+            chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+            if token and chat_id:
+                import json
+                import urllib.request
+                url = f"https://api.telegram.org/bot{token}/sendMessage"
+                data = json.dumps({"chat_id": chat_id, "text": text, "disable_web_page_preview": True}).encode()
+                req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+                try:
+                    urllib.request.urlopen(req, timeout=10)
+                except Exception:
+                    pass
+            return {"status": "ok", "delivered": bool(token and chat_id)}
+
+        def _consultation_reminders():
+            from ..consultation.reminders import ConsultationReminderService
+            service = ConsultationReminderService(self.db)
+            return service.check_and_send_reminders()
+
         return {
             "research.daily": lambda payload: {"note": "disabled (no live research router in mock mode)"},
             "followups.check": lambda p: _followups(),
@@ -267,4 +297,7 @@ class JobRegistry:
             "outbox.drain": lambda p: _drain(),
             "health.check": lambda p: _health(),
             "production.check": lambda p: _production_check(),
+            "content.autopilot": lambda p: _autopilot(),
+            "executive.briefing": lambda p: _executive_briefing(),
+            "consultation.reminders": lambda p: _consultation_reminders(),
         }

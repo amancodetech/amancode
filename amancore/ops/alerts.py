@@ -99,7 +99,7 @@ class EmailAlertTransport(AlertTransport):
             f"Action required: {alert.get('action_required', 'review')}"
         )
         msg = MIMEText(body)
-        msg["Subject"] = f"AmanCore [{alert['severity']}] {alert['title']}"
+        msg["Subject"] = f"AmanCode [{alert['severity']}] {alert['title']}"
         msg["To"] = self.to
         msg["From"] = self.user
         with smtplib.SMTP(self.host, self.port, timeout=30) as server:

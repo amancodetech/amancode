@@ -498,7 +498,7 @@ _DATA_DELETION_PAGE = """<!DOCTYPE html>
 </div></body></html>"""
 
 class WebhookRequestHandler(BaseHTTPRequestHandler):
-    server_version = "AmanCoreWebhook/1.0"
+    server_version = "AmanCodeWebhook/1.0"
 
     # the runtime dict is attached to the HTTPServer instance
     @property
@@ -1255,7 +1255,7 @@ def serve(root: Path, host: str = "127.0.0.1", port: int = 8010) -> int:
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="AmanCore webhook listener")
+    parser = argparse.ArgumentParser(description="AmanCode webhook listener")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8010)
     args = parser.parse_args(argv)

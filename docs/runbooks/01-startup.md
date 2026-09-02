@@ -1,7 +1,7 @@
 # Runbook 01 — Startup
 
 ## Symptoms
-- AmanCore does not start or behaves unexpectedly.
+- AmanCode does not start or behaves unexpectedly.
 
 ## Checks
 1. `python3 -m amancore.cli health` → RESULT: PASS

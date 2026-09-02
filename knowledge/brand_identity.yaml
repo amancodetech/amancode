@@ -1,0 +1,62 @@
+# AmanCode — Authoritative Master Brand Identity Specification
+version: "2.0"
+brand:
+  name:
+    en: "AmanCode"
+    ar: "أمان كود"
+    casing_rule: "CamelCase without spaces (Never: Aman Code, AMANCode, Amancode)"
+  tagline:
+    en: "Advanced technology engineered with security and intelligence."
+    ar: "تقنية متقدمة مصممة بأعلى معايير الأمان والذكاء."
+  archetype: "The Magician + The Ruler"
+  personality:
+    - "Intelligent"
+    - "Precise"
+    - "Secure"
+    - "Sophisticated"
+    - "Powerful"
+    - "Calm"
+    - "Engineered"
+    - "Trustworthy"
+
+core_philosophy:
+  - "Precision over decoration"
+  - "Clarity over complexity"
+  - "Recognition over novelty"
+  - "Restraint over spectacle"
+  - "Optical balance over mathematical perfection"
+  - "Craftsmanship over effects"
+
+anti_ai_rules:
+  prohibited:
+    - "Neon / glow aesthetics"
+    - "Cyberpunk / Holographic UI"
+    - "Blue/Purple generic AI gradients"
+    - "Literal shields, locks, chips, or circuit boards"
+    - "Random particle floating effects"
+    - "Overloaded 3D or Glassmorphism"
+
+palette:
+  primary:
+    name: "Graphite Black"
+    hex: "#17191C"
+    meaning: "Authority, engineering, security, physical substance"
+  secondary:
+    name: "Warm Ivory"
+    hex: "#F3F1EA"
+    meaning: "Canvas, editorial clarity, warmth, calm space"
+  accent:
+    name: "Deep Emerald"
+    hex: "#236B57"
+    meaning: "Proprietary accent, organic intelligence, used with restraint"
+
+typography:
+  english: "Plus Jakarta Sans"
+  arabic: "Noto Kufi Arabic"
+  technical: "JetBrains Mono"
+
+assets:
+  logo: "assets/LOGO.png"
+  app_icon: "assets/app_icon_1024.png"
+  geometry_grid: "assets/الهندسة.png"
+  brand_system: "assets/الهوية البصرية.png"

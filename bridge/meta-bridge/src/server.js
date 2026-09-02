@@ -1,5 +1,5 @@
 'use strict';
-// meta-bridge HTTP server — the local bridge surface AmanCore talks to
+// meta-bridge HTTP server — the local bridge surface AmanCode talks to
 // (owner spec §19-23). Token-checked on every request.
 
 const http = require('node:http');
@@ -12,7 +12,7 @@ const { BridgeError, statusToCategory } = require('./core/errors');
 const { SessionManager } = require('./sessions/manager');
 const { IngressForwarder } = require('./transport/ingress');
 const { WhatsAppTransport } = require('./whatsapp');
-const { FacebookTransport } = require('./facebook');
+const { FacebookBrowserTransport } = require('./facebook/browser-transport');
 const { InstagramTransport } = require('./instagram');
 const metrics = require('./metrics');
 
@@ -39,7 +39,7 @@ function buildWhatsapp() {
 }
 
 function buildFacebook() {
-  const transport = new FacebookTransport(config);
+  const transport = new FacebookBrowserTransport(config);
   const manager = new SessionManager('facebook', transport, {
     baseMs: config.reconnectBaseMs,
     maxMs: config.reconnectMaxMs,
@@ -251,6 +251,17 @@ router.get('/v1/messages/:id', guard(async (req, res, params) => {
     throw new BridgeError('message id unknown', 'not_found', 404);
   }
   sendJson(res, 200, rec);
+}));
+
+router.post('/v1/whatsapp/profile-picture', guard(async (req, res) => {
+  const body = JSON.parse((await readBody(req)).toString() || '{}');
+  const imagePath = body.image_path || '/home/omar/Desktop/work/aman-core/assets/amancode_avatar_1024.jpg';
+  const transport = transports.get('whatsapp');
+  if (!transport) {
+    throw new BridgeError('whatsapp transport not active', 'not_found', 404);
+  }
+  const result = await transport.updateProfilePicture(imagePath);
+  sendJson(res, 200, { ok: true, message: 'WhatsApp profile picture updated successfully', result });
 }));
 
 const messageStatuses = new Map(); // external_message_id -> status record

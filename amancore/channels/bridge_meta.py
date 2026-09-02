@@ -4,7 +4,7 @@ bridge; owner spec §18).
 
 Conservative Phase-1 surface: TEXT (matching the Meta adapters' practical
 customer traffic). Media widens with the bridge implementation without any
-AmanCore-side contract change (capabilities are per-adapter).
+AmanCode-side contract change (capabilities are per-adapter).
 
 Identity parity (owner spec §16): facebook/instagram external ids and
 idempotency keys (`fb:{mid}` / `ig:{mid}`) are preserved exactly like

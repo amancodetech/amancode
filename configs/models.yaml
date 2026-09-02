@@ -7,22 +7,21 @@ defaults:
 # (DeepSeek fully removed from config on 2026-08-27 — owner decision.
 #  Gemini capped at 20/day: definitions kept below, re-enable in a slot if needed.)
 task_routing:
-  strategy:    {primary: glm, secondary: null, fallback: null}
-  reasoning:   {primary: glm, secondary: null, fallback: null}
-  pricing:     {primary: glm, secondary: null, fallback: null}
-  coding:      {primary: glm, secondary: null, fallback: null}
-  routine:     {primary: glm, secondary: null, fallback: null}
-  classification: {primary: glm, secondary: null, fallback: null}
-  extraction:  {primary: glm, secondary: null, fallback: null}
-  summarization: {primary: glm, secondary: null, fallback: null}
+  strategy:    {primary: gemini, secondary: glm, fallback: null}
+  reasoning:   {primary: gemini, secondary: glm, fallback: null}
+  pricing:     {primary: gemini, secondary: glm, fallback: null}
+  coding:      {primary: gemini, secondary: glm, fallback: null}
+  routine:     {primary: gemini, secondary: glm, fallback: null}
+  classification: {primary: gemini, secondary: glm, fallback: null}
+  extraction:  {primary: gemini, secondary: glm, fallback: null}
+  summarization: {primary: gemini, secondary: glm, fallback: null}
   multimodal:  {primary: gemini, secondary: null, fallback: null}
 
 providers:
   gemini:
     type: gemini
     api_key_env: GEMINI_API_KEY
-    model: gemini-3.7-flash
-    reasoning_effort: high
+    model: gemini-3.6-flash
   claude:
     type: anthropic
     base_url_env: ANTHROPIC_BASE_URL
@@ -33,8 +32,6 @@ providers:
     base_url_env: ZHIPU_BASE_URL
     api_key_env: ZHIPU_API_KEY
     model: glm-5.3-flash
-    extra_payload:
-      thinking: {level: low}
 
 # USD per 1M tokens (estimates, configurable)
 pricing_per_million:

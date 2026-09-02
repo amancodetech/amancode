@@ -1,9 +1,9 @@
-# AmanCore Business Brain v1 — seed (immutable).
-# Derived from AMANCORE_BUSINESS_STRATEGY_v1.2.md (source of truth).
+# AmanCode Business Brain v1 — seed (immutable).
+# Derived from AMANCODE_BUSINESS_STRATEGY_v1.2.md (source of truth).
 # This is Versioned Business Configuration, NOT CRM/operational state.
 
 company:
-  name: AmanCore
+  name: AmanCode
   type: Digital Solutions Company for Businesses
   positioning: Digital business systems for growing companies
   brand_voice: {tone: professional, style: clear-outcome-focused}
@@ -35,6 +35,11 @@ services:
     type: core
     delivery_model: standardized
     offer_id: ecommerce_store
+  - id: branding_visual_identity
+    name: Visual Identity & Custom Logo Design
+    type: core
+    delivery_model: custom_quote
+    offer_id: visual_identity
   - id: ai_automation_suite
     name: AI & Automation Suite
     type: premium
@@ -47,6 +52,9 @@ offers:
     tier: entry
   - id: website_system
     name: Business Website System
+    tier: core
+  - id: visual_identity
+    name: Visual Identity & Custom Logo Design
     tier: core
   - id: web_app
     name: Custom Web Application
@@ -598,8 +606,8 @@ brand_voice:
   languages: [id, ar, en]
 
 approved_claims:
-  - "AmanCore builds multilingual business websites and custom web applications"
-  - "AmanCore delivers integrated website, WhatsApp and AI automation solutions"
+  - "AmanCode builds multilingual business websites and custom web applications"
+  - "AmanCode delivers integrated website, WhatsApp and AI automation solutions"
 
 forbidden_claims:
   - "We guarantee revenue growth"

@@ -1,4 +1,4 @@
-"""BridgeTransport — the ONLY way AmanCore talks to the local meta-bridge.
+"""BridgeTransport — the ONLY way AmanCode talks to the local meta-bridge.
 
 Owner spec §9/§10/§13/§15/§43/§44:
   - local HTTP only (127.0.0.1:8765 default), X-Bridge-Token auth
@@ -52,7 +52,7 @@ class BridgeTransport:
         bridge = dict((config or {}).get("bridge") or {})
         self.channel = str((config or {}).get("channel", "whatsapp"))
         self.base_url = str(bridge.get("base_url", "http://127.0.0.1:8765")).rstrip("/")
-        self.token_env = str(bridge.get("token_env", "AMANCORE_BRIDGE_TOKEN"))
+        self.token_env = str(bridge.get("token_env", "AMANCODE_BRIDGE_TOKEN"))
         self.token = os.environ.get(self.token_env, "")
         self.shadow = bool(bridge.get("shadow", False))
         self.connect_timeout = float(bridge.get("connect_timeout", 3.0))

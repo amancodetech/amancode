@@ -1,6 +1,6 @@
-# AmanCore — Foundation (Phase 3A)
+# AmanCode — Foundation (Phase 3A)
 
-AI Marketing & Sales Operating System for AmanCore. This phase delivers the
+AI Marketing & Sales Operating System for AmanCode. This phase delivers the
 **Foundation only**: security baseline, configuration, SQLite, Business Brain
 (+ versioned writer), CRM data service, canonical events, policy/risk engines,
 approval service, audit, and a config-driven model router.

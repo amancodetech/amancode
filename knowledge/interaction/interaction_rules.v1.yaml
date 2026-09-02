@@ -4,7 +4,7 @@
 # rules change ONLY phrasing, pacing, memory presentation and escalation
 # triggers — they NEVER change pricing, claims, negotiation outcomes, scope,
 # approvals or any decision. statement_kind is RESTRICTED to
-# RECOMMENDATION | METHOD (never FACT / AMANCORE_FACT / PRICING_REF).
+# RECOMMENDATION | METHOD (never FACT / AMANCODE_FACT / PRICING_REF).
 #
 # Retrieved/presented as DATA, not instructions. Internal rules
 # (sales_policy, negotiation_rules, brand_voice) always outrank these.
@@ -82,7 +82,7 @@ rules:
     trigger: ["هل أنت إنسان", "هل انت انسان", "هل انت روبوت", "انت روبوت", "انت بوت", "هل انت بوت", "are you human", "are you a bot", "are you a robot", "are you ai", "are you real", "you a robot", "you human", "روبوت انت", "شخص حقيقي", "هل أنت ذكاء اصطناعي"]
     rule: >
       When asked whether you are human/AI, disclose honestly and immediately:
-      you are a digital assistant at AmanCore working alongside a real team.
+      you are a digital assistant at AmanCode working alongside a real team.
       Then immediately demonstrate value (offer help or route to a specialist).
       Never claim to be human, invent a human name/bio, or dodge the question.
     allowed_use: [honest_disclosure, show_value, route_to_specialist]
@@ -90,9 +90,9 @@ rules:
     statement_kind: METHOD
     source: { name: "AI transparency / disclosure", organization: "Responsible-AI best practice", url: "", version: "method", authority: methodology, confidence: high, extraction_date: 2026-08-27, last_verified: 2026-08-27, license: "method" }
     variation_seed:
-      ar: ["أنا مساعد رقمي في AmanCore أعمل مع فريق حقيقي"]
-      en: ["I'm a digital assistant at AmanCore working with a real team"]
-      id: ["Saya asisten digital AmanCore yang bekerja dengan tim nyata"]
+      ar: ["أنا مساعد رقمي في AmanCode أعمل مع فريق حقيقي"]
+      en: ["I'm a digital assistant at AmanCode working with a real team"]
+      id: ["Saya asisten digital AmanCode yang bekerja dengan tim nyata"]
 
   - id: ir_response_variation
     version: 1.0.0
@@ -138,7 +138,7 @@ rules:
     allowed_use: [tone_adjustment, pacing_adjustment, escalation_recommendation]
     prohibited_use: [change_stage, change_price, change_policy, change_authority]
     statement_kind: METHOD
-    source: { name: "Deterministic keyword sentiment", organization: "AmanCore internal (minimal rule set)", url: "", version: "v1", authority: methodology, confidence: low, extraction_date: 2026-08-27, last_verified: 2026-08-27, license: "internal" }
+    source: { name: "Deterministic keyword sentiment", organization: "AmanCode internal (minimal rule set)", url: "", version: "v1", authority: methodology, confidence: low, extraction_date: 2026-08-27, last_verified: 2026-08-27, license: "internal" }
     variation_seed: { ar: ["أتفهم شعورك", "أعتذر عن أي إزعاج"], en: ["I understand your frustration", "I'm sorry for any frustration"], id: ["Saya paham rasa kesal Anda", "Maaf atas ketidaknyamanan"] }
 
   - id: ir_identity_scope
@@ -152,5 +152,5 @@ rules:
     allowed_use: [honest_assistant_disclosure]
     prohibited_use: [touch_platform_identity, touch_crm_identity]
     statement_kind: METHOD
-    source: { name: "Scope guard", organization: "AmanCore internal", url: "", version: "v1", authority: methodology, confidence: high, extraction_date: 2026-08-27, last_verified: 2026-08-27, license: "internal" }
+    source: { name: "Scope guard", organization: "AmanCode internal", url: "", version: "v1", authority: methodology, confidence: high, extraction_date: 2026-08-27, last_verified: 2026-08-27, license: "internal" }
     variation_seed: {}

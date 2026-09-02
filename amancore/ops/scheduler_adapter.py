@@ -6,7 +6,7 @@ Provider-specific construction is confined to THIS module and
 webhook_server.build_runtime (composition roots).
 
 FIX (channel-neutralization audit): the old registry._drain minted an adapter
-with mode=AMANCORE_ENV and NO environment overlay, so in production every
+with mode=AMANCODE_ENV and NO environment overlay, so in production every
 scheduler-driven send raised ProductionNotEnabledError and died on retry.
 Reading production.yaml here restores policy parity with build_runtime while
 keeping the gate itself (block_unless_production_enabled) fully in force.

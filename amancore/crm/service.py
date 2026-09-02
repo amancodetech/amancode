@@ -401,3 +401,226 @@ class CRMService:
         sql += " ORDER BY created_at DESC LIMIT ?"
         params.append(limit)
         return [dict(r) for r in self.db.execute(sql, tuple(params)).fetchall()]
+
+    # ── Requirements Intelligence Layer (RIL) Gateway ────────────────────
+    def create_requirement(self, **fields: Any) -> str:
+        requirement_id = fields.pop("requirement_id", None) or new_id()
+        now = utcnow()
+        cols = ["requirement_id", "first_seen_at", "last_seen_at", "created_at", "updated_at"]
+        vals: list[Any] = [requirement_id, now, now, now, now]
+        for k, v in fields.items():
+            if v is None:
+                continue
+            cols.append(k)
+            vals.append(v)
+        placeholders = ", ".join("?" for _ in vals)
+        self.db.execute(
+            f"INSERT INTO requirements ({', '.join(cols)}) VALUES ({placeholders})",
+            tuple(vals),
+        )
+        self.db.commit()
+        return requirement_id
+
+    def update_requirement(self, requirement_id: str, **fields: Any) -> None:
+        if not fields:
+            return
+        fields["updated_at"] = utcnow()
+        sets = [f"{k} = ?" for k in fields]
+        self.db.execute(
+            f"UPDATE requirements SET {', '.join(sets)} WHERE requirement_id = ?",
+            (*fields.values(), requirement_id),
+        )
+        self.db.commit()
+
+    def get_requirement(self, requirement_id: str) -> dict | None:
+        row = self.db.execute("SELECT * FROM requirements WHERE requirement_id = ?", (requirement_id,)).fetchone()
+        return _row(row)
+
+    def list_requirements_for_lead(self, lead_id: str, category: str | None = None) -> list[dict]:
+        sql = "SELECT * FROM requirements WHERE lead_id = ?"
+        params: list[Any] = [lead_id]
+        if category:
+            sql += " AND category = ?"
+            params.append(category)
+        sql += " ORDER BY created_at ASC"
+        return [dict(r) for r in self.db.execute(sql, tuple(params)).fetchall()]
+
+    def list_requirements_for_project(self, project_id: str) -> list[dict]:
+        return [dict(r) for r in self.db.execute(
+            "SELECT * FROM requirements WHERE project_id = ? ORDER BY created_at ASC", (project_id,)
+        ).fetchall()]
+
+    def create_conflict(self, **fields: Any) -> str:
+        conflict_id = fields.pop("conflict_id", None) or new_id()
+        now = utcnow()
+        cols = ["conflict_id", "created_at"]
+        vals: list[Any] = [conflict_id, now]
+        for k, v in fields.items():
+            if v is None:
+                continue
+            cols.append(k)
+            vals.append(v)
+        self.db.execute(
+            f"INSERT INTO requirement_conflicts ({', '.join(cols)}) VALUES ({', '.join('?' for _ in vals)})",
+            tuple(vals),
+        )
+        self.db.commit()
+        return conflict_id
+
+    def resolve_conflict(self, conflict_id: str, resolution: str) -> None:
+        self.db.execute(
+            "UPDATE requirement_conflicts SET status = 'resolved', resolution = ?, resolved_at = ? WHERE conflict_id = ?",
+            (resolution, utcnow(), conflict_id),
+        )
+        self.db.commit()
+
+    def list_conflicts_for_lead(self, lead_id: str, status: str = "open") -> list[dict]:
+        sql = "SELECT * FROM requirement_conflicts WHERE lead_id = ?"
+        params: list[Any] = [lead_id]
+        if status:
+            sql += " AND status = ?"
+            params.append(status)
+        sql += " ORDER BY created_at ASC"
+        return [dict(r) for r in self.db.execute(sql, tuple(params)).fetchall()]
+
+    def create_decision(self, **fields: Any) -> str:
+        decision_id = fields.pop("decision_id", None) or new_id()
+        now = utcnow()
+        cols = ["decision_id", "created_at", "updated_at"]
+        vals: list[Any] = [decision_id, now, now]
+        for k, v in fields.items():
+            if v is None:
+                continue
+            cols.append(k)
+            vals.append(v)
+        self.db.execute(
+            f"INSERT INTO project_decisions ({', '.join(cols)}) VALUES ({', '.join('?' for _ in vals)})",
+            tuple(vals),
+        )
+        self.db.commit()
+        return decision_id
+
+    def list_decisions_for_lead(self, lead_id: str, status: str | None = "active") -> list[dict]:
+        sql = "SELECT * FROM project_decisions WHERE lead_id = ?"
+        params: list[Any] = [lead_id]
+        if status:
+            sql += " AND status = ?"
+            params.append(status)
+        sql += " ORDER BY created_at ASC"
+        return [dict(r) for r in self.db.execute(sql, tuple(params)).fetchall()]
+
+    def create_open_question(self, **fields: Any) -> str:
+        question_id = fields.pop("question_id", None) or new_id()
+        now = utcnow()
+        cols = ["question_id", "created_at", "updated_at"]
+        vals: list[Any] = [question_id, now, now]
+        for k, v in fields.items():
+            if v is None:
+                continue
+            cols.append(k)
+            vals.append(v)
+        self.db.execute(
+            f"INSERT INTO open_questions ({', '.join(cols)}) VALUES ({', '.join('?' for _ in vals)})",
+            tuple(vals),
+        )
+        self.db.commit()
+        return question_id
+
+    def update_open_question(self, question_id: str, **fields: Any) -> None:
+        if not fields:
+            return
+        fields["updated_at"] = utcnow()
+        sets = [f"{k} = ?" for k in fields]
+        self.db.execute(
+            f"UPDATE open_questions SET {', '.join(sets)} WHERE question_id = ?",
+            (*fields.values(), question_id),
+        )
+        self.db.commit()
+
+    def list_open_questions_for_lead(self, lead_id: str, status: str | None = "open") -> list[dict]:
+        sql = "SELECT * FROM open_questions WHERE lead_id = ?"
+        params: list[Any] = [lead_id]
+        if status:
+            sql += " AND status = ?"
+            params.append(status)
+        sql += " ORDER BY priority DESC, created_at ASC"
+        return [dict(r) for r in self.db.execute(sql, tuple(params)).fetchall()]
+
+    def get_next_open_question(self, lead_id: str) -> dict | None:
+        row = self.db.execute(
+            "SELECT * FROM open_questions WHERE lead_id = ? AND status = 'open' ORDER BY priority DESC, created_at ASC LIMIT 1",
+            (lead_id,),
+        ).fetchone()
+        return _row(row)
+
+    def create_project_scope(self, **fields: Any) -> str:
+        scope_id = fields.pop("scope_id", None) or new_id()
+        now = utcnow()
+        cols = ["scope_id", "created_at", "updated_at"]
+        vals: list[Any] = [scope_id, now, now]
+        for k, v in fields.items():
+            if v is None:
+                continue
+            cols.append(k)
+            vals.append(v)
+        self.db.execute(
+            f"INSERT INTO project_scopes ({', '.join(cols)}) VALUES ({', '.join('?' for _ in vals)})",
+            tuple(vals),
+        )
+        self.db.commit()
+        return scope_id
+
+    def get_project_scope_for_lead(self, lead_id: str) -> dict | None:
+        row = self.db.execute(
+            "SELECT * FROM project_scopes WHERE lead_id = ? ORDER BY created_at DESC LIMIT 1",
+            (lead_id,),
+        ).fetchone()
+        return _row(row)
+
+    def create_scope_version(self, **fields: Any) -> str:
+        version_id = fields.pop("version_id", None) or new_id()
+        now = utcnow()
+        cols = ["version_id", "created_at", "updated_at"]
+        vals: list[Any] = [version_id, now, now]
+        for k, v in fields.items():
+            if v is None:
+                continue
+            cols.append(k)
+            vals.append(v)
+        self.db.execute(
+            f"INSERT INTO scope_versions ({', '.join(cols)}) VALUES ({', '.join('?' for _ in vals)})",
+            tuple(vals),
+        )
+        self.db.commit()
+        return version_id
+
+    def get_latest_scope_version(self, scope_id: str) -> dict | None:
+        row = self.db.execute(
+            "SELECT * FROM scope_versions WHERE scope_id = ? ORDER BY version_number DESC LIMIT 1",
+            (scope_id,),
+        ).fetchone()
+        return _row(row)
+
+    def add_scope_item(self, **fields: Any) -> str:
+        item_id = fields.pop("item_id", None) or new_id()
+        now = utcnow()
+        cols = ["item_id", "created_at"]
+        vals: list[Any] = [item_id, now]
+        for k, v in fields.items():
+            if v is None:
+                continue
+            cols.append(k)
+            vals.append(v)
+        self.db.execute(
+            f"INSERT INTO scope_items ({', '.join(cols)}) VALUES ({', '.join('?' for _ in vals)})",
+            tuple(vals),
+        )
+        self.db.commit()
+        return item_id
+
+    def list_scope_items(self, version_id: str) -> list[dict]:
+        return [dict(r) for r in self.db.execute(
+            "SELECT * FROM scope_items WHERE version_id = ? ORDER BY sort_order ASC, created_at ASC",
+            (version_id,),
+        ).fetchall()]
+

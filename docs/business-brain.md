@@ -1,6 +1,6 @@
 # Business Brain
 
-Single source of truth for **what AmanCore believes/allows/offers**.
+Single source of truth for **what AmanCode believes/allows/offers**.
 It is versioned business configuration — NOT CRM state (no leads/customers).
 
 ## Sections (see `amancore/business_brain/data/v1.yaml`)

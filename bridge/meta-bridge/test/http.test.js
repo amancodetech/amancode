@@ -1,18 +1,18 @@
 'use strict';
-// HTTP surface contract tests — mirror of AmanCore's bridge expectations.
+// HTTP surface contract tests — mirror of AmanCode's bridge expectations.
 
 const test = require('node:test');
 const assert = require('node:assert');
 const { after } = require('node:test');
 const {
-  startBridge, call, sleep, stubAmanCore, receivedEnvelopes, resetReceived,
+  startBridge, call, sleep, stubAmanCode, receivedEnvelopes, resetReceived,
   setFailures,
 } = require('./_helpers');
 
-// let the runner exit: close the stub AmanCore after all tests
+// let the runner exit: close the stub AmanCode after all tests
 after(async () => {
-  stubAmanCore.closeAllConnections();
-  await new Promise((resolve) => stubAmanCore.close(resolve));
+  stubAmanCode.closeAllConnections();
+  await new Promise((resolve) => stubAmanCode.close(resolve));
 });
 
 test('health requires the bridge token', async () => {
@@ -84,7 +84,7 @@ test('react and read endpoints', async () => {
   await bridge.stop();
 });
 
-test('ingress: inbound event reaches AmanCore stub and spool is cleaned', async () => {
+test('ingress: inbound event reaches AmanCode stub and spool is cleaned', async () => {
   const { bridge, baseUrl } = await startBridge();
   resetReceived();
   const transport = bridge.transports.get('whatsapp');

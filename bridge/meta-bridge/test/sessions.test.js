@@ -65,7 +65,7 @@ test('reconnect() clears timer and reconnects', async () => {
   await mgr.stop();
 });
 
-test('snapshot shape matches AmanCore health expectations', async () => {
+test('snapshot shape matches AmanCode health expectations', async () => {
   const t = makeFakeTransport();
   const mgr = new SessionManager('whatsapp', t);
   const snap = mgr.snapshot();

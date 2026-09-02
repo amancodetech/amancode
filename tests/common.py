@@ -15,24 +15,24 @@ SEED = ROOT / "amancore" / "business_brain" / "data" / "v1.yaml"
 
 # P0.3 / 0.1 — LEARNING ISOLATION. The production learnings.jsonl must never be
 # written by a test run. Redirect the journal to a temp path (honoring the
-# AMANCORE_LEARNINGS_PATH override) as soon as the shared test module loads,
+# AMANCODE_LEARNINGS_PATH override) as soon as the shared test module loads,
 # before any coordinator turn can record a learning.
-_AMANCORE_LEARNINGS_ISOLATED = False
+_AMANCODE_LEARNINGS_ISOLATED = False
 
 
 def _isolate_learnings() -> None:
-    global _AMANCORE_LEARNINGS_ISOLATED
-    if _AMANCORE_LEARNINGS_ISOLATED:
+    global _AMANCODE_LEARNINGS_ISOLATED
+    if _AMANCODE_LEARNINGS_ISOLATED:
         return
     try:
         import os
         import amancore.ops.learning as _learning
-        override = os.environ.get("AMANCORE_LEARNINGS_PATH")
+        override = os.environ.get("AMANCODE_LEARNINGS_PATH")
         target = Path(override) if override else \
             Path(os.environ.get("TMPDIR", "/tmp")) / "amancore_test_learnings.jsonl"
         target.parent.mkdir(parents=True, exist_ok=True)
         _learning._JOURNAL = target
-        _AMANCORE_LEARNINGS_ISOLATED = True
+        _AMANCODE_LEARNINGS_ISOLATED = True
     except Exception:  # noqa: BLE001 — isolation must never break test loading
         pass
 

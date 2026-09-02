@@ -1,4 +1,4 @@
-"""AmanCore CLI — local operator commands.
+"""AmanCode CLI — local operator commands.
 
 Usage:  python -m amancore.cli <command>
 """
@@ -85,7 +85,7 @@ def _production_check(args) -> int:
     production["_root"] = ROOT
     gate = ProductionGateService(production)
     report = gate.check(run_health=True)
-    print("AMANCORE PRODUCTION CHECK")
+    print("AMANCODE PRODUCTION CHECK")
     print("-" * 40)
     print(f"verdict                 : {report['verdict']}")
     print(f"production_enabled      : {report['production_enabled']}")
@@ -407,7 +407,7 @@ def _owner_alert_test(args) -> int:
     try:
         dispatcher = AlertDispatcher(db, config=cfg.scheduler.get("alert", {}))
         result = dispatcher.dispatch(
-            severity="HIGH", category="owner_test", title="AmanCore owner alert test",
+            severity="HIGH", category="owner_test", title="AmanCode owner alert test",
             summary="This is a test alert from aman-core owner-alert test.",
             action_required="confirm receipt",
         )

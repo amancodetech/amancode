@@ -36,6 +36,10 @@ _SECURITY_RE = re.compile(
     re.IGNORECASE)
 _SEO_RE = re.compile(r"سيو|أرشفة|ظهور جوجل|google rank|seo|schema\.org",
                      re.IGNORECASE)
+_CONSULTATION_RE = re.compile(
+    r"استشارة|اجتماع|مكالمة|تحدث معكم|حجز موعد|موعد|zoom|google meet|meet|call|meeting|appointment|consultation|jadwal|konsultasi",
+    re.IGNORECASE,
+)
 
 _ESCALATION_KEYWORDS = {
     "legal": ["عقد", "شروط", "مسؤولية", "ملكية فكرية", "استرداد", "قانون",
@@ -286,7 +290,7 @@ class ResponsePlanner:
             parts = ["MODE=SHAPING (collaborative solution building)."]
             if service_name:
                 parts.append(
-                    f"The fitting AmanCore service is '{service_name}' — you may "
+                    f"The fitting AmanCode service is '{service_name}' — you may "
                     "name it naturally once, tied to why it fits their case "
                     "(use ONLY approved capabilities).")
             customer_delegated = any(
@@ -642,7 +646,7 @@ class ResponsePlanner:
             pool = seeds.get(language) or seeds.get("en") or []
             lines.append(
                 "Identity disclosure: answer honestly you are a digital "
-                "assistant at AmanCore working with a real team, then show "
+                "assistant at AmanCode working with a real team, then show "
                 "value or route to a specialist. Never claim to be human, "
                 "never invent a persona."
                 + (f" Suggested: {' | '.join(pool[:1])}" if pool else ""))
@@ -731,13 +735,22 @@ class ResponsePlanner:
                     if hit:
                         lines.append(
                             "[web standards — TAGGED DATA about WORLD "
-                            "standards only, never an AmanCore claim] "
+                            "standards only, never an AmanCode claim] "
                             + ", ".join(hit)
                             + " — name the standard as a reference, state "
                               "NO compliance/self-certification for us, and "
                               "route any assurance wording to our team.")
             except Exception:  # noqa: BLE001 — standards slice never breaks
                 pass
+
+        # 11) Consultation & Meeting Intent Detection
+        if _CONSULTATION_RE.search(text):
+            plan["is_consultation_request"] = True
+            lines.append(
+                "Consultation & Meeting request detected: Warmly offer to schedule a consultation / discovery meeting. "
+                "Mention that our engineering team provides direct meetings (Google Meet / Jitsi) within working hours "
+                "(10:00 - 20:00). Ask for their preferred time or date to confirm their booking slot."
+            )
 
         if not lines:
             return brief

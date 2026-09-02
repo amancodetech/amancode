@@ -44,7 +44,7 @@ class StandardsWebPackTest(unittest.TestCase):
 
     def test_no_compliance_self_assertion_strings(self):
         raw = PACK.read_text()
-        banned = ["AmanCore متوافق", "متوافقون مع", "we are compliant",
+        banned = ["AmanCode متوافق", "متوافقون مع", "we are compliant",
                   "certified by us", "نضمن الامتثال"]
         for b in banned:
             self.assertNotIn(b, raw.lower())
@@ -73,7 +73,7 @@ class StandardsWebPackTest(unittest.TestCase):
         self.assertGreaterEqual(i, 0)
         seg = brief[i:]
         self.assertIn("OWASP Top10:2025", seg)
-        self.assertIn("never an AmanCore claim", seg)
+        self.assertIn("never an AmanCode claim", seg)
         self.assertIn("route any assurance wording to our team", seg)
 
     def test_neutral_conversation_zero_default_growth(self):

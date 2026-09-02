@@ -1,4 +1,4 @@
--- AmanCore Foundation schema (SQLite)
+-- AmanCode Foundation schema (SQLite)
 -- All ids are 32-hex UUID strings. Timestamps are ISO-8601 UTC strings.
 
 PRAGMA foreign_keys = ON;
@@ -552,7 +552,7 @@ CREATE TABLE IF NOT EXISTS channel_ai_settings (
 );
 
 -- ── Bridge migration (owner spec §40) — additive only ────────────────────────
--- Ownership: AmanCore owns business state; the bridge owns platform session
+-- Ownership: AmanCode owns business state; the bridge owns platform session
 -- state (secrets stay in bridge session dirs, NEVER in these tables);
 -- the browser agent owns temporary runtime state.
 
@@ -595,3 +595,208 @@ CREATE TABLE IF NOT EXISTS browser_tasks (
 );
 CREATE INDEX IF NOT EXISTS idx_browser_tasks_status ON browser_tasks(status);
 CREATE INDEX IF NOT EXISTS idx_provider_health_state ON provider_health(state);
+
+-- ── Social Comments & Moderation Engine ──────────────────────────────────────
+CREATE TABLE IF NOT EXISTS social_comments (
+    comment_id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,              -- facebook | instagram | tiktok
+    post_id TEXT,
+    post_caption TEXT,
+    commenter_id TEXT,
+    commenter_name TEXT,
+    comment_text TEXT NOT NULL,
+    intent TEXT,                        -- INQUIRY_PRICING | INQUIRY_SERVICE | PRAISE | GENERAL_QUESTION | SPAM_OR_OFFENSIVE
+    sentiment TEXT,                     -- positive | neutral | negative | toxic
+    public_reply TEXT,
+    dm_message TEXT,
+    action_taken TEXT,                  -- REPLIED_AND_LIKED | DM_SENT | HIDDEN | DELETED | FLAGGED_FOR_REVIEW | IGNORED
+    is_offensive INTEGER NOT NULL DEFAULT 0,
+    reviewed_by TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_social_comments_channel ON social_comments(channel);
+CREATE INDEX IF NOT EXISTS idx_social_comments_intent ON social_comments(intent);
+CREATE INDEX IF NOT EXISTS idx_social_comments_offensive ON social_comments(is_offensive);
+
+-- ── Consultations & Meetings Engine ──────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS consultations (
+    id TEXT PRIMARY KEY,
+    consultation_id TEXT UNIQUE,
+    customer_id TEXT,
+    customer_name TEXT,
+    customer_phone TEXT,
+    customer_email TEXT,
+    source_platform TEXT NOT NULL DEFAULT 'whatsapp',
+    meeting_type TEXT NOT NULL DEFAULT 'GOOGLE_MEET',
+    service TEXT,
+    scheduled_at TEXT NOT NULL,
+    timezone TEXT NOT NULL DEFAULT 'Asia/Makassar',
+    duration_minutes INTEGER NOT NULL DEFAULT 30,
+    meeting_url TEXT,
+    status TEXT NOT NULL DEFAULT 'CONFIRMED',
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    cancelled_at TEXT,
+    completed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_consultations_scheduled_at ON consultations(scheduled_at);
+CREATE INDEX IF NOT EXISTS idx_consultations_status ON consultations(status);
+CREATE INDEX IF NOT EXISTS idx_consultations_customer ON consultations(customer_id);
+
+CREATE TABLE IF NOT EXISTS consultation_events (
+    event_id TEXT PRIMARY KEY,
+    consultation_id TEXT NOT NULL REFERENCES consultations(id) ON DELETE CASCADE,
+    event_type TEXT NOT NULL,
+    metadata TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_consultation_events_cid ON consultation_events(consultation_id);
+CREATE INDEX IF NOT EXISTS idx_consultation_events_type ON consultation_events(event_type);
+
+-- ── Requirements Intelligence Layer (RIL) ───────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS requirements (
+    requirement_id TEXT PRIMARY KEY,
+    project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+    lead_id TEXT NOT NULL REFERENCES leads(lead_id) ON DELETE CASCADE,
+    conversation_id TEXT REFERENCES conversations(conversation_id) ON DELETE SET NULL,
+    parent_requirement_id TEXT REFERENCES requirements(requirement_id) ON DELETE SET NULL,
+    
+    category TEXT NOT NULL,          -- core_module | integration | ui_ux | workflow | security | localization | infrastructure | constraint
+    subcategory TEXT,               -- catalog | checkout | payments | messaging | erp_accounting | ...
+
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+
+    priority TEXT NOT NULL DEFAULT 'must_have',  -- must_have | should_have | nice_to_have
+    status TEXT NOT NULL DEFAULT 'captured',     -- captured | clarified | approved | estimated | in_progress | delivered | rejected
+
+    certainty TEXT NOT NULL DEFAULT 'explicit',  -- explicit | inferred | system_generated
+    confidence REAL NOT NULL DEFAULT 1.0,
+
+    source_message_id TEXT,
+    source_conversation_id TEXT,
+
+    acceptance_criteria TEXT,
+    technical_spec TEXT,
+
+    is_customer_requested INTEGER NOT NULL DEFAULT 1,
+    is_system_inferred INTEGER NOT NULL DEFAULT 0,
+
+    first_seen_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_requirements_lead ON requirements(lead_id);
+CREATE INDEX IF NOT EXISTS idx_requirements_project ON requirements(project_id);
+CREATE INDEX IF NOT EXISTS idx_requirements_category ON requirements(category);
+CREATE INDEX IF NOT EXISTS idx_requirements_status ON requirements(status);
+CREATE INDEX IF NOT EXISTS idx_requirements_certainty ON requirements(certainty);
+
+CREATE TABLE IF NOT EXISTS requirement_conflicts (
+    conflict_id TEXT PRIMARY KEY,
+    lead_id TEXT NOT NULL REFERENCES leads(lead_id) ON DELETE CASCADE,
+    project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+    requirement_a_id TEXT NOT NULL REFERENCES requirements(requirement_id) ON DELETE CASCADE,
+    requirement_b_id TEXT NOT NULL REFERENCES requirements(requirement_id) ON DELETE CASCADE,
+    conflict_type TEXT NOT NULL,      -- mutual_exclusion | scope_contradiction | logic_mismatch | resource_conflict
+    explanation TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open', -- open | resolved | dismissed
+    resolution TEXT,
+    created_at TEXT NOT NULL,
+    resolved_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_req_conflicts_lead ON requirement_conflicts(lead_id);
+CREATE INDEX IF NOT EXISTS idx_req_conflicts_status ON requirement_conflicts(status);
+
+CREATE TABLE IF NOT EXISTS project_decisions (
+    decision_id TEXT PRIMARY KEY,
+    lead_id TEXT NOT NULL REFERENCES leads(lead_id) ON DELETE CASCADE,
+    project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+    
+    topic TEXT NOT NULL,              -- currency | languages | payment_gateway | launch_target | architecture | tier
+    decision TEXT NOT NULL,           -- e.g. 'IDR', 'Indonesian + English', 'Midtrans', 'Website System Starter'
+    rationale TEXT,
+
+    source_message_id TEXT,
+    decided_by TEXT NOT NULL DEFAULT 'customer', -- customer | owner | mutual | system
+
+    status TEXT NOT NULL DEFAULT 'active',       -- active | superseded | revoked
+
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_proj_decisions_lead ON project_decisions(lead_id);
+CREATE INDEX IF NOT EXISTS idx_proj_decisions_topic ON project_decisions(topic);
+
+CREATE TABLE IF NOT EXISTS open_questions (
+    question_id TEXT PRIMARY KEY,
+    lead_id TEXT NOT NULL REFERENCES leads(lead_id) ON DELETE CASCADE,
+    project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+    requirement_id TEXT REFERENCES requirements(requirement_id) ON DELETE SET NULL,
+
+    question TEXT NOT NULL,
+    reason TEXT,
+
+    priority INTEGER NOT NULL DEFAULT 50, -- 1-100 calculated from Business Impact * Missingness * Ambiguity
+    category TEXT,                        -- scoping | integration | budget | timeline | design | workflow
+
+    status TEXT NOT NULL DEFAULT 'open',  -- open | asked | answered | dismissed
+
+    asked_at TEXT,
+    answered_at TEXT,
+    answer_message_id TEXT,
+
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_open_questions_lead ON open_questions(lead_id);
+CREATE INDEX IF NOT EXISTS idx_open_questions_status ON open_questions(status);
+CREATE INDEX IF NOT EXISTS idx_open_questions_priority ON open_questions(priority);
+
+CREATE TABLE IF NOT EXISTS project_scopes (
+    scope_id TEXT PRIMARY KEY,
+    lead_id TEXT NOT NULL REFERENCES leads(lead_id) ON DELETE CASCADE,
+    project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+    current_version_number INTEGER NOT NULL DEFAULT 1,
+    tier TEXT,                            -- website | web_app | mini_erp | mobile | care_plan
+    summary TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_project_scopes_lead ON project_scopes(lead_id);
+
+CREATE TABLE IF NOT EXISTS scope_versions (
+    version_id TEXT PRIMARY KEY,
+    scope_id TEXT NOT NULL REFERENCES project_scopes(scope_id) ON DELETE CASCADE,
+    version_number INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft', -- draft | presented | approved | superseded
+    total_estimated_hours REAL,
+    pricing_snapshot_id TEXT REFERENCES pricing_snapshots(snapshot_id) ON DELETE SET NULL,
+    assumptions TEXT,                    -- JSON array
+    exclusions TEXT,                     -- JSON array
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(scope_id, version_number)
+);
+CREATE INDEX IF NOT EXISTS idx_scope_versions_scope ON scope_versions(scope_id);
+
+CREATE TABLE IF NOT EXISTS scope_items (
+    item_id TEXT PRIMARY KEY,
+    version_id TEXT NOT NULL REFERENCES scope_versions(version_id) ON DELETE CASCADE,
+    requirement_id TEXT REFERENCES requirements(requirement_id) ON DELETE SET NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    deliverable TEXT,
+    complexity TEXT NOT NULL DEFAULT 'standard', -- simple | standard | complex
+    is_included INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_scope_items_version ON scope_items(version_id);
+
+
+

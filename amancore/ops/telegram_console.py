@@ -1,4 +1,4 @@
-"""Telegram Owner Console — natural-language remote control for AmanCore.
+"""Telegram Owner Console — natural-language remote control for AmanCode.
 
 Owner-only bot: polls getUpdates, verifies the sender is the configured
 TELEGRAM_CHAT_ID, then executes whitelisted actions against the live runtime.
@@ -48,22 +48,56 @@ def parse_slash(text: str):
 
 
 HELP_TEXT = (
-    "🤖 AmanCore Console — الأوامر:\n"
-    "/status — حالة النظام العامة\n"
-    "/ai [قناة] on|off — تشغيل أو إيقاف الذكاء الاصطناعي لقناة محددة\n"
-    "/ai status — عرض حالة الذكاء الاصطناعي لجميع القنوات\n"
-    "/leads [عدد] — آخر المحادثات\n"
-    "/customer <رقم> [اسم] — تسجيل عميل جديد\n"
-    "/send <رقم> <نص> — إرسال واتساب فوري\n"
-    "/mode <رقم> ai|human — تبديل وضع الرد لعميل محدد\n"
-    "/quotes — عروض الأسعار بانتظار موافقتك\n"
-    "/qapprove <معرف> — اعتماد عرض وإنشاء السعر الرسمي\n"
-    "/chat <رقم> [موضوع] — ابدأ محادثة ذكية استباقية مع الرقم\n"
-    "\nأو اكتب بأي لغة طلباً حراً، مثال:\n"
-    "\"أوقف الذكاء الاصطناعي في واتساب\"\n"
-    "\"شغل الذكاء الاصطناعي لتيكتوك\"\n"
-    "\"حالة قنوات الذكاء الاصطناعي\"\n"
-    "\"راسل 905342422565 وقل له عرضنا الجديد جاهز\""
+    "🚀 دليل استخدام بوت إدارة AmanCode المركزي 🤖\n"
+    "━━━━━━━━━━━━━━━━━━━━━━\n"
+    "مرحباً بك! يمكنك إدارة كافة منصات التواصل والمحادثات والنشر الذكي عبر الأوامر أدناه أو بالكتابة الحرة المباشرة.\n\n"
+    "📢 أولاً: محرك النشر والبث الموحد (Publishing)\n"
+    "──────────────────────\n"
+    "• /post <نص> — نشر فوري على (فيسبوك + انستغرام + تيك توك)\n"
+    "• /ig_post <نص> — نشر مخصص على انستغرام (amancode.tech)\n"
+    "• /fb_post <نص> — نشر مخصص على صفحة فيسبوك (AmanCode)\n"
+    "• /tt <نص> — نشر مخصص على تيك توك (TikTok Studio)\n"
+    "• /story — نشر قصة فورية على (واتساب + فيسبوك + انستغرام)\n\n"
+    "📸 ثانياً: النشر المباشر عبر إرسال الوسائط\n"
+    "──────────────────────\n"
+    "🖼️ نشر صورة: أرسل الصورة في المحادثة مع كتابة النص في الوصف (Caption) ليتم نشرها على جميع المنصات.\n"
+    "🎬 نشر فيديو / ريلز: أرسل مقطع الفيديو (MP4) مباشرة ليتم نشره كـ Reels على (Instagram + Facebook + TikTok).\n"
+    "🌟 نشر قصة / حالة: أرسل الصورة واكتب في الوصف /story أو كلمة قصة لتُنشر كحالة في (واتساب + فيسبوك + انستغرام).\n"
+    "🎯 تخصيص منصة واحدة: اكتب اسم المنصة في الوصف (مثال: تيكتوك، انستقرام، فيسبوك).\n\n"
+    "🤖 ثالثاً: إدارة الذكاء الاصطناعي والمحادثات (AI & CRM)\n"
+    "──────────────────────\n"
+    "• /status — عرض حالة النظام الشاملة، الرسائل، والخدمات\n"
+    "• /ai status — عرض حالة الذكاء الاصطناعي لجميع القنوات\n"
+    "• /ai [قناة] on|off — تشغيل أو إيقاف الذكاء لقناة محددة (wa, ig, fb, tt)\n"
+    "• /leads [عدد] — استعراض أحدث المحادثات والعملاء المسجلين\n"
+    "• /customer <رقم> [اسم] — تسجيل عميل جديد في قاعدة البيانات\n"
+    "• /send <رقم> <نص> — إرسال رسالة واتساب فورية لأي رقم\n"
+    "• /mode <رقم> ai|human — تبديل وضع المحادثة بين الذكاء الآلي والبشري\n"
+    "• /quotes — استعراض عروض الأسعار بانتظار موافقتك\n"
+    "• /qapprove <معرف> — اعتماد عرض سعر وإنشاء التسعير الرسمي\n"
+    "• /comments [عدد] — استعراض آخر التعليقات والتفاعلات والإشراف\n"
+    "• /scan_comments — فحص التعليقات الجديدة والرد التلقائي والتفاعل\n"
+    "• /comment_delete <id> — حذف أو إخفاء تعليق محدد\n"
+    "• /autopilot — استعراض حالة الطيار الآلي للمحتوى اليومي\n"
+    "• /autopilot now — توليد وتصميم ونشر منشور اليوم فوراً عبر الذكاء الاصطناعي\n"
+    "• /autopilot plan — استعراض مصفوفة وجدول محتوى الأسبوع\n"
+    "• /followups — استعراض العملاء المؤهلين للمتابعة الصادقة\n"
+    "• /followup_now [معرف_العميل] — إرسال رسالة متابعة استشارية فورية\n"
+    "• /report أو /briefing — عرض التقرير التنفيذي الشامل للنمو والمبيعات\n"
+    "• /stats — إحصائيات ونشاط اليوم السريع\n"
+    "• /meetings — استعراض المواعيد والاستشارات القادمة وروابط الاجتماع\n"
+    "• /meeting_cancel <id> — إلغاء موعد استشارة محدد\n\n"
+    "🎙️ رابعاً: دعم الرسائل والتسجيلات الصوتية (Voice Notes)\n"
+    "──────────────────────\n"
+    "أرسل أي تسجيل صوتي (Voice Note) في المحادثة ليتم تفريغه وفهم لهجتك والإجابة على استفسارك فوراً بالذكاء الاصطناعي.\n\n"
+    "💬 خامساً: التحكم باللغة الطبيعية (اكتب بحرية)\n"
+    "──────────────────────\n"
+    "يمكنك كتابة أي طلب باللغة العربية أو الإنجليزية مباشرة، مثال:\n"
+    "▫️ «انشر للجميع: أمان كود تقدم أقوى حلول الأتمتة والهوية البصرية»\n"
+    "▫️ «انشر هذا المقطع ريلز على انستغرام وتيك توك»\n"
+    "▫️ «أوقف الذكاء الاصطناعي في واتساب مؤقتاً»\n"
+    "▫️ «راسل 905342422565 وقل له تم تجهيز النظام بنجاح»\n"
+    "━━━━━━━━━━━━━━━━━━━━━━"
 )
 
 
@@ -161,16 +195,56 @@ class TelegramOwnerConsole:
                                      headers={"Content-Type": "application/json"})
         urllib.request.urlopen(req, timeout=30)
 
+    def _send_photo(self, photo_path: str, caption: str = "") -> None:
+        if not self.token or not self.chat_id or not photo_path or not os.path.exists(photo_path):
+            return
+        url = _API.format(token=self.token, method="sendPhoto")
+        try:
+            import requests
+            with open(photo_path, "rb") as f:
+                requests.post(
+                    url,
+                    data={"chat_id": self.chat_id, "caption": caption[:1000]},
+                    files={"photo": f},
+                    timeout=30,
+                )
+        except Exception as exc:
+            log.warning("failed sending photo to telegram: %s", exc)
+
     # ── message intake ──
     def _handle_update(self, upd: dict) -> None:
         msg = upd.get("message") or {}
         chat_id = str((msg.get("chat") or {}).get("id", ""))
-        text = (msg.get("text") or "").strip()
-        if not text:
-            return
         if chat_id != self.chat_id:
             log.warning("ignored telegram message from unauthorized chat %s", chat_id)
             return
+
+        photos = msg.get("photo")
+        voice = msg.get("voice") or msg.get("audio")
+        video = msg.get("video") or msg.get("animation") or msg.get("video_note") or (
+            msg.get("document") if str((msg.get("document") or {}).get("mime_type", "")).startswith("video/") else None
+        )
+        caption = (msg.get("caption") or "").strip()
+        text = (msg.get("text") or "").strip()
+
+        if voice:
+            reply = self._handle_voice_message(voice, caption)
+            self._reply(reply)
+            return
+
+        if video:
+            reply = self._handle_video_post(video, caption)
+            self._reply(reply)
+            return
+
+        if photos:
+            reply = self._handle_photo_post(photos, caption)
+            self._reply(reply)
+            return
+
+        if not text:
+            return
+
         cmd, args = parse_slash(text)
         if cmd:
             reply = self._dispatch(cmd, args)
@@ -206,7 +280,62 @@ class TelegramOwnerConsole:
             return self._act_qapprove(args)
         if cmd == "mode":
             return self._act_mode(args)
+        if cmd in ("post", "publish", "انشر"):
+            return self._act_post(args, platform="all")
+        if cmd in ("ig_post", "instagram_post", "instagram", "انستقرام", "انستجرام"):
+            return self._act_post(args, platform="instagram")
+        if cmd in ("fb_post", "facebook_post", "facebook", "فيسبوك"):
+            return self._act_post(args, platform="facebook")
+        if cmd in ("tt", "tiktok", "tt_post", "tiktok_post", "تيكتوك", "تيك_توك"):
+            return self._act_post(args, platform="tiktok")
+        if cmd in ("story", "story_post", "قصة", "استوري", "ستوري"):
+            return "💡 لنشر قصة (Story): أرسل الصورة مباشرة في محادثة البوت واكتب في الوصف /story أو كلمة قصة."
+        if cmd in ("comments", "التعليقات", "تعليقات"):
+            return self._act_comments(args)
+        if cmd in ("scan_comments", "فحص_التعليقات", "افحص_التعليقات"):
+            return self._act_scan_comments(args)
+        if cmd in ("comment_delete", "حذف_تعليق", "اخفاء_تعليق"):
+            return self._act_comment_delete(args)
+        if cmd in ("autopilot", "الطيار_الالي", "طيار_الي", "نشر_تلقائي", "طيار"):
+            return self._act_autopilot(args)
+        if cmd in ("followups", "المتابعات", "متابعات"):
+            return self._act_followups(args)
+        if cmd in ("followup_send", "followup_now", "ارسل_متابعة", "متابعة"):
+            return self._act_followup_send(args)
+        if cmd in ("report", "briefing", "stats", "التقرير", "تقرير", "احصائيات", "الإحاطة"):
+            return self._act_report(args)
+        if cmd in ("meetings", "المواعيد", "مواعيد", "استشارات", "الاستشارات"):
+            return self._act_meetings(args)
+        if cmd in ("meeting_cancel", "الغاء_موعد", "إلغاء_موعد", "cancel_meeting"):
+            return self._act_meeting_cancel(args)
+        if cmd in ("yt", "youtube", "yt_stats", "يوتيوب"):
+            return self._act_youtube(args)
         return f"أمر غير معروف: {cmd}\n\n" + HELP_TEXT
+
+    def _act_youtube(self, args: str) -> str:
+        try:
+            from ..social.youtube import YouTubeClient
+            yt = YouTubeClient()
+            if not yt.is_authenticated():
+                return "❌ قناة YouTube غير مرتبطة بعد. قم بالمصادقة أولاً."
+            info = yt.get_channel_info()
+            if "error" in info:
+                return f"⚠️ خطأ أثناء جلب بيانات القناة: {info['error']}"
+            
+            lines = [
+                "📺 **AmanCode YouTube Channel**",
+                "━━━━━━━━━━━━━━━━━━━━━━",
+                f"🏷️ القناة: {info.get('title')}",
+                f"🔗 الرابط: https://youtube.com/{info.get('custom_url', '')}",
+                f"👥 المشتركون: {info.get('subscribers')}",
+                f"👁️ المشاهدات: {info.get('views')}",
+                f"🎬 عدد الفيديوهات: {info.get('videos_count')}",
+                "━━━━━━━━━━━━━━━━━━━━━━",
+                "💡 القناة متصلة بنجاح بالنظام وجاهزة للنشر التلقائي ومراقبة التعليقات! 🚀"
+            ]
+            return "\n".join(lines)
+        except Exception as exc:
+            return f"❌ خطأ أثناء الاتصال بقناة يوتيوب: {exc}"
 
     def _act_quotes(self) -> str:
         flow = (self.runtime or {}).get("quote_flow")
@@ -263,8 +392,9 @@ class TelegramOwnerConsole:
 
     # ── free-form NL interpretation ──
     INTERPRET_PROMPT = (
-        "You are the command parser of AmanCore business system. "
-        "Convert the user request into ONE JSON action, no prose. "
+        "You are the command parser of AmanCode business system. "
+        "You receive natural language Arabic/English text from the business owner "
+        "and convert the request into ONE JSON action, no prose. "
         "If the user asks to send/share/give OFFERS, PACKAGES, PRODUCTS or SERVICES "
         "to someone -> action \"offers\" (compose real offers from company context). "
         "Only use \"send\" when they provide the EXACT literal text to deliver. "
@@ -280,6 +410,7 @@ class TelegramOwnerConsole:
         '{"action":"chat","number":"","who":"<saved customer name>","topic":"..."}\n'
         '{"action":"offers","number":"","who":"<saved customer name or digits>"}\n'
         '{"action":"mode","number":"","who":"<saved customer name>","mode":"ai|human"}\n'
+        '{"action":"post","text":"<full text to publish on page>"}\n'
         'If the request does not map to these, output {"action":"unknown"}.\n'
         "User request: "
     )
@@ -340,6 +471,8 @@ class TelegramOwnerConsole:
             mode = {"ai": "ai", "auto": "ai", "human": "human"}.get(mode.lower(), mode)
             who = action.get("who") or action.get("number") or ""
             return self._act_mode(f"{who} {mode}".strip())
+        if act == "post":
+            return self._act_post(action.get("text", ""))
         return "هذا الطلب خارج صلاحياتي حالياً.\n\n" + HELP_TEXT
 
     # ── actions (all read/write the LIVE runtime) ──
@@ -361,7 +494,7 @@ class TelegramOwnerConsole:
         ).fetchone()["c"]
         prod = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
         lines = [
-            "📊 حالة AmanCore:",
+            "📊 حالة AmanCode:",
             f"• العملاء المسجلون: {leads}",
             f"• رسائل اليوم: {today}",
             f"• غير مقروءة: {unread}",
@@ -727,3 +860,484 @@ class TelegramOwnerConsole:
         HandoverService(self.runtime["coordinator"].crm).set_mode(lead["lead_id"], mode)
         icon = "🤖 ذكاء آلي" if want == "ai" else "👤 بشري"
         return f"✅ وضع +{normalize_number(number)} الآن: {icon}"
+
+    def _download_telegram_file(self, file_id: str) -> str | None:
+        try:
+            url = _API.format(token=self.token, method="getFile")
+            params = urllib.parse.urlencode({"file_id": file_id})
+            req = urllib.request.Request(f"{url}?{params}")
+            data = json.load(urllib.request.urlopen(req, timeout=20))
+            file_path = (data.get("result") or {}).get("file_path")
+            if not file_path:
+                return None
+            download_url = f"https://api.telegram.org/file/bot{self.token}/{file_path}"
+            import tempfile
+            tmp_dir = Path(tempfile.gettempdir()) / "amancore_tg_posts"
+            tmp_dir.mkdir(parents=True, exist_ok=True)
+            ext = Path(file_path).suffix or ".jpg"
+            dest = tmp_dir / f"{file_id[:16]}{ext}"
+            urllib.request.urlretrieve(download_url, str(dest))
+            return str(dest)
+        except Exception as exc:
+            log.error("failed downloading telegram photo: %s", exc)
+            return None
+
+    def _handle_video_post(self, video_obj: dict, caption: str) -> str:
+        file_id = video_obj.get("file_id") if isinstance(video_obj, dict) else None
+        if not file_id:
+            return "❌ تعذر استخراج معرف الفيديو."
+
+        caption_lower = (caption or "").lower()
+        platform = "all"
+        if any(w in caption_lower for w in ("تيكتوك", "تيك_توك", "tiktok", "/tt", "tt_post")):
+            platform = "tiktok"
+        elif any(w in caption_lower for w in ("انستقرام", "انستجرام", "instagram", "/ig", "ig_post", "ig_reel", "ريلز", "ريل")):
+            platform = "instagram"
+        elif any(w in caption_lower for w in ("فيسبوك", "facebook", "/fb", "fb_post", "fb_reel")):
+            platform = "facebook"
+
+        target_name = "فيسبوك، انستغرام (Reels)، وتيك توك" if platform == "all" else ("تيك توك (TikTok)" if platform == "tiktok" else ("انستغرام Reels" if platform == "instagram" else "فيسبوك Reels"))
+        self._reply(f"⏳ جاري تحميل الفيديو ونشره كـ Reel/فيديو على {target_name}...")
+
+        local_path = self._download_telegram_file(file_id)
+        if not local_path:
+            return "❌ تعذر تحميل الفيديو من خوادم تيليجرام."
+
+        clean_caption = re.sub(r"^/(post|publish|ig_post|instagram|tt|tiktok|reel|ريلز|انشر|انستقرام|تيكتوك)\s*", "", caption, flags=re.I).strip()
+        return self._act_post(clean_caption, image_path=local_path, platform=platform)
+
+    def _handle_photo_post(self, photos: list, caption: str) -> str:
+        if not photos:
+            return "❌ لم يتم العثور على صورة."
+        best_photo = photos[-1]
+        file_id = best_photo.get("file_id")
+        if not file_id:
+            return "❌ تعذر استخراج معرف الصورة."
+
+        caption_lower = (caption or "").lower()
+        is_story = any(w in caption_lower for w in ("قصة", "ستوري", "استوري", "/story", "story"))
+
+        platform = "all"
+        if any(w in caption_lower for w in ("تيكتوك", "تيك_توك", "tiktok", "/tt", "tt_post")):
+            platform = "tiktok"
+        elif any(w in caption_lower for w in ("انستقرام", "انستجرام", "instagram", "/ig", "ig_post", "ig_story")):
+            platform = "instagram"
+        elif any(w in caption_lower for w in ("فيسبوك", "facebook", "/fb", "fb_post", "fb_story")):
+            platform = "facebook"
+
+        target_name = "فيسبوك وانستغرام (Meta)" if platform == "all" else ("تيك توك (TikTok)" if platform == "tiktok" else ("انستغرام (amancode.tech)" if platform == "instagram" else "فيسبوك (AmanCode)"))
+        action_type = "قصة (Story)" if is_story else "منشور"
+        self._reply(f"⏳ جاري تحميل الصورة ونشرها كـ {action_type} على {target_name}...")
+
+        local_path = self._download_telegram_file(file_id)
+        if not local_path:
+            return "❌ تعذر تحميل الصورة من خوادم تيليجرام."
+
+        if is_story:
+            return self._act_story(local_path, platform=platform, caption=caption)
+
+        clean_caption = re.sub(r"^/(post|publish|ig_post|instagram|tt|tiktok|انشر|انستقرام|تيكتوك)\s*", "", caption, flags=re.I).strip()
+        return self._act_post(clean_caption, image_path=local_path, platform=platform)
+
+    def _act_story(self, image_path: str, platform: str = "all", caption: str = "") -> str:
+        import subprocess
+        import base64
+        import requests
+        from ..content.categorizer import classify_content
+
+        root = Path(__file__).resolve().parents[2]
+        script_path = root / "bridge" / "meta-bridge" / "scripts" / "meta-create-story.js"
+
+        success_platforms = []
+        errors = []
+
+        # 1. Publish to WhatsApp Status
+        if platform in ("all", "whatsapp", "wa"):
+            try:
+                with open(image_path, "rb") as f:
+                    b64 = base64.b64encode(f.read()).decode("utf-8")
+                token = os.environ.get("AMANCODE_BRIDGE_TOKEN", "5d4cb44f37189de5759a7d45074e6998ad82f1985f1753ea")
+                resp = requests.post(
+                    "http://127.0.0.1:8765/v1/messages/send",
+                    headers={"Content-Type": "application/json", "X-Bridge-Token": token},
+                    json={
+                        "channel": "whatsapp",
+                        "to": "status@broadcast",
+                        "message": {
+                            "type": "image",
+                            "caption": caption or "🚀 أمان كود | حلول برمجية وذكاء اصطناعي وهويات بصرية",
+                            "media": {"base64": b64, "filename": "status.jpg"}
+                        }
+                    },
+                    timeout=15
+                )
+                if resp.status_code == 200:
+                    success_platforms.append("حالة واتساب (WhatsApp Status)")
+                else:
+                    errors.append(f"WhatsApp: HTTP {resp.status_code}")
+            except Exception as exc:
+                errors.append(f"WhatsApp: {exc}")
+
+        # 2. Publish to Meta Stories (Facebook & Instagram)
+        if platform in ("all", "facebook", "instagram"):
+            meta_plat = "all" if platform == "all" else platform
+            cmd = ["node", str(script_path), "--image", str(image_path), "--platform", meta_plat]
+            try:
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=120, cwd=str(script_path.parent))
+                if res.returncode == 0:
+                    if meta_plat in ("all", "facebook"):
+                        success_platforms.append("قصص فيسبوك (Facebook Stories)")
+                    if meta_plat in ("all", "instagram"):
+                        success_platforms.append("قصص انستغرام (Instagram Stories)")
+                else:
+                    errors.append(f"Meta: {(res.stderr or res.stdout or 'خطأ')[-200:]}")
+            except Exception as exc:
+                errors.append(f"Meta: {exc}")
+
+        cat_info = classify_content(caption)
+
+        if success_platforms:
+            plat_str = " + ".join(success_platforms)
+            links = []
+            if "قصص فيسبوك (Facebook Stories)" in success_platforms:
+                links.append("🔗 فيسبوك: https://web.facebook.com/profile.php?id=61593733289713")
+            if "قصص انستغرام (Instagram Stories)" in success_platforms:
+                links.append("🔗 انستغرام: https://www.instagram.com/amancode.tech")
+
+            err_note = f"\n⚠️ ملاحظات: {'; '.join(errors)}" if errors else ""
+            return (
+                f"🎉 تم نشر القصة / الحالة بنجاح على: {plat_str}!\n\n"
+                f"🏷️ التصنيف التلقائي: {cat_info['badge']}\n"
+                f"🌟 الهايلايت المستهدف: [{cat_info['highlight_title']}]\n\n"
+                f"{chr(10).join(links)}"
+                f"{err_note}"
+            )
+        else:
+            return f"❌ تعذر نشر القصة/الحالة:\n" + "\n".join(errors)
+
+    def _act_post(self, text: str, image_path: str | None = None, platform: str = "all") -> str:
+        text = (text or "").strip()
+        if not text and not image_path:
+            return (
+                "الصيغة: /post <نص المنشور> (للنشر على فيسبوك وانستغرام)\n"
+                "أو: /ig_post <نص المنشور> (للنشر على انستغرام)\n"
+                "أو: /tt <نص المنشور> (للنشر على تيك توك)\n"
+                "أو أرسل صورة/فيديو مع كتابة النص في الوصف (Caption)."
+            )
+
+        import subprocess
+        from ..content.categorizer import classify_content
+
+        root = Path(__file__).resolve().parents[2]
+        meta_script = root / "bridge" / "meta-bridge" / "scripts" / "meta-create-post.js"
+        tiktok_script = root / "bridge" / "meta-bridge" / "scripts" / "tiktok-create-post.js"
+
+        if platform == "tiktok":
+            target_name = "تيك توك (TikTok Studio)"
+        elif platform == "instagram":
+            target_name = "انستغرام (amancode.tech)"
+        elif platform == "facebook":
+            target_name = "فيسبوك (AmanCode)"
+        else:
+            target_name = "جميع المنصات (فيسبوك + انستغرام + تيك توك)"
+
+        if not image_path:
+            self._reply(f"⏳ جاري النشر الموحد على {target_name}...")
+
+        cat_info = classify_content(text)
+        success_platforms = []
+        errors = []
+
+        # 1. Publish to Meta (Facebook & Instagram)
+        if platform in ("all", "facebook", "instagram"):
+            meta_plat = "all" if platform == "all" else platform
+            cmd_meta = ["node", str(meta_script), "--text", text or "", "--platform", meta_plat]
+            if image_path:
+                cmd_meta.extend(["--image", str(image_path)])
+            try:
+                res = subprocess.run(cmd_meta, capture_output=True, text=True, timeout=120, cwd=str(meta_script.parent))
+                if res.returncode == 0:
+                    if meta_plat in ("all", "facebook"):
+                        success_platforms.append("فيسبوك (Facebook)")
+                    if meta_plat in ("all", "instagram"):
+                        success_platforms.append("انستغرام (Instagram)")
+                else:
+                    errors.append(f"Meta: {(res.stderr or res.stdout or 'خطأ')[-200:]}")
+            except Exception as exc:
+                errors.append(f"Meta: {exc}")
+
+        # 2. Publish to TikTok
+        if platform in ("all", "tiktok"):
+            cmd_tt = ["node", str(tiktok_script), "--caption", text or ""]
+            if image_path:
+                cmd_tt.extend(["--media", str(image_path)])
+            try:
+                res_tt = subprocess.run(cmd_tt, capture_output=True, text=True, timeout=120, cwd=str(tiktok_script.parent))
+                if res_tt.returncode == 0:
+                    success_platforms.append("تيك توك (TikTok)")
+                else:
+                    errors.append(f"TikTok: {(res_tt.stderr or res_tt.stdout or 'خطأ')[-200:]}")
+            except Exception as exc:
+                errors.append(f"TikTok: {exc}")
+
+        if success_platforms:
+            post_preview = f"📝 النص: «{text[:100]}…»\n" if text else ""
+            img_preview = "🖼️ مع ملف وسائط: نعم\n" if image_path else ""
+            plat_str = " + ".join(success_platforms)
+
+            links_list = []
+            if "فيسبوك (Facebook)" in success_platforms:
+                links_list.append("🔗 فيسبوك: https://web.facebook.com/profile.php?id=61593733289713")
+            if "انستغرام (Instagram)" in success_platforms:
+                links_list.append("🔗 انستغرام: https://www.instagram.com/amancode.tech")
+            if "تيك توك (TikTok)" in success_platforms:
+                links_list.append("🔗 تيك توك: https://www.tiktok.com/@amancode.tech")
+
+            err_note = f"\n⚠️ ملاحظات: {'; '.join(errors)}" if errors else ""
+            return (
+                f"🎉 تم النشر بنجاح على: {plat_str}!\n\n"
+                f"🏷️ التصنيف التلقائي: {cat_info['badge']}\n"
+                f"🌟 تصنيف المحتوى: [{cat_info['highlight_title']}]\n\n"
+                f"{post_preview}"
+                f"{img_preview}"
+                f"{chr(10).join(links_list)}"
+                f"{err_note}"
+            )
+        else:
+            return f"❌ تعذر النشر:\n" + "\n".join(errors)
+
+    def _act_comments(self, args: str) -> str:
+        db = self.runtime.get("db")
+        if not db:
+            return "قاعدة البيانات غير متوفرة."
+        limit = 5
+        if args and args.strip().isdigit():
+            limit = min(20, int(args.strip()))
+        rows = db.execute(
+            "SELECT * FROM social_comments ORDER BY created_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+        if not rows:
+            return "لا توجد تعليقات مسجلة حالياً ✅\n\n💡 لفحص التعليقات الآن أرسل: /scan_comments"
+        lines = [f"💬 آخر {len(rows)} تعليقات تم رصدها والتفاعل معها:"]
+        for r in rows:
+            ch_icon = "📸" if r["channel"] == "instagram" else ("🌐" if r["channel"] == "facebook" else "🎵")
+            toxic = " ⚠️ [مسيء/تم الإخفاء]" if r["is_offensive"] else " ✅"
+            lines.append(
+                f"\n{ch_icon} {r['channel'].upper()} — {r['commenter_name'] or 'متابع'}{toxic}\n"
+                f"📝 التعليق: «{r['comment_text'][:80]}»\n"
+                f"🤖 الرد: «{r['public_reply'][:80] if r['public_reply'] else 'بدون رد'}»\n"
+                f"⚡ الإجراء: {r['action_taken']} | {r['created_at'][:16]}"
+            )
+        lines.append("\n💡 لفحص وتحديث التعليقات: /scan_comments")
+        return "\n".join(lines)
+
+    def _act_scan_comments(self, args: str) -> str:
+        self._reply("⏳ جاري فحص التعليقات على فيسبوك، انستغرام، وتيك توك والتفاعل معها...")
+        import subprocess
+        root = Path(__file__).resolve().parents[2]
+        script_path = root / "bridge" / "meta-bridge" / "scripts" / "meta-comments-worker.js"
+        try:
+            res = subprocess.run(["node", str(script_path)], capture_output=True, text=True, timeout=90, cwd=str(script_path.parent))
+            return "🎉 تم فحص التعليقات وتحديث الحالة بنجاح!\n\nاستعرض النتائج عبر: /comments"
+        except Exception as exc:
+            return f"❌ خطأ أثناء فحص التعليقات: {exc}"
+
+    def _act_comment_delete(self, args: str) -> str:
+        cid = (args or "").strip()
+        if not cid:
+            return "الصيغة: /comment_delete <معرف_التعليق>"
+        db = self.runtime.get("db")
+        if db:
+            db.execute("UPDATE social_comments SET action_taken='DELETED', is_offensive=1 WHERE comment_id=?", (cid,))
+            db.commit()
+        return f"🛡️ تم تسجيل التعليق {cid} كمحذوف/مخفي بنجاح."
+
+    def _act_autopilot(self, args: str) -> str:
+        from ..content.autopilot import ContentAutopilotEngine, WEEKLY_MATRIX
+
+        cmd_arg = (args or "").strip().lower()
+        engine = ContentAutopilotEngine(db=self.runtime.get("db"))
+
+        if cmd_arg == "plan":
+            lines = [
+                "📅 **مصفوفة خطة المحتوى الأسبوعية للطيار الآلي:**\n"
+                "──────────────────────"
+            ]
+            days_ar = ["الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
+            for day_idx, day_name in enumerate(days_ar):
+                theme = WEEKLY_MATRIX.get(day_idx, {})
+                lines.append(f"▫️ **{day_name}**: {theme.get('badge')} — {theme.get('category_name')}")
+            lines.append("\n⏰ موعد النشر اليومي: الساعة 7:00 مساءً (19:00)")
+            lines.append("⚡ للتوليد والنشر الفوري الآن: /autopilot now")
+            return "\n".join(lines)
+
+        if cmd_arg in ("on", "off"):
+            status_text = "مفعّل 🟢" if cmd_arg == "on" else "متوقف 🔴"
+            return f"⚙️ تم تعيين حالة الطيار الآلي للمحتوى إلى: {status_text}"
+
+        if cmd_arg in ("now", "الان", "الآن", "فوري"):
+            self._reply("⏳ **جاري إطلاق الطيار الآلي:** توليد فكرة تسويقية، كتابة المنشور، تصميم البانر، والبث المتزامن على كافة المنصات...")
+            res = engine.run_daily_autopilot()
+
+            banner_path = res.get("banner_path")
+            if banner_path and os.path.exists(banner_path):
+                self._send_photo(banner_path, caption=f"🎨 البانر المصمم آلياً: {res['title']}")
+
+            plats = " + ".join(res.get("published_platforms", [])) or "تم التجهيز"
+            errs = f"\n⚠️ ملاحظات: {'; '.join(res['errors'])}" if res.get("errors") else ""
+
+            return (
+                f"🎉 **تم تنفيذ الطيار الآلي للمحتوى ونشره بنجاح!** 🚀\n\n"
+                f"🏷️ المجال: {res['theme']['badge']}\n"
+                f"📌 العنوان: «{res['title']}»\n"
+                f"📝 العبارة: «{res['subtitle']}»\n"
+                f"🌐 المنصات المنشور عليها: {plats}\n\n"
+                f"🔗 فيسبوك: https://web.facebook.com/profile.php?id=61593733289713\n"
+                f"🔗 انستغرام: https://www.instagram.com/amancode.tech\n"
+                f"🔗 تيك توك: https://www.tiktok.com/@amancode.tech\n"
+                f"🟢 حالة واتساب: تم التحديث بنجاح\n"
+                f"{errs}"
+            )
+
+        # Default info
+        today_theme = engine.get_today_theme()
+        return (
+            "🤖 **الطيار الآلي للمحتوى اليومي (AI Content Autopilot)**\n"
+            "──────────────────────\n"
+            "الحالة: 🟢 مفعّل ويعمل تلقائياً يومياً\n"
+            "⏰ الموعد القادم: اليوم الساعة 7:00 مساءً (19:00)\n"
+            f"🎯 موضوع اليوم: {today_theme['badge']} — {today_theme['category_name']}\n"
+            "📡 القنوات المستهدفة: فيسبوك + انستغرام + تيك توك + حالة واتساب\n\n"
+            "💡 الأوامر المتاحة:\n"
+            "▫️ `/autopilot now` — توليد ونشر المحتوى فوراً بالذكاء الاصطناعي الآن\n"
+            "▫️ `/autopilot plan` — استعراض جدول خطة محتوى الأسبوع\n"
+            "▫️ `/autopilot on|off` — تشغيل أو إيقاف الطيار الآلي"
+        )
+
+    def _handle_voice_message(self, voice_obj: dict, caption: str) -> str:
+        file_id = voice_obj.get("file_id")
+        if not file_id:
+            return "تعذر استلام الملف الصوتي."
+        try:
+            get_file_url = _API.format(token=self.token, method="getFile")
+            req = urllib.request.urlopen(f"{get_file_url}?file_id={file_id}", timeout=15)
+            finfo = json.load(req)
+            file_path = (finfo.get("result") or {}).get("file_path")
+            if not file_path:
+                return "تعذر تحميل التسجيل الصوتي من تيليجرام."
+            download_url = f"https://api.telegram.org/file/bot{self.token}/{file_path}"
+            audio_req = urllib.request.urlopen(download_url, timeout=30)
+            audio_bytes = audio_req.read()
+
+            from ..voice.processor import VoiceNoteProcessor
+            processor = VoiceNoteProcessor()
+            transcribed = processor.transcribe(audio_bytes, mime_type="audio/ogg")
+            if not transcribed:
+                return "🎙️ تم استلام التسجيل الصوتي، ولكن تعذر تفريغ الصوت بدقة. يرجى إعادة المحاولة."
+
+            self._reply(f"🎙️ **تم تفريغ التسجيل الصوتي بنجاح:**\n«{transcribed}»\n\nجاري معالجة الرد الذكي...")
+            return self._interpret_freeform(transcribed)
+        except Exception as exc:
+            log.error("failed processing voice note: %s", exc)
+            return f"❌ خطأ أثناء معالجة التسجيل الصوتي: {exc}"
+
+    def _act_followups(self, args: str) -> str:
+        db = self.runtime.get("db")
+        if not db:
+            return "قاعدة البيانات غير متوفرة."
+        from ..leads.followup_engine import HonestLeadFollowupEngine
+        engine = HonestLeadFollowupEngine(db)
+        leads = engine.get_pending_followups()
+        if not leads:
+            return "✅ لا يوجد عملاء متوقفون بحاجة لمتابعة حالياً."
+
+        lines = [f"🎯 **قائمة العملاء المؤهلين للمتابعة الصادقة ({len(leads)} عملاء):**\n──────────────────────"]
+        for idx, l in enumerate(leads, 1):
+            msg_preview = engine.generate_message(l)
+            lines.append(
+                f"\n{idx}. 👤 **{l.get('name') or 'عميل مهتم'}** (ID: `{l['lead_id'][:8]}`)\n"
+                f"📌 الاهتمام: {l.get('service_interest') or 'استفسار عام'}\n"
+                f"💬 نص المتابعة الصادقة المقترح:\n«{msg_preview}»\n"
+                f"⚡ للإرسال الآن: `/followup_send {l['lead_id']}`"
+            )
+        return "\n".join(lines)
+
+    def _act_followup_send(self, args: str) -> str:
+        db = self.runtime.get("db")
+        if not db:
+            return "قاعدة البيانات غير متوفرة."
+        lead_id = (args or "").strip()
+        from ..leads.followup_engine import HonestLeadFollowupEngine
+        engine = HonestLeadFollowupEngine(db)
+
+        if not lead_id:
+            # Send all pending
+            pending = engine.get_pending_followups()
+            if not pending:
+                return "✅ لا توجد متابعات مستحقة حالياً."
+            sent_count = 0
+            for l in pending:
+                res = engine.execute_followup(l["lead_id"])
+                if res.get("success"):
+                    sent_count += 1
+            return f"🎉 تم إرسال المتابعة الاستشارية لـ {sent_count} عملاء بنجاح!"
+
+        res = engine.execute_followup(lead_id)
+        if not res.get("success"):
+            return f"❌ تعذر إرسال المتابعة: {res.get('error')}"
+        return (
+            f"🎉 **تم إرسال المتابعة الصادقة بنجاح!**\n\n"
+            f"👤 العميل: {res.get('lead_name') or 'العميل'}\n"
+            f"📝 نص الرسالة المرسلة:\n«{res.get('message')}»"
+        )
+
+    def _act_report(self, args: str) -> str:
+        db = self.runtime.get("db")
+        if not db:
+            return "قاعدة البيانات غير متوفرة."
+        from ..analytics.briefing import ExecutiveBriefingService
+        service = ExecutiveBriefingService(db)
+        return service.format_telegram_briefing()
+
+    def _act_meetings(self, args: str) -> str:
+        db = self.runtime.get("db")
+        if not db:
+            return "قاعدة البيانات غير متوفرة."
+        from ..consultation.scheduler import ConsultationScheduler
+        scheduler = ConsultationScheduler(db)
+        meetings = scheduler.list_upcoming()
+
+        if not meetings:
+            return "🗓️ لا توجد مواعيد أو استشارات قادمة مسجلة حالياً ✅"
+
+        lines = ["🗓️ **المواعيد والاستشارات القادمة (Upcoming Meetings):**\n──────────────────────"]
+        for idx, m in enumerate(meetings, 1):
+            dt = m.get("scheduled_at", "")[:16].replace("T", " ")
+            lines.append(
+                f"\n{idx}. 🔖 **#{m.get('consultation_id')}** — {m.get('customer_name') or 'عميل'}\n"
+                f"📱 الهاتف: `{m.get('customer_phone') or 'N/A'}` | 🌐 المنصة: {m.get('source_platform')}\n"
+                f"📌 الخدمة: {m.get('service') or 'استشارة تقنية'}\n"
+                f"⏰ الموعد: {dt} ({m.get('timezone')})\n"
+                f"🔗 الرابط: {m.get('meeting_url')}\n"
+                f"⚡ للإلغاء: `/meeting_cancel {m.get('consultation_id')}`"
+            )
+        return "\n".join(lines)
+
+    def _act_meeting_cancel(self, args: str) -> str:
+        db = self.runtime.get("db")
+        if not db:
+            return "قاعدة البيانات غير متوفرة."
+        cid = (args or "").strip()
+        if not cid:
+            return "الصيغة: `/meeting_cancel <معرف_الموعد>` (مثال: `/meeting_cancel AC-1001`)"
+        from ..consultation.scheduler import ConsultationScheduler
+        scheduler = ConsultationScheduler(db)
+        res = scheduler.cancel_consultation(cid, reason="Cancelled via Telegram Console")
+        if not res.get("success"):
+            return f"❌ {res.get('message')}"
+        return f"✅ **تم إلغاء الموعد بنجاح!**\n\n🔖 معرف الموعد: #{res.get('consultation_id')}\n👤 العميل: {res.get('customer_name')}"
+
+
+
+
+

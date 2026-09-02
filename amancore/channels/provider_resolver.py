@@ -10,7 +10,7 @@ the scheduler process and the health probes can never disagree
 
 mode ≠ transport (owner spec §8): `mode: bridge` selects the local-bridge
 provider family; the actual transport (baileys / private / realtime) lives in
-the `providers:` config block and is opaque to AmanCore.
+the `providers:` config block and is opaque to AmanCode.
 
 Legacy semantics preserved byte-for-byte for mock/production modes:
   - whatsapp: production mode only under the audited production.yaml overlay
@@ -26,7 +26,7 @@ import os
 BRIDGE_MODE = "bridge"
 VALID_MODES = ("mock", "sandbox", "production", BRIDGE_MODE)
 BRIDGE_DEFAULT_BASE_URL = "http://127.0.0.1:8765"
-BRIDGE_TOKEN_ENV = "AMANCORE_BRIDGE_TOKEN"
+BRIDGE_TOKEN_ENV = "AMANCODE_BRIDGE_TOKEN"
 BRIDGE_INGRESS_TOKEN_ENV = "BRIDGE_INGRESS_TOKEN"
 
 _KNOWN_CHANNELS = ("whatsapp", "telegram", "facebook", "instagram")
@@ -117,7 +117,7 @@ def _resolve_bridge(channel: str, cfg: dict, channels: dict,
     prov = dict((channels.get("providers") or {}).get(channel) or {})
     cfg["bridge"] = {
         "base_url": str(prov.get("base_url")
-                        or os.environ.get("AMANCORE_BRIDGE_URL",
+                        or os.environ.get("AMANCODE_BRIDGE_URL",
                                           BRIDGE_DEFAULT_BASE_URL)),
         "token_env": str(prov.get("token_env") or BRIDGE_TOKEN_ENV),
         "transport": str(prov.get("transport") or channel),

@@ -218,7 +218,7 @@ class InteractionRealismEval(TempDirTestCase, unittest.TestCase):
             lang = "en" if q.startswith("are you") else "ar"
             plan = self._plan(q, mem={"facts": {}}, language=lang)
             b = plan["brief"]
-            self.assertIn("digital assistant at AmanCore", b, q)
+            self.assertIn("digital assistant at AmanCode", b, q)
             self.assertIn("real team", b, q)
             self.assertIn("Never claim to be human", b, q)
 

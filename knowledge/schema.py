@@ -17,7 +17,7 @@ A pack references its Brain profile by ``brain_profile_id`` and never re-states
 Brain-owned fields.
 
 statement_kind in this layer is RESTRICTED to RECOMMENDATION | METHOD.
-FACT / AMANCORE_FACT / PRICING_REF are forbidden here — they belong only to the
+FACT / AMANCODE_FACT / PRICING_REF are forbidden here — they belong only to the
 Business Brain / PricingEngine.
 """
 
@@ -125,7 +125,7 @@ def pack_errors(pack: dict) -> list[str]:
     if maturity_value and normalize(maturity_value) not in \
             tuple(normalize(m) for m in DIGITAL_MATURITY):
         errs.append(f"invalid digital_maturity: {maturity_value!r}")
-    # forbid AmanCore pricing-authority / script / claim leakage in packs.
+    # forbid AmanCode pricing-authority / script / claim leakage in packs.
     # These target *authority signals*, not benign English/Arabic words such as
     # a restaurant "menu" or "stock".
     low = str(pack).lower()

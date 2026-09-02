@@ -77,7 +77,7 @@ def _meta_pack_errors(pack: dict) -> list[str]:
     # P1-final §3/§5 — generic epistemic-stability walk (meta-packs).
     # Every node carrying statement_kind must declare RECOMMENDATION, or
     # FACT **only inside the standards_web pack** (world-standard facts,
-    # never AmanCore claims) — and always with a provenance source_ref.
+    # never AmanCode claims) — and always with a provenance source_ref.
     fact_pack_id = {"standards_web"}
     allowed_kinds = {"RECOMMENDATION"} | (
         fact_pack_id and {"RECOMMENDATION", "FACT"} if

@@ -75,8 +75,8 @@ class SeventhChannelTest(unittest.TestCase):
         import os
 
         # never touch production DB — restored in tearDown
-        self._old_iso = os.environ.pop("AMANCORE_ISOLATED", None)
-        os.environ["AMANCORE_ISOLATED"] = "1"
+        self._old_iso = os.environ.pop("AMANCODE_ISOLATED", None)
+        os.environ["AMANCODE_ISOLATED"] = "1"
         self.tmp = tempfile.TemporaryDirectory()
         self.db = make_db(Path(self.tmp.name) / "t.db")
         from amancore.agents.sales import SalesAgent
@@ -144,9 +144,9 @@ class SeventhChannelTest(unittest.TestCase):
         self.db.close()
         self.tmp.cleanup()
         if self._old_iso is None:
-            os.environ.pop("AMANCORE_ISOLATED", None)
+            os.environ.pop("AMANCODE_ISOLATED", None)
         else:
-            os.environ["AMANCORE_ISOLATED"] = self._old_iso
+            os.environ["AMANCODE_ISOLATED"] = self._old_iso
 
     def test_seventh_channel_end_to_end(self):
         body = {"messages": [{"id": "s-1", "from": "user-777", "name": "Seventh",

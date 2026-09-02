@@ -57,7 +57,7 @@ class S3RequiredSecrets(unittest.TestCase):
         cfg.channels = {"whatsapp": {"mode": "bridge"}}
         missing = validate_required_env(cfg, environ={})
         joined = "\n".join(missing)
-        for key in ("AMANCORE_BRIDGE_TOKEN", "BRIDGE_INGRESS_TOKEN"):
+        for key in ("AMANCODE_BRIDGE_TOKEN", "BRIDGE_INGRESS_TOKEN"):
             self.assertIn(key, joined)
 
     def test_shadow_mode_no_requirements(self):

@@ -108,13 +108,13 @@ class P11DeterministicVoice(TempDirTestCase, unittest.TestCase):
         guard = self.coord.conversation is not None and \
             __import__("amancore.conversation.quality_guard",
                        fromlist=["QualityGuard"]).QualityGuard()
-        res = guard.check("شكرًا فريق AmanCode رائع!", plan={"mode": "SHAPING"})
-        self.assertIn("brand_spelling_advisory:amancode",
+        res = guard.check("شكرًا فريق AmanCore رائع!", plan={"mode": "SHAPING"})
+        self.assertIn("brand_spelling_advisory:amancore",
                       res["advisories"])
         # advisory must NEVER flip allowed off by itself
         self.assertTrue(res["allowed"])
-        clean = guard.check("فريق AmanCore رائع!", plan={"mode": "SHAPING"})
-        self.assertNotIn("brand_spelling_advisory:amancode",
+        clean = guard.check("فريق AmanCode رائع!", plan={"mode": "SHAPING"})
+        self.assertNotIn("brand_spelling_advisory:amancore",
                          clean["advisories"])
 
     # ---- §2.1 deterministic identity disclosure -----------------------
@@ -124,12 +124,12 @@ class P11DeterministicVoice(TempDirTestCase, unittest.TestCase):
             lead, self._msg("انت روبوت ولا انسان؟"), "ar")
         self.assertIsNotNone(r_ar)
         self.assertIn("مساعد رقمي", r_ar)
-        self.assertIn("AmanCore", r_ar)
+        self.assertIn("AmanCode", r_ar)
         self.assertIn("فريق", r_ar)
         r_en = self.coord._deterministic_voice_reply(
             lead, self._msg("are you a bot or human?"), "en")
         self.assertIn("digital assistant", r_en.lower())
-        self.assertIn("AmanCore", r_en)
+        self.assertIn("AmanCode", r_en)
 
     def test_identity_wins_over_generic_deferral_when_llm_dead(self):
         lead = self._lead()

@@ -1,4 +1,4 @@
-"""Message Coordinator — inbound channel events → AmanCore Core → outbox.
+"""Message Coordinator — inbound channel events → AmanCode Core → outbox.
 
 CHANNEL-NEUTRAL: this module knows nothing about provider identifiers or
 payload dialects. Adapters deliver CanonicalEvents (generic vocabulary) which
@@ -37,15 +37,12 @@ log = get_logger("channels.coordinator")
 _SAFE_FALLBACK = "Thank you — our team will follow up with you shortly."
 
 # P1-1 §2.4 — deterministic deferral: acknowledge + ONE next step.
-# No time promises, no prices, no claims.
-_DEFERRAL_AR = ("وصلني طلبك وأتابعه معك. ما الخدمة التي تهمك؟")
-_DEFERRAL_EN = "Got your message — I'm on it with you. What service do you need?"
+_DEFERRAL_AR = ("وصلني طلبك وأتابعه معك. نحن في أمان كود (AmanCode) نطور المواقع والمتاجر، نبني الهويات البصرية، ونوفر وكلاء الذكاء الاصطناعي والأنظمة السحابية (ERP). ما الخدمة التي تهمك للبدء بها؟")
+_DEFERRAL_EN = "Got your message — I'm on it with you. At AmanCode, we build web platforms, brand identities, AI agents, and Cloud ERP systems. What service do you need?"
 
-# P1-1 §2.1 — deterministic identity disclosure (honest, never human).
-_IDENTITY_AR = ("أنا مساعد رقمي في AmanCore وأعمل مع فريق حقيقي يساندك؛ "
-                "ما الخدمة التي أُساعدك بها الآن؟")
-_IDENTITY_EN = ("I'm a digital assistant at AmanCore working alongside our "
-                "real team — what can we help you with right now?")
+# P1-1 §2.1 — deterministic identity & services disclosure (honest, clear, complete).
+_IDENTITY_AR = ("أنا مساعد رقمي في أمان كود (AmanCode) وأعمل مع فريق هندسي حقيقي يساندك.\n\nنقدم 4 خدمات رئيسية:\n1. تطوير المواقع والمتاجر الإلكترونية عالية الأداء\n2. صناعة الهوية البصرية وتصميم الشعارات\n3. وكلاء الذكاء الاصطناعي وأتمتة العمليات\n4. الأنظمة السحابية وإدارة الأعمال (ERP)\n\nما الخدمة التي أُساعدك بها الآن؟")
+_IDENTITY_EN = ("I'm a digital assistant at AmanCode working alongside our real team.\n\nWe provide 4 core services:\n1. High-Performance Web & E-Commerce\n2. Strategic Brand Identity & Logo Systems\n3. Autonomous AI Agents & Workflow Automation\n4. Custom Cloud ERP Systems\n\nWhat can we help you with right now?")
 
 # P1-1 §2.2 — deterministic escalation handoff text (team review, no
 # commitment verbs, no price). Used verbatim when the LLM is unavailable.
@@ -240,6 +237,7 @@ class MessageCoordinator:
         cost_governor=None,
         conversation=None,
         quote_flow=None,
+        requirements_service=None,
     ):
         # accepts a single adapter (back-compat) or a {channel: adapter} registry
         if isinstance(adapters, ChannelAdapter):
@@ -277,6 +275,17 @@ class MessageCoordinator:
         # COM P0-5: pre-send quality gate for planned sales turns
         self.quality_guard = QualityGuard(
             conversation.policy if conversation is not None else None)
+        # Requirements Intelligence Layer (RIL)
+        if requirements_service is not None:
+            self.requirements_service = requirements_service
+        elif self.crm is not None:
+            try:
+                from ..requirements.service import RequirementsService
+                self.requirements_service = RequirementsService(self.crm)
+            except Exception:  # noqa: BLE001
+                self.requirements_service = None
+        else:
+            self.requirements_service = None
 
     @property
     def whatsapp(self):
@@ -611,6 +620,23 @@ class MessageCoordinator:
                               plan=price_plan)
             return {"lead_id": lead["lead_id"], "reply_sent": True, "price_reply": True}
 
+        # RIL: Requirements Intelligence Processing
+        ril_result = None
+        if self.requirements_service is not None:
+            try:
+                ril_result = self.requirements_service.process_message(
+                    lead_id=lead["lead_id"],
+                    message=text,
+                    conversation_id=mem.get("conversation_id"),
+                    source_message_id=msg.external_message_id,
+                    language=language,
+                )
+                log.info("ril.processed lead=%s reqs=%d coverage=%.1f next_q=%s",
+                         lead["lead_id"], ril_result.get("total_requirements_count", 0),
+                         ril_result.get("coverage_score", 0.0), bool(ril_result.get("next_question")))
+            except Exception as exc:  # noqa: BLE001
+                log.warning("ril.process_failed err=%s", exc)
+
         # sales flow — engine computes facts/state, AI speaks
         # P1-2 §2 — deterministic extraction gating for this single message.
         router_obj = getattr(self.sales_agent, "router", None)
@@ -654,9 +680,12 @@ class MessageCoordinator:
         qual = result.get("qualification") or {}
         plan = None
         missing = ", ".join(list(qual.get("missing_information", []))[:4])
+        ril_extra = ""
+        if ril_result is not None:
+            ril_extra = f" | RIL: {ril_result.get('total_requirements_count', 0)} reqs, {ril_result.get('coverage_score', 0):.0f}% coverage, decisions={list(ril_result.get('active_decisions', {}).keys())}"
         known = json.dumps({"facts": mem.get("facts", {}),
                             "requirements": mem.get("requirements", {})},
-                           ensure_ascii=False)[:400]
+                           ensure_ascii=False)[:350] + ril_extra
         if self.conversation is not None:
             # COM P0-1: the planner is the ONLY steering source this turn.
             plan = self.conversation.plan(
@@ -909,12 +938,21 @@ class MessageCoordinator:
             return None
         try:
             low = f" {(msg.text or '').lower()} "
+            # Check for identity & services inquiry directly
+            services_triggers = (
+                "من انتم", "من أنتم", "من نحن", "ما خدماتكم", "ماهي خدماتكم",
+                "ما هي خدماتكم", "ماذا تقدمون", "ماذا تفعلون", "ايش خدماتكم",
+                "وش خدماتكم", "شو خدماتكم", "who are you", "what services",
+                "what do you do", "what can you do", "your services",
+            )
+            if any(t in low for t in services_triggers):
+                return (_IDENTITY_AR if language == "ar" else _IDENTITY_EN)
+
             rules = {}
-            rules = {r.get("id"): r for r in
-                     self.conversation.planner.interaction_rules}
+            if hasattr(self, "conversation") and self.conversation and hasattr(self.conversation, "planner") and self.conversation.planner:
+                rules = {r.get("id"): r for r in self.conversation.planner.interaction_rules}
             ident = rules.get("ir_identity_disclosure")
-            if ident and any(t.lower() in low
-                             for t in (ident.get("trigger") or [])):
+            if ident and any(t.lower() in low for t in (ident.get("trigger") or [])):
                 return (_IDENTITY_AR if language == "ar" else _IDENTITY_EN)
             esc = next(
                 (kind for kind, kws in _ESCALATION_KEYWORDS.items()
@@ -1332,9 +1370,9 @@ class MessageCoordinator:
                 facts = ""
             messages = [
                 {"role": "system", "content":
-                 "You are AmanCore's assistant (websites, systems, digital "
-                 "solutions). Brand spelling is exactly \"AmanCore\" — never "
-                 "\"AmanCode\". "
+                 "You are AmanCode's assistant (websites, systems, AI automation, "
+                 "and brand identity). Brand spelling is exactly \"AmanCode\" "
+                 "(أمان كود). "
                  f"CHANNEL: {msg.channel}. Write the customer's reply: warm, confident,"
                  " human, max 55 words, in the SAME language/dialect as their message. "
                  # P1-2 §5 single permitted lever — language-lock first-pass fix.
@@ -1408,7 +1446,7 @@ class MessageCoordinator:
                 learnings = ""
             r = self._complete_draft([
                 {"role": "system", "content":
-                 "You are AmanCore's sales assistant. Draft ONE short warm reply "
+                 "You are AmanCode's sales assistant. Draft ONE short warm reply "
                  "(max 40 words) in the SAME language/dialect the customer used. "
                  "NEVER mention any price or commitment. Thank them, say our team will "
                  "send a personalized official quote shortly, and ask ONE useful "

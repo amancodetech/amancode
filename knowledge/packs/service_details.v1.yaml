@@ -16,7 +16,7 @@ type: service_details
 
 sources:
   - name: "Business Brain v1 services/offers + conversation_policy service_categories"
-    organization: "AmanCore"
+    organization: "AmanCode"
     url: ""
     version: "v1"
     authority: methodology
@@ -201,6 +201,35 @@ service_details:
         source_ref: business_brain_v1.services[ai_automation_suite].offer_id+name
         confidence: medium
         last_verified: 2026-08-27
+    - service_id: branding_visual_identity
+      offer_id: visual_identity
+      band_category_hint: branding
+      what:
+        ar: "تصميم الهوية البصرية المتكاملة والشعارات (اللوجو) الاحترافية المخصصة حسب الطلب"
+        en: "Comprehensive visual identity and custom professional logo design on demand"
+      for_whom:
+        ar: "الشركات، المشاريع والمتاجر التي تسعى لبناء حضور مرئي مميز وانطباع احترافي يدوم"
+        en: "Businesses, startups and stores aiming to build a standout visual brand and lasting impression"
+      problem_solved:
+        ar: "غياب الهوية المميزة، ضعف الانطباع الأولي لدى العملاء، وعدم تناسق التصاميم والألوان"
+        en: "Lack of brand distinction, weak first impressions, and inconsistent design identity"
+      when_to_recommend:
+        - "إطلاق علامة تجارية أو مشروع جديد"
+        - "تطوير أو تجديد الشعار والهوية الحالية (Rebranding)"
+        - "طلب هوية بصرية مخصصة، لوجو، أو تصاميم واجهات"
+      when_NOT_to_recommend:
+        - "طلب صيانة برمجية بحتة دون أي احتياج للتصميم"
+      required_info_to_estimate:
+        - { ar: "ما هو مجال نشاطك، وهل ترغب في تصميم الشعار فقط أم الهوية البصرية المتكاملة؟", en: "What is your business field, and do you need a standalone logo or the full visual identity suite?" }
+      typical_scope: ["رسم الشعار المخصص (Logo)", "دليل الألوان والخطوط (Brand Guide)", "ملفات المصدر الفكتور (AI, SVG, PDF, PNG)", "نماذج القرطاسية والتواصل الاجتماعي"]
+      common_integrations: ["تصاميم السوشيال ميديا", "المطبوعات", "واجهات المواقع والتطبيقات"]
+      compatible_addons: [care_plan]
+      related_services: [business_website_system, custom_web_application, ecommerce_store]
+      statement_kind: RECOMMENDATION
+      provenance:
+        source_ref: business_brain_v1.services[branding_visual_identity].offer_id+name
+        confidence: high
+        last_verified: 2026-08-31
 
 price_reference_pointer:
   note: >

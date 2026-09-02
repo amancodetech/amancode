@@ -25,7 +25,7 @@ class Database:
         resolved = Path(path).resolve()
         # LAST-LINE DEFENSE (LOAD-601 incident): load/mock contexts may NEVER
         # touch the production database, whatever the configuration says.
-        if os.environ.get("LOAD_MOCK_LLM") or os.environ.get("AMANCORE_ISOLATED"):
+        if os.environ.get("LOAD_MOCK_LLM") or os.environ.get("AMANCODE_ISOLATED"):
             if resolved.name == "aman_core.db":
                 raise RuntimeError(
                     "SAFETY GUARD: refusing to open production aman_core.db "
@@ -310,7 +310,7 @@ def _split_schema(sql: str) -> tuple[str, str]:
 
 
 def open_database(path: Path, schema_file: Path | None = None) -> Database:
-    """Open (and optionally initialize) the AmanCore database."""
+    """Open (and optionally initialize) the AmanCode database."""
     db = Database(path)
     if schema_file is not None and schema_file.exists():
         tables_sql, index_sql = _split_schema(schema_file.read_text(encoding="utf-8"))

@@ -34,14 +34,15 @@ function classifyDisconnect(code) {
 
 // digits-only E164 — identical semantics to the Graph identity (parity!)
 function normalizePhone(jid) {
+  if (jid === 'status@broadcast' || jid === 'status') return 'status';
   const user = String(jid || '').split('@')[0].split(':')[0];
   return user.replace(/\D/g, '');
 }
 
 function toJid(phone, jidMap = null) {
   const raw = String(phone || '').trim();
-  if (raw.endsWith('@s.whatsapp.net') || raw.endsWith('@lid') || raw.endsWith('@g.us')) {
-    return raw;
+  if (raw === 'status@broadcast' || raw === 'status' || raw.endsWith('@broadcast') || raw.endsWith('@s.whatsapp.net') || raw.endsWith('@lid') || raw.endsWith('@g.us')) {
+    return raw === 'status' ? 'status@broadcast' : raw;
   }
   const digits = raw.replace(/\D/g, '');
   if (!digits) throw new Error('empty recipient phone');
@@ -274,7 +275,7 @@ class WhatsAppTransport extends EventEmitter {
     }
   }
 
-  // ---- outbound surface (AmanCore-facing semantics) --------------------
+  // ---- outbound surface (AmanCode-facing semantics) --------------------
 
   async sendText({ to, text, replyTo }) {
     if (this.shadow) return this._shadowHold('sendText', { to, text });
@@ -335,6 +336,13 @@ class WhatsAppTransport extends EventEmitter {
 
   async _quoted(jid, messageId) {
     return { key: { remoteJid: jid, id: String(messageId), fromMe: false } };
+  }
+
+  async updateProfilePicture(imagePath) {
+    const sock = this._requireSocket();
+    const jid = sock.user?.id ? (sock.user.id.split(':')[0] + '@s.whatsapp.net') : null;
+    if (!jid) throw new Error('WhatsApp user JID not found');
+    return await sock.updateProfilePicture(jid, { url: imagePath });
   }
 
   _shadowHold(op, args) {

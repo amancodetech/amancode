@@ -149,7 +149,7 @@ class ContentAgent(Agent):
         }.get(content_type, "")
 
 
-_DRAFT_PROMPT = """Write a short, professional {content_type} for AmanCore in language={language}
+_DRAFT_PROMPT = """Write a short, professional {content_type} for AmanCode in language={language}
 targeting market={market}. Keep brand voice: professional, clear, outcome-focused.
 Topic: {topic}
 Angle: {angle}

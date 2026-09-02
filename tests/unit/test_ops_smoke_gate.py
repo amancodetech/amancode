@@ -147,7 +147,7 @@ class ProductionGateExtendedTest(TempDirTestCase, unittest.TestCase):
         cfg["environment"] = {"mode": "production", "production_enabled": True,
                               "webhook_url": "https://example.com/w"}
         secrets = {
-            "AMANCORE_BRIDGE_TOKEN": "t", "BRIDGE_INGRESS_TOKEN": "s",
+            "AMANCODE_BRIDGE_TOKEN": "t", "BRIDGE_INGRESS_TOKEN": "s",
         }
         # runbooks must exist for runbooks_present
         runbooks = self.tmp / "docs" / "runbooks"

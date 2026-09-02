@@ -27,20 +27,20 @@ def _cfg(base_url: str, shadow: bool = False) -> dict:
     return {"channel": "whatsapp", "mode": "bridge",
             "environment": dict(PROD_ENV),
             "bridge": {"base_url": base_url,
-                       "token_env": "AMANCORE_BRIDGE_TOKEN",
+                       "token_env": "AMANCODE_BRIDGE_TOKEN",
                        "shadow": shadow,
                        "connect_retries": 0}}
 
 
 class BridgeProviderSurfaceTests(unittest.TestCase):
     def setUp(self):
-        self._old = os.environ.pop("AMANCORE_BRIDGE_TOKEN", None)
-        os.environ["AMANCORE_BRIDGE_TOKEN"] = "test-bridge-token"
+        self._old = os.environ.pop("AMANCODE_BRIDGE_TOKEN", None)
+        os.environ["AMANCODE_BRIDGE_TOKEN"] = "test-bridge-token"
 
     def tearDown(self):
-        os.environ.pop("AMANCORE_BRIDGE_TOKEN", None)
+        os.environ.pop("AMANCODE_BRIDGE_TOKEN", None)
         if self._old is not None:
-            os.environ["AMANCORE_BRIDGE_TOKEN"] = self._old
+            os.environ["AMANCODE_BRIDGE_TOKEN"] = self._old
 
     def test_whatsapp_capabilities_match_graph_adapter(self):
         from amancore.channels.whatsapp import WhatsAppAdapter

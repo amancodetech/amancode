@@ -347,7 +347,7 @@ class OutboxWorker:
             if final == "dead" and self.owner_alert is not None:  # OUT-205: dead is never silent
                 self.owner_alert(
                     "HIGH",
-                    f"[AmanCore] outbox DEAD after {self.outbox.max_attempts} attempts: "
+                    f"[AmanCode] outbox DEAD after {self.outbox.max_attempts} attempts: "
                     f"{message['message_id']} ({str(exc)[:120]})",
                     event_type="outbox.dead", resource=message["message_id"],
                 )

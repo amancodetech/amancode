@@ -1,15 +1,15 @@
-"""Typed error hierarchy for AmanCore."""
+"""Typed error hierarchy for AmanCode."""
 
 
-class AmanCoreError(Exception):
+class AmanCodeError(Exception):
     """Base error."""
 
 
-class ConfigError(AmanCoreError):
+class ConfigError(AmanCodeError):
     """Configuration loading/validation failure."""
 
 
-class BusinessBrainError(AmanCoreError):
+class BusinessBrainError(AmanCodeError):
     """Business Brain load/validation/versioning failure."""
 
 
@@ -17,46 +17,46 @@ class ValidationError(BusinessBrainError):
     """Business Brain content validation failure."""
 
 
-class NotFoundError(AmanCoreError):
+class NotFoundError(AmanCodeError):
     """Requested entity does not exist."""
 
 
-class IntegrityError(AmanCoreError):
+class IntegrityError(AmanCodeError):
     """Data integrity violation (duplicate id, FK, immutable mutation)."""
 
 
-class CRMError(AmanCoreError):
+class CRMError(AmanCodeError):
     """CRM data-service failure."""
 
 
-class EventError(AmanCoreError):
+class EventError(AmanCodeError):
     """Canonical event validation/dispatch failure."""
 
 
-class PolicyError(AmanCoreError):
+class PolicyError(AmanCodeError):
     """Policy engine failure."""
 
 
-class RiskError(AmanCoreError):
+class RiskError(AmanCodeError):
     """Risk engine failure."""
 
 
-class ApprovalError(AmanCoreError):
+class ApprovalError(AmanCodeError):
     """Approval service failure."""
 
 
-class AuditError(AmanCoreError):
+class AuditError(AmanCodeError):
     """Audit service failure."""
 
 
-class RoutingError(AmanCoreError):
+class RoutingError(AmanCodeError):
     """Model router failure."""
 
 
-class PermissionDenied(AmanCoreError):
+class PermissionDenied(AmanCodeError):
     """Actor attempted an operation outside its permission boundary."""
 
 
-class ProductionNotEnabledError(AmanCoreError):
+class ProductionNotEnabledError(AmanCodeError):
     """External send attempted while production_enabled=false (safety rule)."""
 

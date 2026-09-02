@@ -12,7 +12,7 @@ class BusinessBrainTest(TempDirTestCase, unittest.TestCase):
         store = make_brain(self.tmp)
         version, data = store.current()
         self.assertEqual(version, 1)
-        self.assertEqual(data["company"]["name"], "AmanCore")
+        self.assertEqual(data["company"]["name"], "AmanCode")
 
     def test_seed_is_valid(self):
         store = make_brain(self.tmp)
@@ -41,12 +41,12 @@ class BusinessBrainTest(TempDirTestCase, unittest.TestCase):
         store = make_brain(self.tmp)
         writer = BrainWriter(store, proposals_dir=self.tmp / "proposals")
         _, data = store.current()
-        data["company"]["name"] = "AmanCore v2"
+        data["company"]["name"] = "AmanCode v2"
         pid = writer.propose(data, requested_by="owner", reason="rename")
         new_version = writer.approve(pid, approved_by="owner")
         self.assertEqual(new_version, 2)
-        self.assertEqual(store.current()[1]["company"]["name"], "AmanCore v2")
-        self.assertEqual(store.get(1)["company"]["name"], "AmanCore")
+        self.assertEqual(store.current()[1]["company"]["name"], "AmanCode v2")
+        self.assertEqual(store.get(1)["company"]["name"], "AmanCode")
 
     def test_writer_reject(self):
         store = make_brain(self.tmp)

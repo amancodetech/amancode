@@ -1,6 +1,6 @@
 'use strict';
 // Durable ingress spool: every normalized inbound event is written to disk
-// first, then forwarded to AmanCore /bridge/inbound with the ingress token.
+// first, then forwarded to AmanCode /bridge/inbound with the ingress token.
 // Ack (HTTP 2xx with accepted=true) deletes the spool file; anything else
 // retries with backoff. Survives bridge restarts.
 
@@ -69,7 +69,7 @@ class IngressForwarder {
         this._done(item);
         return;
       }
-      // AmanCore explicitly rejected (e.g. UNKNOWN_CHANNEL) — permanent
+      // AmanCode explicitly rejected (e.g. UNKNOWN_CHANNEL) — permanent
       log.error('ingress rejected by amancore', {
         file: item.file, ack, attempts: item.attempts,
       });
@@ -95,7 +95,7 @@ class IngressForwarder {
   _post(envelope) {
     const body = JSON.stringify(envelope);
     return new Promise((resolve, reject) => {
-      const u = new URL('/bridge/inbound', this.config.amancoreBaseUrl);
+      const u = new URL('/bridge/inbound', this.config.amancodeBaseUrl);
       const req = http.request(u, {
         method: 'POST',
         headers: {

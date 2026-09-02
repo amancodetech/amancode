@@ -1,7 +1,7 @@
 # Web-Standards Pack — KB Design §14–15 (consultative summaries).
 # The SINGLE pack where statement_kind = FACT is permitted
 # (authority = official_standard): these are facts about WORLD standards,
-# never assertions about AmanCore. Any "AmanCore متوافق مع …" phrasing is
+# never assertions about AmanCode. Any "AmanCode متوافق مع …" phrasing is
 # forbidden and remains gated by approved_claims/forbidden_claims.
 
 id: standards_web
@@ -66,7 +66,7 @@ standards_web:
       - "Dragging Alternatives (بديل إلزامي لأي عملية سحب)"
       - "Target Size Minimum (حد أدنى لهدف اللمس)"
       - "Consistent Help / Redundant Entry (مساعدة متسقة وتقليل الإعادة)"
-    claim_guard_ar: "يُمنع ادعاء امتثال AmanCore؛ الفحص لكل مشروع على حدة."
+    claim_guard_ar: "يُمنع ادعاء امتثال AmanCode؛ الفحص لكل مشروع على حدة."
   # --------------------------- OWASP Top 10:2025 --------------------------
   owasp_top_10_2025:
     statement_kind: FACT
@@ -93,7 +93,7 @@ standards_web:
       - {rank: A10, name: "Server-Side Request Forgery",
          one_liner_ar: "تقييد عناوين URL التي يجلبها الخادم بنفسه وفق قائمة مسموحة."}
     claim_guard_ar: >
-      الإشارة إليها كمرجع عالمي جائزة؛ تكييف امتثال AmanCore يمنع.
+      الإشارة إليها كمرجع عالمي جائزة؛ تكييف امتثال AmanCode يمنع.
   # ------------------------------ NIST CSF 2.0 ----------------------------
   nist_csf_2_0:
     statement_kind: FACT

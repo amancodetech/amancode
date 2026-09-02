@@ -2,7 +2,7 @@
   "name": "meta-bridge",
   "version": "0.1.0",
   "private": true,
-  "description": "AmanCore local meta-bridge: WhatsApp (Baileys) / Facebook / Instagram local transports. Platform SDKs live ONLY here — never in the AmanCore core.",
+  "description": "AmanCode local meta-bridge: WhatsApp (Baileys) / Facebook / Instagram local transports. Platform SDKs live ONLY here — never in the AmanCode core.",
   "type": "commonjs",
   "main": "src/server.js",
   "scripts": {
@@ -14,9 +14,11 @@
     "fb:session": "node scripts/fb-session.js",
     "fb:login": "node scripts/fb-login.js",
     "fb:browser": "node scripts/fb-browser-login.js",
+    "fb:post": "node scripts/fb-create-post.js",
     "ig:session": "node scripts/ig-session.js",
     "ig:login": "node scripts/ig-login.js",
-    "ig:browser": "node scripts/ig-browser-login.js"
+    "ig:browser": "node scripts/ig-browser-login.js",
+    "tiktok:browser": "node scripts/tiktok-browser-login.js"
   },
   "engines": {
     "node": ">=20"
@@ -24,6 +26,7 @@
   "dependencies": {
     "@whiskeysockets/baileys": "6.7.24",
     "instagram-private-api": "^1.46.1",
+    "playwright-core": "^1.49.1",
     "puppeteer": "^25.9.0",
     "qrcode": "^1.5.4",
     "qrcode-terminal": "0.12.0",

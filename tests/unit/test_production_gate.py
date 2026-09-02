@@ -34,7 +34,7 @@ READY_CONFIG = {
 }
 
 SECRETS = {
-    "AMANCORE_BRIDGE_TOKEN": "test-bridge-token",
+    "AMANCODE_BRIDGE_TOKEN": "test-bridge-token",
     "BRIDGE_INGRESS_TOKEN": "test-ingress-token",
 }
 
@@ -89,7 +89,7 @@ class ProductionGateTest(unittest.TestCase):
 
     def test_secrets_presence(self):
         gate = ProductionGateService(MOCK_PRODUCTION_CONFIG, env={
-            "AMANCORE_BRIDGE_TOKEN": "t", "BRIDGE_INGRESS_TOKEN": "s",
+            "AMANCODE_BRIDGE_TOKEN": "t", "BRIDGE_INGRESS_TOKEN": "s",
         })
         self.assertTrue(gate._secrets_present())
         gate2 = ProductionGateService(MOCK_PRODUCTION_CONFIG, env={})
@@ -97,7 +97,7 @@ class ProductionGateTest(unittest.TestCase):
 
     def test_assert_send_allowed_blocks_when_disabled(self):
         gate = ProductionGateService(MOCK_PRODUCTION_CONFIG, env={
-            "AMANCORE_BRIDGE_TOKEN": "secret-token-123", "BRIDGE_INGRESS_TOKEN": "111",
+            "AMANCODE_BRIDGE_TOKEN": "secret-token-123", "BRIDGE_INGRESS_TOKEN": "111",
         })
         with self.assertRaises(ProductionNotEnabledError):
             gate.assert_production_send_allowed()
@@ -115,7 +115,7 @@ class ProductionGateTest(unittest.TestCase):
         provider = BridgeWhatsAppProvider({
             "mode": "production",
             "environment": {"production_enabled": False, "mode": "production"},
-            "bridge": {"base_url": "http://127.0.0.1:8765", "token_env": "AMANCORE_BRIDGE_TOKEN"},
+            "bridge": {"base_url": "http://127.0.0.1:8765", "token_env": "AMANCODE_BRIDGE_TOKEN"},
         })
         with self.assertRaises(ProductionNotEnabledError):
             provider.send("5511", "text", "hello")

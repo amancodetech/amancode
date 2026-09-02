@@ -15,7 +15,7 @@ class ClaimGateTest(TempDirTestCase, unittest.TestCase):
         self.gate = ClaimGate(make_brain(self.tmp))
 
     def test_clean(self):
-        d = self.gate.check("AmanCore builds multilingual business websites")
+        d = self.gate.check("AmanCode builds multilingual business websites")
         self.assertEqual(d.status, CLEAN)
 
     def test_forbidden(self):

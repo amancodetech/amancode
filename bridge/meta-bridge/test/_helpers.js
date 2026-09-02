@@ -1,7 +1,7 @@
 'use strict';
 // Test harness: starts the meta-bridge HTTP server on an ephemeral port with
 // a FAKE WhatsApp transport (no Baileys socket, no network) and an in-memory
-// ingress forwarder pointed at a stub AmanCore endpoint.
+// ingress forwarder pointed at a stub AmanCode endpoint.
 
 const http = require('node:http');
 const { EventEmitter } = require('node:events');
@@ -10,20 +10,20 @@ const os = require('node:os');
 const path = require('node:path');
 
 // config must exist before requiring src/server.js
-process.env.AMANCORE_BRIDGE_TOKEN = 'test-bridge-token';
+process.env.AMANCODE_BRIDGE_TOKEN = 'test-bridge-token';
 process.env.BRIDGE_INGRESS_TOKEN = 'test-ingress-token';
 process.env.BRIDGE_PORT = '0'; // ephemeral
 process.env.BRIDGE_DATA_DIR = fs.mkdtempSync(
   path.join(os.tmpdir(), 'meta-bridge-test-'));
 process.env.BRIDGE_SHADOW = '';
 process.env.BRIDGE_CHANNELS = 'whatsapp';
-process.env.AMANCORE_BASE_URL = 'http://127.0.0.1:1'; // no real amancore
+process.env.AMANCODE_BASE_URL = 'http://127.0.0.1:1'; // no real amancore
 
-// Stub AmanCore: accepts /bridge/inbound, records acks, optionally fails
+// Stub AmanCode: accepts /bridge/inbound, records acks, optionally fails
 let amancoreFailures = 0;
 const receivedEnvelopes = [];
 
-const stubAmanCore = http.createServer((req, res) => {
+const stubAmanCode = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/bridge/inbound') {
     if ((req.headers['x-bridge-token'] || '') !== 'test-ingress-token') {
       res.writeHead(403); res.end('{"error":"UNAUTHORIZED"}'); return;
@@ -110,12 +110,12 @@ async function startBridge({ transport = new FakeWhatsAppTransport() } = {}) {
   bridge.sessions.clear();
   bridge.transports.clear();
   if (!stubListening) {
-    await new Promise((resolve) => stubAmanCore.listen(0, '127.0.0.1', resolve));
+    await new Promise((resolve) => stubAmanCode.listen(0, '127.0.0.1', resolve));
     stubListening = true;
   }
   // point the forwarder at the stub
-  const addr = stubAmanCore.address();
-  bridge.forwarder.config.amancoreBaseUrl =
+  const addr = stubAmanCode.address();
+  bridge.forwarder.config.amancodeBaseUrl =
     `http://127.0.0.1:${addr.port}`;
   await bridge.start();
   const baddr = bridge.server.address();
@@ -157,7 +157,7 @@ function call(baseUrl, method, p, body, token = 'test-bridge-token') {
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 module.exports = {
-  startBridge, call, sleep, stubAmanCore, receivedEnvelopes,
+  startBridge, call, sleep, stubAmanCode, receivedEnvelopes,
   setFailures: (n) => { amancoreFailures = n; },
   resetReceived: () => { receivedEnvelopes.length = 0; },
   FakeWhatsAppTransport,

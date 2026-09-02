@@ -1,4 +1,4 @@
-"""Architecture boundary test (owner spec §39) — AmanCore core must NEVER
+"""Architecture boundary test (owner spec §39) — AmanCode core must NEVER
 import platform implementations (Baileys, facebook-chat-api,
 instagram-private-api, Playwright/Puppeteer). Those live ONLY in the
 bridge/browser-agent layers (bridge/, outside the core package).
@@ -22,7 +22,10 @@ BANNED_MODULE_FRAGMENTS = (
 )
 
 # declared external dependencies inside the core (everything stdlib is fine)
-APPROVED_EXTERNAL = {"requests", "yaml", "google"}
+APPROVED_EXTERNAL = {
+    "requests", "yaml", "google", "PIL", "arabic_reshaper", "bidi",
+    "google_auth_oauthlib", "googleapiclient",
+}
 
 
 def _iter_core_imports():
@@ -59,7 +62,7 @@ class BridgeBoundaryTests(unittest.TestCase):
                     violations.append(f"{rel}:{lineno}: import {module}")
         self.assertEqual(
             violations, [],
-            "AmanCore core imports a platform implementation — it must live "
+            "AmanCode core imports a platform implementation — it must live "
             "in bridge/ (owner spec §39):\n" + "\n".join(violations))
 
     def test_core_imports_only_declared_external_dependencies(self):
