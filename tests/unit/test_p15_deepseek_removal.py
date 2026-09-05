@@ -25,14 +25,17 @@ class DeepSeekRemovalChainTest(unittest.TestCase):
         self.assertNotIn("deepseek-v4-flash\"", raw.replace("deepseek-v4-flash-vision-exp", ""))
         providers = set(cfg["providers"])
         self.assertIn("deepseek_vision", providers)
+        self.assertIn("deepseek_chat", providers)
         for task, chain in cfg["task_routing"].items():
             self.assertIn(chain["primary"], providers,
                           f"{task} primary must be in configured providers")
-            self.assertEqual(chain["primary"], "deepseek_vision")
+        self.assertEqual(cfg["task_routing"]["routine"]["primary"], "deepseek_chat")
         mm = cfg["task_routing"]["multimodal"]
         self.assertEqual(mm["primary"], "deepseek_vision")
         self.assertEqual(cfg["providers"]["deepseek_vision"]["model"],
                          "deepseek-v4-flash-vision-exp")
+        self.assertEqual(cfg["providers"]["deepseek_chat"]["model"],
+                         "deepseek-chat")
 
     def test_build_providers_returns_no_deepseek_instance(self):
         import yaml
@@ -43,9 +46,8 @@ class DeepSeekRemovalChainTest(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         cfg = yaml.safe_load((root / "configs" / "models.yaml").read_text())
         built = build_providers(cfg)
-        # ONLY deepseek_vision may exist — never deepseek_chat / plain flash
         deepseek_providers = sorted(p for p in built if "deepseek" in p.lower())
-        self.assertEqual(deepseek_providers, ["deepseek_vision"])
+        self.assertEqual(deepseek_providers, ["deepseek_chat", "deepseek_vision"])
         # provider class registry never had a vendor-specific deepseek type
         # (vision reuses the generic openai_compatible adapter)
         from amancore.routing import providers as prov_mod

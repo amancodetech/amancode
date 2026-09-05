@@ -103,7 +103,7 @@ class IngressForwarder {
           'Content-Length': Buffer.byteLength(body),
           'X-Bridge-Token': this.config.ingressToken,
         },
-        timeout: 10000,
+        timeout: 60000,
       }, (res) => {
         const chunks = [];
         res.on('data', c => chunks.push(c));

@@ -52,7 +52,10 @@ class OpenAICompatibleProvider(Provider):
     def complete(self, messages: list[dict], **kwargs: Any) -> ProviderResult:
         url = f"{self._base_url()}/chat/completions"
         headers = {"Authorization": f"Bearer {self._api_key()}", "Content-Type": "application/json"}
+        max_tokens = kwargs.get("max_tokens", self.config.get("max_tokens"))
         payload = {"model": self.model, "messages": messages}
+        if max_tokens:
+            payload["max_tokens"] = int(max_tokens)
         # config-injected extras (e.g. thinking level) — never override core fields
         for k, v in (self.config.get("extra_payload") or {}).items():
             payload.setdefault(k, v)

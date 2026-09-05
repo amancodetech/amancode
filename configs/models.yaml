@@ -3,25 +3,33 @@ defaults:
   max_retries: 2
   monthly_cost_alert_usd: 20
 
-# Effective chain: unified routing to deepseek_vision (model: deepseek-v4-flash-vision-exp).
-# Voice STT uses AssemblyAI -> transcribed text continues via DeepSeek-Vision-Exp.
+# Effective chain:
+# - Text tasks / routine / extraction / reasoning / pricing / strategy -> deepseek_chat (model: deepseek-chat)
+# - Multimodal / image understanding -> deepseek_vision (model: deepseek-v4-flash-vision-exp)
 task_routing:
-  strategy:       {primary: deepseek_vision, secondary: null, fallback: null}
-  reasoning:      {primary: deepseek_vision, secondary: null, fallback: null}
-  pricing:        {primary: deepseek_vision, secondary: null, fallback: null}
-  coding:         {primary: deepseek_vision, secondary: null, fallback: null}
-  routine:        {primary: deepseek_vision, secondary: null, fallback: null}
-  classification: {primary: deepseek_vision, secondary: null, fallback: null}
-  extraction:     {primary: deepseek_vision, secondary: null, fallback: null}
-  summarization:  {primary: deepseek_vision, secondary: null, fallback: null}
+  strategy:       {primary: deepseek_chat, secondary: null, fallback: null}
+  reasoning:      {primary: deepseek_chat, secondary: null, fallback: null}
+  pricing:        {primary: deepseek_chat, secondary: null, fallback: null}
+  coding:         {primary: deepseek_chat, secondary: null, fallback: null}
+  routine:        {primary: deepseek_chat, secondary: null, fallback: null}
+  classification: {primary: deepseek_chat, secondary: null, fallback: null}
+  extraction:     {primary: deepseek_chat, secondary: null, fallback: null}
+  summarization:  {primary: deepseek_chat, secondary: null, fallback: null}
   multimodal:     {primary: deepseek_vision, secondary: null, fallback: null}
 
 providers:
+  deepseek_chat:
+    type: openai_compatible
+    base_url_env: DEEPSEEK_BASE_URL
+    api_key_env: DEEPSEEK_API_KEY
+    model: deepseek-chat
+    max_tokens: 1024
   deepseek_vision:
     type: openai_compatible
     base_url_env: DEEPSEEK_BASE_URL
     api_key_env: DEEPSEEK_API_KEY
     model: deepseek-v4-flash-vision-exp
+    max_tokens: 1024
   gemini:
     type: gemini
     api_key_env: GEMINI_API_KEY
@@ -38,9 +46,11 @@ providers:
     model: glm-5.3-flash
 
 # USD per 1M tokens (estimates, configurable)
+# deepseek_chat: $0.27/1M input ($0.07 cache hit), $1.10/1M output
 # deepseek_vision: image billed max 384 tokens/image at flash input rate
 pricing_per_million:
+  deepseek_chat:   {input: 0.27, output: 1.1}
   deepseek_vision: {input: 0.27, output: 1.1}
-  gemini:            {input: 1.0, output: 4.0}
-  claude:            {input: 3.0, output: 15.0}
-  glm:               {input: 0.1, output: 0.4}
+  gemini:          {input: 1.0, output: 4.0}
+  claude:          {input: 3.0, output: 15.0}
+  glm:             {input: 0.1, output: 0.4}
