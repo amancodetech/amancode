@@ -77,6 +77,9 @@ jobs:
   consultation.reminders:
     enabled: true
     cron: "*/5 * * * *"       # checks every 5 minutes for 60m and 15m reminders
+  email.poll:
+    enabled: true
+    cron: "*/5 * * * *"       # IMAP UNSEEN sweep → coordinator (skips when unconfigured)
 
 alert:
   channel: auto               # auto picks telegram/email when creds exist, else log fallback

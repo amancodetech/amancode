@@ -195,11 +195,6 @@ class MessageOutbox:
                 (attempts, next_at, reason, message_id),
             )
             return "queued"
-            self.db.execute(
-                "UPDATE message_outbox SET status = 'dead', attempts = ?, failure_reason = ? WHERE message_id = ?",
-                (attempts, reason, message_id),
-            )
-            return "dead"
         else:
             backoff = timedelta(seconds=self.retry_backoff_seconds * attempts)
             next_at = (datetime.now(timezone.utc) + backoff).isoformat()

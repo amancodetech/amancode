@@ -83,7 +83,7 @@ def run_health_checks(root: Path) -> dict[str, tuple[str, str]]:
     # channels — generic per-channel registration (adapter-driven);
     # unconfigured channels are skipped, never silently "pass"
     cfg3 = cfg or load_config(root)
-    for _ch in ("whatsapp", "telegram", "facebook", "instagram"):
+    for _ch in ("whatsapp", "telegram", "facebook", "instagram", "email"):
         if not cfg3.channels.get(_ch):
             continue
         results[f"channel_config:{_ch}"] = _check(

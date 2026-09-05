@@ -162,11 +162,13 @@ class FacebookBrowserTransport extends EventEmitter {
         const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
         const nameMatch = document.body.innerText.match(/تم التعيين إلى\s+([^\n]+)/);
-        const name = nameMatch ? nameMatch[1].trim() : 'Omar Adel Alsaeedi';
+        const urlMatch = window.location.href.match(/selected_item_id=([0-9]+)/);
+        const threadFromUrl = urlMatch ? urlMatch[1] : null;
 
         return {
           lines,
           name,
+          threadId: threadFromUrl,
         };
       });
 
@@ -178,7 +180,7 @@ class FacebookBrowserTransport extends EventEmitter {
 
       if (!isSystem && !isSelfEcho && lastLine.length > 0) {
         const hash = Buffer.from(lastLine).toString('base64').slice(0, 16);
-        const externalId = '100040732989431';
+        const externalId = threadData.threadId || '100040732989431';
         const msgKey = `${externalId}-${hash}`;
 
         if (!this.conversationState.isDuplicate(externalId, msgKey)) {
@@ -216,7 +218,22 @@ class FacebookBrowserTransport extends EventEmitter {
   // ---- Browser actions --------------------------------------------------
 
   async _navigateToConversation(page, threadId) {
-    await this._openMessenger(page);
+    const ASSET_ID = process.env.FACEBOOK_PAGE_ID || '1318320251359371';
+    const BUSINESS_ID = process.env.FACEBOOK_BUSINESS_ID || '1582931449996932';
+    if (threadId && threadId !== '100040732989431') {
+      const threadUrl = `https://business.facebook.com/latest/inbox/all?asset_id=${ASSET_ID}&business_id=${BUSINESS_ID}&selected_item_id=${threadId}`;
+      if (!page.url().includes(`selected_item_id=${threadId}`)) {
+        try {
+          await page.goto(threadUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+          await new Promise(r => setTimeout(r, 4000));
+        } catch (e) {
+          log.warn('failed navigating to specific thread, falling back to active inbox', { error: e.message, threadId });
+          await this._openMessenger(page);
+        }
+      }
+    } else {
+      await this._openMessenger(page);
+    }
     await page.waitForSelector('div[role="textbox"][contenteditable="true"]', { timeout: 30000 });
   }
 

@@ -21,7 +21,7 @@ JOB_TYPES = (
     "insights.daily", "insights.weekly", "insights.monthly",
     "retention.cleanup", "database.backup", "backup.verify", "backup.restore_test",
     "health.check", "production.check", "content.autopilot",
-    "executive.briefing", "consultation.reminders",
+    "executive.briefing", "consultation.reminders", "email.poll",
 )
 
 
@@ -205,14 +205,14 @@ class JobRegistry:
             from ..ops.backup import BackupService
 
             return BackupService(self.db, self.root,
-                                 database_path=root / cfg.database_path).create_backup(
+                                 database_path=self.root / cfg.database_path).create_backup(
                                      kind="all", payload=payload)
 
         def _backup_verify():
             from ..ops.backup import BackupService
 
             return BackupService(self.db, self.root,
-                                 database_path=root / cfg.database_path).verify_latest()
+                                 database_path=self.root / cfg.database_path).verify_latest()
 
         def _restore_test():
             """BAK-103: monthly proof that the latest backup actually restores.
@@ -281,6 +281,31 @@ class JobRegistry:
             service = ConsultationReminderService(self.db)
             return service.check_and_send_reminders()
 
+        def _email_poll():
+            """Inbound email leg: IMAP UNSEEN → coordinator → mark Seen."""
+            import os as _os
+            if not (_os.environ.get("EMAIL_IMAP_USER") or _os.environ.get("SMTP_USER")):
+                return {"status": "skipped", "reason": "inbound email not configured"}
+            if not (_os.environ.get("EMAIL_IMAP_PASSWORD") or _os.environ.get("SMTP_PASSWORD")):
+                return {"status": "skipped", "reason": "inbound email not configured"}
+            from ..channels.email_poll import mark_seen, poll_inbox_once
+            from ..channels.webhook_server import build_runtime
+            body = poll_inbox_once()
+            if not body.get("emails"):
+                return {"status": "ok", "received": 0}
+            runtime = build_runtime(self.root)
+            try:
+                summary = runtime["coordinator"].handle_inbound("email", body)
+            finally:
+                try:
+                    runtime["db"].close()
+                except Exception:  # noqa: BLE001
+                    pass
+            if summary.get("processed"):
+                mark_seen(body.get("uids") or [])
+            return {"status": "ok", **{k: summary.get(k, 0)
+                                       for k in ("received", "processed", "duplicates", "replies")}}
+
         return {
             "research.daily": lambda payload: {"note": "disabled (no live research router in mock mode)"},
             "followups.check": lambda p: _followups(),
@@ -300,4 +325,5 @@ class JobRegistry:
             "content.autopilot": lambda p: _autopilot(),
             "executive.briefing": lambda p: _executive_briefing(),
             "consultation.reminders": lambda p: _consultation_reminders(),
+            "email.poll": lambda p: _email_poll(),
         }

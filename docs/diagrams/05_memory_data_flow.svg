@@ -1,0 +1,211 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="100%" height="100%">
+    
+    <defs>
+      <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#0b0f17"/>
+        <stop offset="100%" stop-color="#141c2b"/>
+      </linearGradient>
+      <linearGradient id="cardGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#1c2536"/>
+        <stop offset="100%" stop-color="#151d2c"/>
+      </linearGradient>
+      <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#3b82f6"/>
+        <stop offset="100%" stop-color="#8b5cf6"/>
+      </linearGradient>
+      <linearGradient id="greenGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#10b981"/>
+        <stop offset="100%" stop-color="#059669"/>
+      </linearGradient>
+      <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#f59e0b"/>
+        <stop offset="100%" stop-color="#d97706"/>
+      </linearGradient>
+      <linearGradient id="purpleGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#8b5cf6"/>
+        <stop offset="100%" stop-color="#ec4899"/>
+      </linearGradient>
+      
+      <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%" filterUnits="userSpaceOnUse">
+        <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.5"/>
+      </filter>
+      <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+        <feGaussianBlur stdDeviation="4" result="blur"/>
+        <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+      </filter>
+
+      <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#60a5fa"/>
+      </marker>
+      <marker id="arrow-green" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#34d399"/>
+      </marker>
+      <marker id="arrow-gold" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#fbbf24"/>
+      </marker>
+    </defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&amp;display=swap');
+      text { font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif; }
+      .title { font-size: 24px; font-weight: 800; fill: #ffffff; text-anchor: middle; }
+      .subtitle { font-size: 14px; fill: #94a3b8; text-anchor: middle; }
+      .sec-title { font-size: 15px; font-weight: 700; fill: #93c5fd; }
+      .box-title { font-size: 14px; font-weight: 700; fill: #ffffff; }
+      .box-sub { font-size: 11px; fill: #94a3b8; }
+      .badge-text { font-size: 11px; font-weight: 700; fill: #ffffff; }
+      .link-text { font-size: 11px; fill: #38bdf8; font-weight: 600; }
+    </style>
+
+    <rect width="1200" height="800" fill="url(#bgGrad)"/>
+    <rect x="20" y="20" width="1160" height="760" rx="16" fill="none" stroke="#334155" stroke-width="1.5"/>
+
+    <!-- Header -->
+    <text x="600" y="55" class="title">المخطط 5: تدفق الذاكرة والمستندات الفنية (Memory &amp; SOW Data Flow)</text>
+    <text x="600" y="80" class="subtitle">كيف تتحول كلمات العميل الطبيعية إلى حقائق برمجية دائمة وتلخيص تراكمي دون نسيان أي تفصيل</text>
+
+    <!-- Column 1: Inbound Message -->
+    <g transform="translate(50, 120)">
+      <rect width="250" height="620" rx="12" fill="#131d2e" stroke="#38bdf8" stroke-width="1.5" filter="url(#shadow)"/>
+      <rect x="15" y="-12" width="220" height="24" rx="6" fill="#0284c7"/>
+      <text x="125" y="4" class="badge-text" text-anchor="middle">📩 كل رسالة جديدة من العميل</text>
+
+      <g transform="translate(20, 30)">
+        <rect width="210" height="90" rx="8" fill="#1e293b" stroke="#334155"/>
+        <text x="15" y="25" class="box-title">رسالة العميل الأولية</text>
+        <text x="15" y="45" font-size="10" fill="#94a3b8">"أريد متجر عطور في الرياض"</text>
+        <rect x="15" y="55" width="120" height="20" rx="4" fill="#0369a1"/>
+        <text x="75" y="69" font-size="9" fill="#fff" text-anchor="middle">نوع الخدمة: متجر</text>
+      </g>
+
+      <g transform="translate(20, 140)">
+        <rect width="210" height="110" rx="8" fill="#1e293b" stroke="#334155"/>
+        <text x="15" y="25" class="box-title">الرسالة الثانية: الميزات</text>
+        <text x="15" y="45" font-size="10" fill="#94a3b8">"مع بوابة دفع أبل باي ولغتين"</text>
+        <rect x="15" y="55" width="160" height="20" rx="4" fill="#0369a1"/>
+        <text x="95" y="69" font-size="9" fill="#fff" text-anchor="middle">ميزات: دفع + لغتين</text>
+        <rect x="15" y="80" width="120" height="20" rx="4" fill="#0284c7"/>
+        <text x="75" y="94" font-size="9" fill="#fff" text-anchor="middle">العملة: SAR</text>
+      </g>
+
+      <g transform="translate(20, 270)">
+        <rect width="210" height="90" rx="8" fill="#1e293b" stroke="#334155"/>
+        <text x="15" y="25" class="box-title">الرسالة الثالثة: النطاق</text>
+        <text x="15" y="45" font-size="10" fill="#94a3b8">"عندي حوالي 25 منتج تقريباً"</text>
+        <rect x="15" y="55" width="150" height="20" rx="4" fill="#0369a1"/>
+        <text x="90" y="69" font-size="9" fill="#fff" text-anchor="middle">حجم الكتالوج: 25 منتج</text>
+      </g>
+
+      <g transform="translate(20, 380)">
+        <rect width="210" height="210" rx="8" fill="#0f172a" stroke="#1e293b"/>
+        <text x="15" y="25" font-size="12" font-weight="700" fill="#38bdf8">حفظ في سجل المحادثة:</text>
+        <text x="15" y="50" font-size="10" fill="#94a3b8">جدول channel_messages</text>
+        <text x="15" y="70" font-size="10" fill="#94a3b8">• رقم الرسالة الخارجي</text>
+        <text x="15" y="90" font-size="10" fill="#94a3b8">• اتجاه الرسالة (in / out)</text>
+        <text x="15" y="110" font-size="10" fill="#94a3b8">• القناة (whatsapp, ig...)</text>
+        <text x="15" y="130" font-size="10" fill="#94a3b8">• التوقيت الدقيق UTC</text>
+        <text x="15" y="150" font-size="10" fill="#94a3b8">• هوية العميل الموحدة</text>
+        <text x="15" y="180" font-size="10" fill="#34d399">✅ ثبات دائم لا يحذف</text>
+      </g>
+    </g>
+
+    <!-- Arrow 1 -> 2 -->
+    <path d="M 300 230 L 350 230" stroke="#38bdf8" stroke-width="2.5" marker-end="url(#arrow)"/>
+    <path d="M 300 450 L 350 450" stroke="#38bdf8" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+    <!-- Column 2: Extractor & Facts -->
+    <g transform="translate(350, 120)">
+      <rect width="360" height="620" rx="12" fill="#181825" stroke="#8b5cf6" stroke-width="1.5" filter="url(#shadow)"/>
+      <rect x="15" y="-12" width="240" height="24" rx="6" fill="#6d28d9"/>
+      <text x="135" y="4" class="badge-text" text-anchor="middle">🔍 محرك الاستخراج وتحليل المتطلبات</text>
+
+      <!-- Facts Extraction -->
+      <g transform="translate(20, 25)">
+        <rect width="320" height="170" rx="8" fill="#1e1b4b" stroke="#4338ca"/>
+        <text x="15" y="25" class="box-title" fill="#c4b5fd">استخراج الحقائق (Structured Facts JSON)</text>
+        <rect x="15" y="38" width="290" height="115" rx="6" fill="#0f0c29"/>
+        <text x="25" y="58" font-size="10" fill="#a5b4fc">"service": "ecommerce_store",</text>
+        <text x="25" y="75" font-size="10" fill="#a5b4fc">"features": ["apple_pay", "multilingual"],</text>
+        <text x="25" y="92" font-size="10" fill="#a5b4fc">"catalog_size": 25,</text>
+        <text x="25" y="109" font-size="10" fill="#a5b4fc">"location": "Riyadh, SA",</text>
+        <text x="25" y="126" font-size="10" fill="#a5b4fc">"currency": "SAR"</text>
+      </g>
+
+      <!-- Rolling Summary -->
+      <g transform="translate(20, 215)">
+        <rect width="320" height="170" rx="8" fill="#1e1b4b" stroke="#4338ca"/>
+        <text x="15" y="25" class="box-title" fill="#c4b5fd">التلخيص التراكمي (Rolling Summary)</text>
+        <text x="15" y="45" class="box-sub">كل 10 رسائل يلخص المحادثة آلياً:</text>
+        <rect x="15" y="55" width="290" height="100" rx="6" fill="#0f0c29"/>
+        <text x="25" y="75" font-size="10" fill="#e2e8f0">"العميل صاحب متجر عطور بالرياض،</text>
+        <text x="25" y="95" font-size="10" fill="#e2e8f0">يحتاج متجر إلكتروني يدعم أبل باي</text>
+        <text x="25" y="115" font-size="10" fill="#e2e8f0">ولغتين عربي وإنجليزي لـ 25 منتج،</text>
+        <text x="25" y="135" font-size="10" fill="#e2e8f0">وهو في مرحلة انتظار السعر الرسمي."</text>
+      </g>
+
+      <!-- Scope Fingerprint -->
+      <g transform="translate(20, 405)">
+        <rect width="320" height="195" rx="8" fill="#1e1b4b" stroke="#4338ca"/>
+        <text x="15" y="25" class="box-title" fill="#c4b5fd">بصمة النطاق (Scope Fingerprint)</text>
+        <text x="15" y="45" class="box-sub">توليد شفرة فريدة تمثل نطاق المشروع:</text>
+        <rect x="15" y="55" width="290" height="35" rx="4" fill="#0f0c29"/>
+        <text x="25" y="77" font-size="11" fill="#38bdf8" font-weight="700">fp_ecom_25p_applepay_multilang</text>
+        <text x="15" y="115" font-size="11" fill="#cbd5e1">• تمنع تكرار طلب اعتماد نفس السعر</text>
+        <text x="15" y="135" font-size="11" fill="#cbd5e1">• تكتشف أي تعديل أو إضافة جديدة فوراً</text>
+        <text x="15" y="155" font-size="11" fill="#cbd5e1">• تضمن اتساق التسعير طوال المحادثة</text>
+      </g>
+    </g>
+
+    <!-- Arrow 2 -> 3 -->
+    <path d="M 710 230 L 760 230" stroke="#8b5cf6" stroke-width="2.5" marker-end="url(#arrow)"/>
+    <path d="M 710 500 L 760 500" stroke="#8b5cf6" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+    <!-- Column 3: SOW & Project Scope -->
+    <g transform="translate(760, 120)">
+      <rect width="390" height="620" rx="12" fill="#0f291e" stroke="#10b981" stroke-width="1.8" filter="url(#shadow)"/>
+      <rect x="15" y="-12" width="260" height="24" rx="6" fill="#047857"/>
+      <text x="145" y="4" class="badge-text" text-anchor="middle">📋 ملف نطاق العمل الفني (SOW File)</text>
+
+      <!-- Scope Version Table -->
+      <g transform="translate(20, 25)">
+        <rect width="350" height="260" rx="8" fill="#064e3b" stroke="#059669"/>
+        <text x="15" y="25" class="box-title" fill="#a7f3d0">جدول المهام والمتطلبات الرسمية</text>
+
+        <rect x="15" y="40" width="320" height="35" rx="4" fill="#022c22"/>
+        <text x="25" y="62" font-size="11" fill="#fff" font-weight="700">1. واجهة المتجر وتجربة المستخدم (UI/UX)</text>
+        <text x="315" y="62" font-size="11" fill="#6ee7b7" text-anchor="end">18 ساعة</text>
+
+        <rect x="15" y="82" width="320" height="35" rx="4" fill="#022c22"/>
+        <text x="25" y="104" font-size="11" fill="#fff" font-weight="700">2. خوادم وقواعد البيانات (Backend API)</text>
+        <text x="315" y="104" font-size="11" fill="#6ee7b7" text-anchor="end">16 ساعة</text>
+
+        <rect x="15" y="124" width="320" height="35" rx="4" fill="#022c22"/>
+        <text x="25" y="146" font-size="11" fill="#fff" font-weight="700">3. بوابات الدفع واللغات (Integrations)</text>
+        <text x="315" y="146" font-size="11" fill="#6ee7b7" text-anchor="end">8 ساعات</text>
+
+        <rect x="15" y="166" width="320" height="35" rx="4" fill="#022c22"/>
+        <text x="25" y="188" font-size="11" fill="#fff" font-weight="700">4. فحص الجودة والنشر السحابي (QA)</text>
+        <text x="315" y="188" font-size="11" fill="#6ee7b7" text-anchor="end">6 ساعات</text>
+
+        <rect x="15" y="210" width="320" height="38" rx="6" fill="#047857"/>
+        <text x="25" y="234" font-size="13" fill="#ffffff" font-weight="800">إجمالي ساعات العمل التقديرية:</text>
+        <text x="315" y="234" font-size="13" fill="#ffffff" font-weight="800" text-anchor="end">48 ساعة</text>
+      </g>
+
+      <!-- Package Inclusions -->
+      <g transform="translate(20, 305)">
+        <rect width="350" height="295" rx="8" fill="#064e3b" stroke="#059669"/>
+        <text x="15" y="25" class="box-title" fill="#a7f3d0">حزمة المزايا الـ 7 المضمنة في العرض:</text>
+        
+        <text x="20" y="55" font-size="11" fill="#d1fae5">1. ⚡ استضافة سحابية فائقة السرعة لمدة عام</text>
+        <text x="20" y="85" font-size="11" fill="#d1fae5">2. 🗄️ قاعدة بيانات مستقلة مع نسخ احتياطي تلقائي</text>
+        <text x="20" y="115" font-size="11" fill="#d1fae5">3. 🌐 حجز اسم نطاق رسمي (.com / .sa) + شهادة SSL</text>
+        <text x="20" y="145" font-size="11" fill="#d1fae5">4. 📱 واجهات متجاوبة بالكامل 100% مع الجوال والكمبيوتر</text>
+        <text x="20" y="175" font-size="11" fill="#d1fae5">5. 📊 لوحة تحكم كاملة لإدارة الطلبات والمنتجات</text>
+        <text x="20" y="205" font-size="11" fill="#d1fae5">6. 💳 دفعات مرحلية آمنة (50% مقدم و 50% بعد التسليم)</text>
+        <text x="20" y="235" font-size="11" fill="#d1fae5">7. 🛠️ دعم فني وضمان شامل وتدريب كامل على النظام</text>
+
+        <rect x="20" y="255" width="310" height="30" rx="4" fill="#047857"/>
+        <text x="175" y="275" font-size="11" fill="#ffffff" font-weight="700" text-anchor="middle">جاهز للتنفيذ والتعاقد الفوري 🚀</text>
+      </g>
+    </g>
+</svg>

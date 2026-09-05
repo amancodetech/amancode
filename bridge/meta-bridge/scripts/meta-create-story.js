@@ -83,25 +83,37 @@ async function publishStory() {
     await new Promise(r => setTimeout(r, 6000));
 
     console.log('🖼️ Attaching story media file...');
-    const [fileChooser] = await Promise.all([
-      page.waitForFileChooser({ timeout: 15000 }).catch(() => null),
-      page.evaluate(() => {
-        const btns = Array.from(document.querySelectorAll('[role=button], button, div[tabindex]'));
-        const addBtn = btns.find(b => (b.innerText || '').includes('إضافة صورة') || (b.innerText || '').includes('إضافة صورة/فيديو') || (b.innerText || '').includes('وسائط'));
-        if (addBtn) addBtn.click();
-      }),
-    ]);
+    let attached = false;
+    try {
+      const [fileChooser] = await Promise.all([
+        page.waitForFileChooser({ timeout: 12000 }).catch(() => null),
+        page.evaluate(() => {
+          const btns = Array.from(document.querySelectorAll('[role=button], button, div[tabindex]'));
+          const addBtn = btns.find(b => {
+            const t = (b.innerText || '').trim();
+            return t.includes('إضافة صورة') || t.includes('إضافة فيديو') || t.includes('إضافة صورة/فيديو') || t.includes('وسائط');
+          });
+          if (addBtn) addBtn.click();
+        }),
+      ]);
 
-    if (fileChooser) {
-      await fileChooser.accept([path.resolve(imagePath)]);
-      console.log('✅ Story image uploaded via file chooser!');
-      await new Promise(r => setTimeout(r, 6000));
-    } else {
+      if (fileChooser) {
+        await fileChooser.accept([path.resolve(imagePath)]);
+        console.log('✅ Story media uploaded via file chooser!');
+        attached = true;
+        await new Promise(r => setTimeout(r, 8000));
+      }
+    } catch (eChooser) {
+      console.warn('⚠️ Story file chooser error:', eChooser.message);
+    }
+
+    if (!attached) {
       const fileInput = await page.$('input[type=file]');
       if (fileInput) {
         await fileInput.uploadFile(path.resolve(imagePath));
-        console.log('✅ Story image uploaded via file input!');
-        await new Promise(r => setTimeout(r, 6000));
+        console.log('✅ Story media uploaded via file input!');
+        attached = true;
+        await new Promise(r => setTimeout(r, 8000));
       } else {
         console.error('❌ Could not find file upload trigger.');
         process.exit(1);
@@ -109,13 +121,16 @@ async function publishStory() {
     }
 
     // Wait for media processing
-    await new Promise(r => setTimeout(r, 4000));
+    await new Promise(r => setTimeout(r, 5000));
 
     // Click Share ("مشاركة")
     console.log('🚀 Sharing story...');
     const shared = await page.evaluate(() => {
-      const btns = Array.from(document.querySelectorAll('[role=button], button'));
-      const shareBtn = btns.find(b => (b.innerText || '').trim() === 'مشاركة' || (b.innerText || '').trim() === 'مشاركة القصة' || (b.innerText || '').trim() === 'Share');
+      const btns = Array.from(document.querySelectorAll('[role=button], button, div[role=button]'));
+      const shareBtn = btns.find(b => {
+        const t = (b.innerText || '').trim();
+        return t === 'مشاركة' || t === 'مشاركة القصة' || t.startsWith('مشاركة في') || t.startsWith('مشاركة على') || t === 'Share' || t.includes('مشاركة');
+      });
       if (shareBtn) {
         shareBtn.click();
         return true;
@@ -125,7 +140,7 @@ async function publishStory() {
 
     if (shared) {
       console.log('⏳ Waiting for story sharing confirmation...');
-      await new Promise(r => setTimeout(r, 8000));
+      await new Promise(r => setTimeout(r, 10000));
       console.log('🎉 Story successfully shared to Facebook & Instagram Stories!');
     } else {
       console.error('❌ Could not find Share button.');

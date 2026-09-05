@@ -34,7 +34,7 @@ class SalesAgent(Agent):
         self.followup = followup
         self.handoff = handoff
 
-    def process_message(self, lead: dict, message: str) -> dict:
+    def process_message(self, lead: dict, message: str, history: str = "") -> dict:
         lead_id = lead["lead_id"]
         corr = new_id()
         mem = self.conversation_memory.get_or_create(lead_id, "internal", lead.get("language", "en"))
@@ -42,7 +42,10 @@ class SalesAgent(Agent):
             self._emit("sales.conversation_started", {"lead_id": lead_id}, corr)
         mem["current_state"] = self._advance(mem["current_state"])
 
-        facts = extract_facts(message, self.router)
+        facts = extract_facts(message, self.router, history=history)
+        # CIR interpretation rides along ephemerally (in-turn only): popped
+        # before merge so it can never persist into facts/requirements.
+        cir_block = facts.pop("cir", None)
         mem = self.conversation_memory.merge_facts(mem, facts)
         mem["last_message_at"] = utcnow()
 
@@ -56,6 +59,7 @@ class SalesAgent(Agent):
             return {
                 "reply": "I'll connect you with a specialist to help with this.",
                 "state": mem["current_state"], "handoff": h, "needs_human": True,
+                "cir": cir_block,
             }
 
         # objection
@@ -69,6 +73,7 @@ class SalesAgent(Agent):
             return {
                 "reply": resp["clarification"], "objection": obj,
                 "objection_response": resp, "state": mem["current_state"],
+                "cir": cir_block,
             }
 
         fit = compute_fit(self.brain, self._lead_data(lead))
@@ -85,6 +90,7 @@ class SalesAgent(Agent):
             return {
                 "reply": question, "state": mem["current_state"],
                 "qualification": qual, "next_question": question,
+                "cir": cir_block,
             }
 
         # qualified → score + recommend + opportunity
@@ -116,6 +122,7 @@ class SalesAgent(Agent):
             "reply": rec["message"], "state": mem["current_state"],
             "qualification": qual, "lead_score": score_result,
             "recommendation": rec, "opportunity_id": opp_id,
+            "cir": cir_block,
         }
 
     def _advance(self, current: str) -> str:

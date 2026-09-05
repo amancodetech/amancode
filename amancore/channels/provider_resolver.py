@@ -29,7 +29,7 @@ BRIDGE_DEFAULT_BASE_URL = "http://127.0.0.1:8765"
 BRIDGE_TOKEN_ENV = "AMANCODE_BRIDGE_TOKEN"
 BRIDGE_INGRESS_TOKEN_ENV = "BRIDGE_INGRESS_TOKEN"
 
-_KNOWN_CHANNELS = ("whatsapp", "telegram", "facebook", "instagram")
+_KNOWN_CHANNELS = ("whatsapp", "telegram", "facebook", "instagram", "email")
 
 
 def production_enabled(prod_env: dict | None) -> bool:
@@ -88,11 +88,11 @@ def resolve_channel_config(channel: str, channels_cfg: dict | None,
             }
         return cfg
 
-    # telegram / facebook / instagram — same shape as the live composition root
+    # telegram / email / facebook / instagram — same shape as the live composition root
     if glob_on and raw_mode == "production":
         cfg["mode"] = "production"
         cfg["environment"] = {"production_enabled": True, "mode": "production"}
-    elif channel == "telegram":
+    elif channel in ("telegram", "email"):
         # keep the declared mode; the environment gate blocks external sends
         cfg.setdefault("environment", {
             "production_enabled": False,
@@ -155,6 +155,10 @@ def build_channel_adapter(channel: str, cfg: dict):
         from .telegram import TelegramAdapter
 
         return TelegramAdapter(cfg)
+    if channel == "email":
+        from .email import EmailAdapter
+
+        return EmailAdapter(cfg)
     if channel == "facebook":
         from .meta_channels import FacebookAdapter
 

@@ -185,7 +185,7 @@ router.post('/v1/messages/send', guard(async (req, res) => {
     } else if (['image', 'audio', 'video', 'document'].includes(type)) {
       result = await transport.sendMedia({
         to: body.to, type, base64: msg.media?.base64,
-        caption: msg.caption, filename: msg.media?.filename,
+        caption: msg.caption || msg.media?.caption, filename: msg.media?.filename,
         replyTo: msg.reply_to,
       });
     } else {

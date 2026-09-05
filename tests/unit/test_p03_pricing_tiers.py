@@ -61,8 +61,13 @@ class QuoteFlowTests(TempDirTestCase, unittest.TestCase):
         self.assertFalse(QuoteFlow.gate_b_ready(policy, "website", {}))
         self.assertFalse(QuoteFlow.gate_b_ready(
             policy, "website", {"scope": "pages only"}))          # no timeline/scale
-        self.assertTrue(QuoteFlow.gate_b_ready(
+        # D2-APPROVED: scope+timeline alone is NOT enough (connect +
+        # authority/budget required for a responsible estimate).
+        self.assertFalse(QuoteFlow.gate_b_ready(
             policy, "website", {"scope": "pages", "timeline": "next month"}))
+        self.assertTrue(QuoteFlow.gate_b_ready(
+            policy, "website", {"scope": "pages", "timeline": "next month",
+                                "integrations": "mada", "budget": "$5k"}))
 
     def test_estimate_gcc_currency_and_range(self):
         est = self.flow.estimate({"language": "ar"}, "website")
@@ -170,9 +175,13 @@ class CoordinatorPricingTests(TempDirTestCase, unittest.TestCase):
                                   "text": {"body": text}}]}}]}]}
 
     def _seed_scope(self, crm, lead_id):
+        # D2-APPROVED Gate-B+: scope-shape + scale + connect +
+        # authority/budget (seeds stand in for prior discovery turns).
         mem = ConversationMemory(crm).get_or_create(lead_id)
         mem["facts"].update({"scope": "7 صفحات مع بوابة تبرع",
-                             "timeline": "خلال شهرين"})
+                             "timeline": "خلال شهرين",
+                             "payments": True,
+                             "budget": "mentioned"})
         ConversationMemory(crm).save(mem)
 
     def test_t2_estimate_with_approval_request(self):
@@ -186,17 +195,25 @@ class CoordinatorPricingTests(TempDirTestCase, unittest.TestCase):
         summary = coord.handle_inbound("whatsapp", self._body(PRICE_MSG, "m2"))
         self.assertEqual(summary["processed"], 1)
         prompt = str(drafter.messages[-1])
-        self.assertIn("TENTATIVE ESTIMATE ONLY", prompt)
+        # Arabic T2 brief carries tier=T2 (not the English-only marker).
         self.assertIn("tier=T2", prompt)
+        # Arab market is priced in USD (fixed base).
+        self.assertIn("USD", prompt)
         self.assertEqual(len(flow.pending()), 1)
         self.assertTrue(alerts)
 
     def test_t0_deferral_when_scope_missing(self):
-        coord, drafter, _db, _crm, flow, _alerts = self._build()
+        coord, drafter, db, _crm, flow, _alerts = self._build()
         coord.handle_inbound("whatsapp", self._body(PRICE_MSG, "m1"))
         self.assertEqual(len(flow.pending()), 0)          # no approval requested
-        prompt = str(drafter.messages[0])
-        self.assertNotIn("TENTATIVE ESTIMATE", prompt)
+        # T0 deferral is deterministic (same philosophy as the T3 test
+        # below): no LLM call, no figure. The old drafter.messages[0]
+        # proxy predates the deterministic-T0 path and is obsolete.
+        self.assertEqual(drafter.messages, [])
+        sent = db.execute(
+            "SELECT payload FROM message_outbox ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()["payload"]
+        self.assertNotRegex(sent, r"\d{4,}")  # no invented figure
 
     def test_t3_approved_snapshot_short_circuits_llm(self):
         coord, drafter, db, crm, flow, _alerts = self._build()
@@ -236,7 +253,8 @@ class CoordinatorPricingTests(TempDirTestCase, unittest.TestCase):
         from amancore.pricing import registry
         fp = registry.scope_fingerprint(
             "website", {"scope": "7 صفحات مع بوابة تبرع",
-                        "timeline": "خلال شهرين"}, False)
+                        "timeline": "خلال شهرين",
+                        "payments": True, "budget": "mentioned"}, False)
         aid = flow.request_owner_approval(crm.get_lead(lead_id), est,
                                           scope_fingerprint=fp)
         flow.finalize(aid, approved_by="owner_console")

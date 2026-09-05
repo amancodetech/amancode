@@ -9,6 +9,7 @@ Adheres strictly to the AmanCode Master Brand Identity:
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import subprocess
@@ -288,35 +289,49 @@ class ContentAutopilotEngine:
         # 1. Meta Post
         if meta_post_script.exists():
             try:
-                env = os.environ.copy()
-                env["POST_IMAGE"] = banner_path
-                env["POST_CAPTION"] = caption
-                p = subprocess.run(["node", str(meta_post_script)], env=env, capture_output=True, text=True, timeout=90)
+                cmd_meta = [
+                    "node", str(meta_post_script),
+                    "--text", caption,
+                    "--image", banner_path,
+                    "--platform", "all",
+                ]
+                p = subprocess.run(cmd_meta, capture_output=True, text=True, timeout=120, cwd=str(meta_post_script.parent))
                 if p.returncode == 0:
                     published_platforms.extend(["facebook", "instagram"])
+                else:
+                    log.warning("meta post broadcast failed: %s", (p.stderr or p.stdout)[-200:])
             except Exception as exc:
                 log.warning("meta post broadcast failed: %s", exc)
 
         # 2. Meta Story
         if meta_story_script.exists():
             try:
-                env = os.environ.copy()
-                env["STORY_IMAGE"] = banner_path
-                p = subprocess.run(["node", str(meta_story_script)], env=env, capture_output=True, text=True, timeout=90)
+                cmd_story = [
+                    "node", str(meta_story_script),
+                    "--image", banner_path,
+                    "--platform", "all",
+                ]
+                p = subprocess.run(cmd_story, capture_output=True, text=True, timeout=120, cwd=str(meta_story_script.parent))
                 if p.returncode == 0:
                     published_platforms.append("meta_story")
+                else:
+                    log.warning("meta story broadcast failed: %s", (p.stderr or p.stdout)[-200:])
             except Exception as exc:
                 log.warning("meta story broadcast failed: %s", exc)
 
         # 3. TikTok Studio Post
         if tiktok_script.exists():
             try:
-                env = os.environ.copy()
-                env["TIKTOK_MEDIA"] = banner_path
-                env["TIKTOK_TITLE"] = content["title"]
-                p = subprocess.run(["node", str(tiktok_script)], env=env, capture_output=True, text=True, timeout=90)
+                cmd_tt = [
+                    "node", str(tiktok_script),
+                    "--caption", caption,
+                    "--media", banner_path,
+                ]
+                p = subprocess.run(cmd_tt, capture_output=True, text=True, timeout=120, cwd=str(tiktok_script.parent))
                 if p.returncode == 0:
                     published_platforms.append("tiktok")
+                else:
+                    log.warning("tiktok post broadcast failed: %s", (p.stderr or p.stdout)[-200:])
             except Exception as exc:
                 log.warning("tiktok post broadcast failed: %s", exc)
 
@@ -325,25 +340,40 @@ class ContentAutopilotEngine:
         try:
             import requests
 
-            requests.post(
+            with open(banner_path, "rb") as f:
+                img_b64 = base64.b64encode(f.read()).decode("utf-8")
+
+            resp = requests.post(
                 "http://127.0.0.1:8765/v1/messages/send",
                 headers={"Content-Type": "application/json", "X-Bridge-Token": bridge_token},
                 json={
                     "channel": "whatsapp",
                     "to": "status@broadcast",
-                    "message": {"type": "image", "image": banner_path, "caption": caption},
+                    "message": {
+                        "type": "image",
+                        "caption": caption,
+                        "media": {
+                            "base64": img_b64,
+                            "mimetype": "image/jpeg",
+                            "filename": Path(banner_path).name,
+                        },
+                    },
                 },
                 timeout=15,
             )
-            published_platforms.append("whatsapp_status")
+            if resp.status_code == 200:
+                published_platforms.append("whatsapp_status")
+            else:
+                log.warning("whatsapp status bridge returned %s: %s", resp.status_code, resp.text[:200])
         except Exception as exc:
             log.warning("whatsapp status broadcast failed: %s", exc)
 
         return {
             "status": "success",
             "published_at": utcnow(),
-            "theme": theme["key"],
+            "theme": theme,
             "title": content["title"],
+            "subtitle": content.get("subtitle", ""),
             "banner_path": banner_path,
             "published_platforms": published_platforms,
         }

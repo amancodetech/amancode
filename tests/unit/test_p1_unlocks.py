@@ -22,7 +22,13 @@ class T1BandTests(TempDirTestCase, unittest.TestCase):
         self.model = ConversationModel(ROOT, BrainStore(ROOT / "amancore" / "business_brain"))
 
     def test_t1_engages_in_commercial_brief(self):
-        plan = self.model.plan(lead={"lead_id": "L"}, mem={"facts": {}},
+        # D1-APPROVED gate: T1 needs category + shape + one other group.
+        # Timeline alone is NOT scope context (must stay T0 — see
+        # tests/unit/test_t1_groups.py); the seed stands in for prior
+        # discovery of both shape and scale.
+        plan = self.model.plan(lead={"lead_id": "L"},
+                               mem={"facts": {"scope": "موقع جمعية",
+                                              "timeline": "خلال شهرين"}},
                                agent_result={},
                                text="كم تستغرق مدة موقع جمعية؟",
                                language="ar", channel="whatsapp")
@@ -294,8 +300,12 @@ class MiniBandTests(TempDirTestCase, unittest.TestCase):
         self.model = ConversationModel(self.tmp, self.brain)
 
     def test_small_scope_picks_mini_band(self):
+        # D1-APPROVED gate: the mini band needs shape + one other group
+        # (seeded here as prior discovery would provide them).
         p = self.model.plan(lead={"lead_id": "L"},
-                            mem={"facts": {}, "working_memory":
+                            mem={"facts": {"scope": "موقع تعريفي",
+                                           "timeline": "قريب"},
+                                 "working_memory":
                                  {"mode": "SHAPING", "service_category": "website"}},
                             agent_result={},
                             text="موقع تعريفي من صفحتين، كم تستغرقون؟",

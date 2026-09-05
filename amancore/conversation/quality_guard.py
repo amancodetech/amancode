@@ -21,7 +21,18 @@ import re
 _NUM_RE = re.compile(r"\d[\d.,]*")
 _AR_RE = re.compile(r"[\u0600-\u06FF]")
 _QUESTIONS = ("?", "؟")
-_CURRENCY_RE = re.compile(r"\b(usd|sar|idr|myr|sgd|us\$|دولار|ريال|روبية)\b")
+_CURRENCY_RE = re.compile(r"\b(usd|sar|idr|myr|sgd|us\$|دولار|ريال|روبية|rp|rupiah|dollar)\b")
+
+# Approved-currency aliases: the plan declares an ISO code, but the reply may
+# word it ("دولار أمريكي" for USD, "روبية"/Rp for IDR). A mismatch against the
+# ISO code alone would false-positive every Arabic T1 — compare alias sets.
+_CURRENCY_ALIASES = {
+    "USD": {"usd", "us$", "dollar", "دولار"},
+    "IDR": {"idr", "rp", "rupiah", "روبية"},
+    "SAR": {"sar", "ريال"},
+    "MYR": {"myr"},
+    "SGD": {"sgd"},
+}
 
 _FORBIDDEN_PHRASES = [
     "guarantee", "we guarantee", "نضمن", "ضمان الزيادة", "زيادة مضمونة",
@@ -68,10 +79,13 @@ class QualityGuard:
 
         # 1b — currency consistency: only enforced when the plan declares an
         # approved currency (no declared currency = no currency authority).
+        # Alias-aware: "دولار" satisfies USD, "روبية"/Rp satisfies IDR.
         approved_currency = (plan.get("commercial") or {}).get("currency")
         if approved_currency:
+            allowed_cur = _CURRENCY_ALIASES.get(
+                str(approved_currency).upper(), {str(approved_currency).lower()})
             for tok in _CURRENCY_RE.findall((text or "").lower()):
-                if tok != approved_currency.lower():
+                if tok not in allowed_cur:
                     violations.append(f"wrong_currency:{tok}")
                     break
 

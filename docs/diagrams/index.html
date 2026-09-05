@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>مخططات معمارية وتشغيل نظام AmanCore - جودة فيكتور لا نهائية</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: #131b2e;
+      --border: #23334d;
+      --accent: #3b82f6;
+      --text: #cbd5e1;
+      --heading: #ffffff;
+      --gold: #f59e0b;
+      --green: #10b981;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Cairo', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 30px 20px;
+      line-height: 1.6;
+    }
+    .header {
+      max-width: 1300px;
+      margin: 0 auto 30px auto;
+      text-align: center;
+      padding: 30px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    }
+    .header h1 {
+      color: var(--heading);
+      margin: 0 0 10px 0;
+      font-size: 2.3rem;
+      font-weight: 900;
+    }
+    .header p {
+      color: #94a3b8;
+      margin: 0;
+      font-size: 1.15rem;
+    }
+    .badges-row {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+    .badge {
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      font-weight: 700;
+    }
+    .badge-blue { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid #3b82f6; }
+    .badge-green { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid #10b981; }
+    .badge-gold { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid #f59e0b; }
+
+    .container {
+      max-width: 1300px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 50px;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 25px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 18px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 15px;
+    }
+    .card-title {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: var(--heading);
+      margin: 0;
+    }
+    .btn-download {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 9px 20px;
+      border-radius: 8px;
+      font-family: 'Cairo', sans-serif;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      transition: all 0.2s;
+      font-size: 0.95rem;
+    }
+    .btn-download:hover {
+      background: #2563eb;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+    }
+    .svg-container {
+      background: #0b0f17;
+      border-radius: 12px;
+      padding: 15px;
+      border: 1px solid #1e293b;
+      overflow-x: auto;
+      text-align: center;
+    }
+    .svg-container img, .svg-container object, .svg-container svg {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🚀 مركز المخططات الهندسية الشاملة - AmanCore</h1>
+    <p>ملفات بصيغة الفيكتور النقي (Pure Scalable Vector Graphics - SVG) • تكبير لا نهائي بنسبة 1000% بأعلى دقة ووضوح بدون أي بكسلة</p>
+    <div class="badges-row">
+      <span class="badge badge-blue">دقة 100% مطابقة لتدفق الكود الفعلي</span>
+      <span class="badge badge-green">فيكتور هندسي مستقل بدون أي إنترنت</span>
+      <span class="badge badge-gold">جاهز للعرض في المتصفح، الجوال، وFigma</span>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Card 1 -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">المخطط 1: معمارية النظام العامة والربط بالقنوات (System Architecture)</h2>
+        <a class="btn-download" href="./01_system_architecture.svg" download="01_system_architecture.svg">
+          📥 تحميل ملف الـ SVG الفيكتور
+        </a>
+      </div>
+      <div class="svg-container">
+        <img src="./01_system_architecture.svg" alt="المخطط 1: معمارية النظام العامة">
+      </div>
+    </div>
+
+    <!-- Card 2 -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">المخطط 2: تسلسل رحلة العميل خطوة بخطوة (Customer Journey Sequence)</h2>
+        <a class="btn-download" href="./02_customer_journey_sequence.svg" download="02_customer_journey_sequence.svg">
+          📥 تحميل ملف الـ SVG الفيكتور
+        </a>
+      </div>
+      <div class="svg-container">
+        <img src="./02_customer_journey_sequence.svg" alt="المخطط 2: تسلسل رحلة العميل">
+      </div>
+    </div>
+
+    <!-- Card 3 -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">المخطط 3: آلة الحالات لمراحل البيع (Conversation State Machine FSM)</h2>
+        <a class="btn-download" href="./03_sales_state_machine.svg" download="03_sales_state_machine.svg">
+          📥 تحميل ملف الـ SVG الفيكتور
+        </a>
+      </div>
+      <div class="svg-container">
+        <img src="./03_sales_state_machine.svg" alt="المخطط 3: آلة الحالات">
+      </div>
+    </div>
+
+    <!-- Card 4 -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">المخطط 4: حراسة الجودة والأمان المالي (QualityGuard &amp; Financial Safety)</h2>
+        <a class="btn-download" href="./04_quality_guard_safety.svg" download="04_quality_guard_safety.svg">
+          📥 تحميل ملف الـ SVG الفيكتور
+        </a>
+      </div>
+      <div class="svg-container">
+        <img src="./04_quality_guard_safety.svg" alt="المخطط 4: حراسة الجودة">
+      </div>
+    </div>
+
+    <!-- Card 5 -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">المخطط 5: تدفق الذاكرة والمستندات الفنية (Memory &amp; SOW Data Flow)</h2>
+        <a class="btn-download" href="./05_memory_data_flow.svg" download="05_memory_data_flow.svg">
+          📥 تحميل ملف الـ SVG الفيكتور
+        </a>
+      </div>
+      <div class="svg-container">
+        <img src="./05_memory_data_flow.svg" alt="المخطط 5: تدفق الذاكرة">
+      </div>
+    </div>
+  </div>
+</body>
+</html>

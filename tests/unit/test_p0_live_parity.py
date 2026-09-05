@@ -169,13 +169,18 @@ class LiveParityTests(TempDirTestCase, unittest.TestCase):
         self.assertIn("بوابة تبرع", p4.split("Base it on their choices:")[-1])
 
         summary = self._send("كم سيكلفني؟", "t5")
-        p4 = self._prompt()
-        # commercial path engaged — never a discovery structure/question turn
-        self.assertNotIn("MODE=NEED", p4)
-        self.assertTrue(
-            ("official quote" in p4) or ("TENTATIVE ESTIMATE" in p4) or
-            ("tier=" in p4), p4[:400])
+        # P1 anti-premature-pricing: after 5 turns the scope facts are still
+        # incomplete (no scope/timeline captured), so the price ask must NOT
+        # produce figures — it defers with a requirement question via the
+        # price path (signal, not shortcut; guard always on).
         self.assertEqual(summary["processed"], 1)
+        self.assertEqual(summary.get("price_replies"), 1)
+        p5 = self._prompt()
+        self.assertNotIn("MODE=NEED", p5)
+        # No premature figure drafted on the price turn: the last LLM prompt
+        # is still the t4 SHAPING proposal (T0 deferral is deterministic).
+        self.assertNotIn("tier=T1", p5)
+        self.assertNotIn("tier=T2", p5)
 
     def test_price_after_scope_goes_t2_not_discovery(self):
         self._send("مرحبا", "q0")
@@ -184,13 +189,19 @@ class LiveParityTests(TempDirTestCase, unittest.TestCase):
             "SELECT lead_id FROM platform_identities WHERE external_user_id=?",
             (WA,)).fetchone()["lead_id"]
         mem = self.coord.memory.get_or_create(lead_id)
+        # D2-APPROVED Gate-B+: shape + scale + connect + authority/budget
+        # (seeds stand in for prior discovery turns).
         mem["facts"].update({"scope": "بوابة تبرع وتقارير",
-                             "timeline": "بعد شهرين"})
+                             "timeline": "بعد شهرين",
+                             "payments": True,
+                             "budget": "mentioned"})
         self.coord.memory.save(mem)
         self._send("كم سيكلفني؟", "q2")
         p = self._prompt()
-        self.assertIn("TENTIMATE OR T2".replace("TENTIMATE OR T2",
-                                                "TENTATIVE ESTIMATE"), p)
+        # Arabic T2 brief carries tier=T2 (the English-only marker is gone).
+        self.assertIn("tier=T2", p)
+        # Arab market is priced in USD (fixed base).
+        self.assertIn("USD", p)
         flow = self.coord.quote_flow
         self.assertEqual(len(flow.pending()), 1)
 

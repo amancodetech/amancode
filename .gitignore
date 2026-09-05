@@ -48,8 +48,10 @@ cookies/
 # runtime state (DBs, metrics, logs) — never version-controlled
 storage/
 bridge.env
-bridge_data/
+bridge_data*/
+scratch/
 bridge/meta-bridge/qr.png
 bridge/meta-bridge/qr-live.html
 configs/*secret*.json
+assets/*.json
 *.mp4

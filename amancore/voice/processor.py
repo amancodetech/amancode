@@ -1,9 +1,15 @@
-"""VoiceNoteProcessor — converts customer voice notes into text using Gemini Multimodal Audio.
+"""VoiceNoteProcessor — converts customer voice notes into text.
+
+Primary: AssemblyAI STT (Arabic-first, language_code='ar').
+Fallback: Gemini Multimodal Audio (legacy path, kept for resilience).
 
 Supports:
 - WhatsApp voice notes (.ogg / opus)
 - Telegram voice notes and audio messages
 - Arabic dialects (Gulf, Egyptian, Levantine, Yemeni, etc.) + Technical terms
+
+After transcription, the caller continues the TEXT via DeepSeek
+(see amancore.voice.pipeline.continue_with_deepseek).
 """
 
 from __future__ import annotations
@@ -25,20 +31,39 @@ VOICE_PROMPT = (
 
 
 class VoiceNoteProcessor:
-    """Processes and transcribes voice notes via Gemini Audio Multimodal API."""
+    """Processes voice notes: AssemblyAI first, Gemini fallback."""
 
     def __init__(self, api_key: str | None = None):
+        # legacy param = Gemini key override; AssemblyAI reads its own env.
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
 
     def transcribe(self, audio_data: bytes, mime_type: str = "audio/ogg") -> str:
-        """Transcribes raw audio bytes into text."""
+        """Transcribes raw audio bytes into text (never raises)."""
         if not audio_data:
             return ""
 
+        # 1) Primary: AssemblyAI (Arabic STT)
+        if os.environ.get("ASSEMBLYAI_API_KEY", "").strip():
+            try:
+                from .assemblyai import AssemblyAITranscriber
+
+                text = AssemblyAITranscriber().transcribe_simple(
+                    audio_data, mime_type=mime_type
+                )
+                if text:
+                    log.info("transcribed via assemblyai (chars=%d)", len(text))
+                    return text
+                log.warning("assemblyai empty, falling back to gemini")
+            except Exception as exc:  # noqa: BLE001 — fallback below
+                log.warning("assemblyai failed, falling back to gemini: %s", exc)
+
+        # 2) Fallback: Gemini Multimodal Audio
+        return self._transcribe_gemini(audio_data, mime_type)
+
+    def _transcribe_gemini(self, audio_data: bytes, mime_type: str) -> str:
         if not self.api_key:
             log.warning("cannot transcribe voice note: GEMINI_API_KEY not set")
             return ""
-
         try:
             from google import genai
             from google.genai import types

@@ -44,7 +44,7 @@ class FacebookSessionManager extends EventEmitter {
         channel: undefined,
         executablePath: this.config.browserPath || '/usr/bin/google-chrome',
         viewport: { width: 1280, height: 900 },
-        args: ['--disable-blink-features=AutomationControlled', '--lang=en', '--no-sandbox'],
+        args: ['--disable-blink-features=AutomationControlled', '--lang=en', '--no-sandbox', '--dns-result-order=ipv4first', '--disable-dev-shm-usage'],
       });
       this.browser = this.context;
       this.page = this.context.pages()[0] || await this.context.newPage();
@@ -75,12 +75,16 @@ class FacebookSessionManager extends EventEmitter {
     if (fs.existsSync(appStateFile)) {
       try {
         const appState = JSON.parse(fs.readFileSync(appStateFile, 'utf8'));
-        const browserCookies = appState.map(c => ({
-          name: c.key,
-          value: c.value,
-          domain: '.' + (c.domain || 'facebook.com').replace(/^\./, ''),
-          path: c.path || '/',
-        }));
+        const browserCookies = appState.map(c => {
+          let dom = (c.domain || 'facebook.com').trim();
+          if (!dom.startsWith('.')) dom = '.' + dom;
+          return {
+            name: c.key,
+            value: c.value,
+            domain: dom,
+            path: c.path || '/',
+          };
+        });
         await this.context.addCookies(browserCookies);
         log.info('facebook injected appstate cookies', { count: browserCookies.length });
       } catch (e) {
@@ -111,6 +115,22 @@ class FacebookSessionManager extends EventEmitter {
     if (allCookies.some(c => c.name === 'c_user' && c.value)) {
       this._setState(STATES.AUTHENTICATED);
       this._lastActivity = new Date().toISOString();
+      try {
+        const appStateDir = path.join(this.config.dataDir, 'facebook_session');
+        fs.mkdirSync(appStateDir, { recursive: true });
+        const appState = allCookies.map(c => ({
+          key: c.name,
+          value: c.value,
+          domain: (c.domain || 'facebook.com').replace(/^\./, ''),
+          path: c.path || '/',
+          hostOnly: !c.domain.startsWith('.'),
+          creation: new Date().toISOString(),
+          lastAccessed: new Date().toISOString(),
+        }));
+        fs.writeFileSync(path.join(appStateDir, 'appstate.json'), JSON.stringify(appState, null, 2), 'utf8');
+      } catch (saveErr) {
+        log.warn('failed auto-saving appstate.json', { error: saveErr.message });
+      }
       return true;
     }
     this._setState(STATES.AUTH_REQUIRED);

@@ -636,6 +636,8 @@ CREATE TABLE IF NOT EXISTS consultations (
     meeting_url TEXT,
     status TEXT NOT NULL DEFAULT 'CONFIRMED',
     notes TEXT,
+    calendar_event_id TEXT,
+    calendar_link TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     cancelled_at TEXT,

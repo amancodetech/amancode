@@ -119,11 +119,22 @@ def business_context() -> str:
         lines.append("Services:")
         for sv in brain.get("services", [])[:6]:
             lines.append(f"- {sv['name']} [{sv.get('delivery_model','')}]")
+        lines.append("\nWHAT WE DELIVER IN OUR PACKAGES (STANDARDS & VALUE INCLUSIONS):")
+        lines.append("- High-Performance Fast Cloud Server & Hosting deployment.")
+        lines.append("- Domain configuration and Free SSL Security Certificate (https encryption).")
+        lines.append("- Fully responsive UI for mobile, tablet, and desktop.")
+        lines.append("- Database architecture with automated backup pipelines.")
+        lines.append("- Direct WhatsApp business chat integration.")
+        lines.append("- Search Engine Optimization (SEO) foundations & fast page loading.")
+        lines.append("- Safe customer payment terms: 50% upfront, 50% only after delivery and client review.")
+        lines.append("- Handover training, warranty, and continuous support through tiered Care Plans.")
         icp = brain.get("icp", {})
         lines.append(f"Ideal customers: {icp.get('primary','')}")
         out = "\n".join(lines)
     except Exception as exc:  # noqa: BLE001
-        out = "AmanCode: digital solutions — websites, web apps, mini-ERP systems, mobile apps."
+        out = ("AmanCode: digital solutions — websites, web apps, mini-ERP systems, mobile apps.\n"
+               "Includes cloud hosting, domain setup, SSL, database, WhatsApp integration, "
+               "and 50% upfront / 50% on delivery terms.")
     _BIZ_CACHE_TEXT.append(out)
     return out
 
@@ -343,10 +354,22 @@ class TelegramOwnerConsole:
         pending = flow.pending()
         if not pending:
             return "لا عروض معلّقة حالياً ✅"
-        lines = ["💰 عروض بانتظار موافقتك:"]
+        lines = ["💰 **عروض الأسعار بانتظار اعتمادك:**\n──────────────────────"]
         for r in pending:
-            lines.append(f"• {r['approval_id'][:12]} — {r['reason']} ({r['requested_at'][:16]})")
-        lines.append("\nللاعتماد: /qapprove <المعرف>")
+            payload = json.loads(r.get("payload") or "{}")
+            proposed = payload.get("proposed_price") or 0
+            floor = payload.get("minimum_price") or 0
+            cur = payload.get("currency", "USD")
+            lead_id = str(payload.get("lead_id") or "")[:8]
+            service = payload.get("service_id") or "خدمة برمجية"
+            lines.append(
+                f"\n🔖 المعرف: `{r['approval_id'][:8]}` (عميل: `{lead_id}`)\n"
+                f"• الخدمة: {service}\n"
+                f"• السعر المستهدف المقترح: **{proposed:g} {cur}**\n"
+                f"• الحد الأدنى للتفاوض: {floor:g} {cur}\n"
+                f"⚡ للاعتماد بالسعر المقترح: `/qapprove {r['approval_id'][:8]}`\n"
+                f"✏️ أو حدد سعراً مخصصاً: `/qapprove {r['approval_id'][:8]} 1500`"
+            )
         return "\n".join(lines)
 
     def _act_qapprove(self, args: str) -> str:
@@ -355,21 +378,33 @@ class TelegramOwnerConsole:
         flow = (self.runtime or {}).get("quote_flow")
         if flow is None:
             return "تدفق التسعير غير مفعّل في هذه الجلسة."
-        prefix = (args or "").strip()
-        if not prefix:
-            return "الصيغة: /qapprove <معرف الموافقة>"
+        parts = (args or "").split()
+        if not parts:
+            return "الصيغة: /qapprove <معرف الموافقة> [سعر_مخصص_اختياري]"
+        prefix = parts[0]
+        custom_price = None
+        if len(parts) > 1:
+            try:
+                custom_price = float(parts[1].replace("$", "").replace(",", ""))
+            except ValueError:
+                return "سعر مخصص غير صالح. الصيغة: /qapprove <معرف> [سعر_اختياري]"
         matches = [r for r in flow.pending()
                    if r["approval_id"].startswith(prefix)]
         if len(matches) != 1:
             return ("لم أجد موافقة مطابقة. استخدم /quotes لعرض المعرفات.")
-        approval_id = matches[0]["approval_id"]
+        match = matches[0]
+        approval_id = match["approval_id"]
         try:
-            snapshot_id = flow.finalize(approval_id, approved_by="owner_console")
+            snapshot_id = flow.finalize(approval_id, approved_by="owner_console", price_override=custom_price)
         except (ValueError, NotFoundError) as exc:
             return f"تعذر الاعتماد: {exc}"
-        return (f"✅ اعتُمد العرض وأُنشئ السعر الرسمي.\n"
-                f"Snapshot: {snapshot_id[:12]}…\n"
-                "سيصل العميل السعر المعتمد عند سؤاله التالي.")
+        payload = json.loads(match.get("payload") or "{}")
+        final_price = custom_price if custom_price is not None else payload.get("proposed_price", 0)
+        cur = payload.get("currency", "USD")
+        return (f"✅ اعتُمد العرض وأُنشئ السعر الرسمي بنجاح!\n\n"
+                f"💵 **السعر النهائي المعتمد**: {final_price:g} {cur}\n"
+                f"🔖 المعرف: {snapshot_id[:12]}…\n"
+                f"📡 سيصل العميل هذا السعر الرسمي فوراً في رسالته التالية.")
 
     def _act_approve(self, args: str) -> str:
         """Compliance kit: owner tops-up today's business-initiated cap."""
@@ -802,6 +837,7 @@ class TelegramOwnerConsole:
         resolved, err = self._resolve_who(number)
         if err:
             return err
+        lead = self._find_or_create(resolved, None)
         if lead is None:
             return "رقم غير صالح."
         wa_id = resolved
@@ -882,29 +918,78 @@ class TelegramOwnerConsole:
             log.error("failed downloading telegram photo: %s", exc)
             return None
 
+    def _generate_smart_caption(self, user_instruction: str) -> str:
+        """Analyze user prompt/instruction and compose a professional marketing post caption using AI."""
+        clean = (user_instruction or "").strip()
+        if not clean:
+            return ""
+        try:
+            from ..voice.pipeline import continue_with_deepseek
+            system_prompt = (
+                "أنت المساعد التسويقي والمدير الإبداعي لشركة AmanCode المتخصصة في الحلول البرمجية وتطوير المواقع والمتاجر وأنظمة الذكاء الاصطناعي وتصميم الهويات البصرية.\n"
+                "المستخدم يرسل لك توجيهات أو طلباً أو فكرة لكتابة منشور/كابشن لفيديو أو صورة.\n"
+                "المطلوب منك:\n"
+                "1. استيعاب طلب المستخدم بدقة (مثلاً: لغة المنشور المطلوبة كالإندونيسية أو العربية، مناسبة المنشور كإطلاق الشركة أو إعلان خدمة).\n"
+                "2. صياغة المنشور الإعلاني النهائي الاحترافي الجذاب باللغة المطلوبة مع إيموجي مناسب وهاشتاجات قوية، مع تمثيل AmanCode بأفضل صورة.\n"
+                "3. تجنب تماماً تضمين تعليمات المستخدم بحد ذاتها (مثل 'انشر الفيديو' أو 'واضف تعليق مناسب') أو أي معرفات تقنية مثل BQACAg...\n"
+                "4. أخرج فقط نص الكابشن النهائي الجاهز للنشر بدون أي مقدمات أو شروحات."
+            )
+            ai_caption = continue_with_deepseek(clean, system=system_prompt)
+            if ai_caption and len(ai_caption.strip()) > 10:
+                return ai_caption.strip()
+        except Exception as exc:
+            log.warning("failed generating smart caption with AI: %s", exc)
+        return clean
+
     def _handle_video_post(self, video_obj: dict, caption: str) -> str:
         file_id = video_obj.get("file_id") if isinstance(video_obj, dict) else None
         if not file_id:
             return "❌ تعذر استخراج معرف الفيديو."
 
         caption_lower = (caption or "").lower()
-        platform = "all"
-        if any(w in caption_lower for w in ("تيكتوك", "تيك_توك", "tiktok", "/tt", "tt_post")):
-            platform = "tiktok"
-        elif any(w in caption_lower for w in ("انستقرام", "انستجرام", "instagram", "/ig", "ig_post", "ig_reel", "ريلز", "ريل")):
-            platform = "instagram"
-        elif any(w in caption_lower for w in ("فيسبوك", "facebook", "/fb", "fb_post", "fb_reel")):
-            platform = "facebook"
+        is_story = any(w in caption_lower for w in ("قصة", "ستوري", "استوري", "/story", "story", "حالة", "حاله", "status"))
 
-        target_name = "فيسبوك، انستغرام (Reels)، وتيك توك" if platform == "all" else ("تيك توك (TikTok)" if platform == "tiktok" else ("انستغرام Reels" if platform == "instagram" else "فيسبوك Reels"))
-        self._reply(f"⏳ جاري تحميل الفيديو ونشره كـ Reel/فيديو على {target_name}...")
+        is_all_explicit = any(w in caption_lower for w in ("جميع", "كل المنصات", "كل منصات", "السوشيال ميديا", "سوشيال ميديا", "social media", "all"))
+
+        # Check specific platform mentions
+        has_tt = any(w in caption_lower for w in ("تيكتوك", "تيك_توك", "تيك توك", "tiktok", "/tt", "tt_post"))
+        has_ig = any(w in caption_lower for w in ("انستغرام", "إنستغرام", "انستقرام", "إنستقرام", "انستجرام", "instagram", "/ig", "ig_post", "ig_reel", "ريلز", "ريل"))
+        has_fb = any(w in caption_lower for w in ("فيسبوك", "facebook", "/fb", "fb_post", "fb_reel"))
+        has_yt = any(w in caption_lower for w in ("يوتيوب", "youtube", "yt", "/yt", "شورتس", "shorts"))
+
+        if is_all_explicit:
+            platforms = ["facebook", "instagram", "tiktok", "youtube"]
+        else:
+            selected = []
+            if has_fb: selected.append("facebook")
+            if has_ig: selected.append("instagram")
+            if has_tt: selected.append("tiktok")
+            if has_yt: selected.append("youtube")
+            platforms = selected if selected else ["facebook", "instagram", "tiktok", "youtube"]
+
+        plat_labels = {
+            "facebook": "فيسبوك",
+            "instagram": "انستغرام",
+            "tiktok": "تيك توك",
+            "youtube": "يوتيوب (Shorts)"
+        }
+        target_name = " + ".join(plat_labels[p] for p in platforms)
+        if is_story:
+            target_name += " + حالة واتساب / ستوري"
+        self._reply(f"⏳ جاري تحليل الفكرة وصياغة المنشور بالذكاء الاصطناعي وتحميل الفيديو لنشره على {target_name}...")
 
         local_path = self._download_telegram_file(file_id)
         if not local_path:
             return "❌ تعذر تحميل الفيديو من خوادم تيليجرام."
 
-        clean_caption = re.sub(r"^/(post|publish|ig_post|instagram|tt|tiktok|reel|ريلز|انشر|انستقرام|تيكتوك)\s*", "", caption, flags=re.I).strip()
-        return self._act_post(clean_caption, image_path=local_path, platform=platform)
+        clean_caption = re.sub(r"^/(post|publish|ig_post|instagram|tt|tiktok|reel|ريلز|انشر|انستغرام|إنستغرام|انستقرام|انستجرام|تيكتوك|يوتيوب|youtube|شورتس)\s*", "", caption, flags=re.I).strip()
+        smart_caption = self._generate_smart_caption(clean_caption)
+
+        if is_story:
+            # Also publish to WhatsApp status / Meta stories if requested
+            self._act_story(local_path, platform="whatsapp", caption=smart_caption)
+
+        return self._act_post(smart_caption, image_path=local_path, platforms=platforms)
 
     def _handle_photo_post(self, photos: list, caption: str) -> str:
         if not photos:
@@ -918,9 +1003,9 @@ class TelegramOwnerConsole:
         is_story = any(w in caption_lower for w in ("قصة", "ستوري", "استوري", "/story", "story"))
 
         platform = "all"
-        if any(w in caption_lower for w in ("تيكتوك", "تيك_توك", "tiktok", "/tt", "tt_post")):
+        if any(w in caption_lower for w in ("تيكتوك", "تيك_توك", "تيك توك", "tiktok", "/tt", "tt_post")):
             platform = "tiktok"
-        elif any(w in caption_lower for w in ("انستقرام", "انستجرام", "instagram", "/ig", "ig_post", "ig_story")):
+        elif any(w in caption_lower for w in ("انستغرام", "إنستغرام", "انستقرام", "إنستقرام", "انستجرام", "instagram", "/ig", "ig_post", "ig_story")):
             platform = "instagram"
         elif any(w in caption_lower for w in ("فيسبوك", "facebook", "/fb", "fb_post", "fb_story")):
             platform = "facebook"
@@ -933,11 +1018,13 @@ class TelegramOwnerConsole:
         if not local_path:
             return "❌ تعذر تحميل الصورة من خوادم تيليجرام."
 
-        if is_story:
-            return self._act_story(local_path, platform=platform, caption=caption)
+        clean_caption = re.sub(r"^/(post|publish|ig_post|instagram|tt|tiktok|انشر|انستغرام|إنستغرام|انستقرام|تيكتوك)\s*", "", caption, flags=re.I).strip()
+        smart_caption = self._generate_smart_caption(clean_caption)
 
-        clean_caption = re.sub(r"^/(post|publish|ig_post|instagram|tt|tiktok|انشر|انستقرام|تيكتوك)\s*", "", caption, flags=re.I).strip()
-        return self._act_post(clean_caption, image_path=local_path, platform=platform)
+        if is_story:
+            return self._act_story(local_path, platform=platform, caption=smart_caption)
+
+        return self._act_post(smart_caption, image_path=local_path, platform=platform)
 
     def _act_story(self, image_path: str, platform: str = "all", caption: str = "") -> str:
         import subprocess
@@ -954,6 +1041,9 @@ class TelegramOwnerConsole:
         # 1. Publish to WhatsApp Status
         if platform in ("all", "whatsapp", "wa"):
             try:
+                is_vid = bool(image_path and any(str(image_path).lower().endswith(ext) for ext in (".mp4", ".mov", ".avi", ".mkv", ".webm")))
+                media_type = "video" if is_vid else "image"
+                media_name = "status.mp4" if is_vid else "status.jpg"
                 with open(image_path, "rb") as f:
                     b64 = base64.b64encode(f.read()).decode("utf-8")
                 token = os.environ.get("AMANCODE_BRIDGE_TOKEN", "5d4cb44f37189de5759a7d45074e6998ad82f1985f1753ea")
@@ -964,9 +1054,9 @@ class TelegramOwnerConsole:
                         "channel": "whatsapp",
                         "to": "status@broadcast",
                         "message": {
-                            "type": "image",
+                            "type": media_type,
                             "caption": caption or "🚀 أمان كود | حلول برمجية وذكاء اصطناعي وهويات بصرية",
-                            "media": {"base64": b64, "filename": "status.jpg"}
+                            "media": {"base64": b64, "filename": media_name}
                         }
                     },
                     timeout=15
@@ -1015,7 +1105,7 @@ class TelegramOwnerConsole:
         else:
             return f"❌ تعذر نشر القصة/الحالة:\n" + "\n".join(errors)
 
-    def _act_post(self, text: str, image_path: str | None = None, platform: str = "all") -> str:
+    def _act_post(self, text: str, image_path: str | None = None, platform: str = "all", platforms: list | None = None) -> str:
         text = (text or "").strip()
         if not text and not image_path:
             return (
@@ -1032,14 +1122,19 @@ class TelegramOwnerConsole:
         meta_script = root / "bridge" / "meta-bridge" / "scripts" / "meta-create-post.js"
         tiktok_script = root / "bridge" / "meta-bridge" / "scripts" / "tiktok-create-post.js"
 
-        if platform == "tiktok":
-            target_name = "تيك توك (TikTok Studio)"
-        elif platform == "instagram":
-            target_name = "انستغرام (amancode.tech)"
-        elif platform == "facebook":
-            target_name = "فيسبوك (AmanCode)"
-        else:
-            target_name = "جميع المنصات (فيسبوك + انستغرام + تيك توك)"
+        if platforms is None:
+            if platform == "all":
+                platforms = ["facebook", "instagram", "tiktok", "youtube"]
+            else:
+                platforms = [platform]
+
+        plat_labels = {
+            "facebook": "فيسبوك (AmanCode)",
+            "instagram": "انستغرام (amancode.tech)",
+            "tiktok": "تيك توك (TikTok Studio)",
+            "youtube": "يوتيوب (YouTube Shorts)"
+        }
+        target_name = " + ".join(plat_labels.get(p, p) for p in platforms)
 
         if not image_path:
             self._reply(f"⏳ جاري النشر الموحد على {target_name}...")
@@ -1048,18 +1143,26 @@ class TelegramOwnerConsole:
         success_platforms = []
         errors = []
 
+        # Calculate dynamic timeout based on file size (e.g. 5 mins minimum + extra time for large files)
+        file_size_mb = 0
+        if image_path and Path(image_path).exists():
+            file_size_mb = Path(image_path).stat().st_size / (1024 * 1024)
+        proc_timeout = int(max(300, 240 + file_size_mb * 10))
+
         # 1. Publish to Meta (Facebook & Instagram)
-        if platform in ("all", "facebook", "instagram"):
-            meta_plat = "all" if platform == "all" else platform
+        has_fb = "facebook" in platforms
+        has_ig = "instagram" in platforms
+        if has_fb or has_ig:
+            meta_plat = "all" if (has_fb and has_ig) else ("facebook" if has_fb else "instagram")
             cmd_meta = ["node", str(meta_script), "--text", text or "", "--platform", meta_plat]
             if image_path:
                 cmd_meta.extend(["--image", str(image_path)])
             try:
-                res = subprocess.run(cmd_meta, capture_output=True, text=True, timeout=120, cwd=str(meta_script.parent))
+                res = subprocess.run(cmd_meta, capture_output=True, text=True, timeout=proc_timeout, cwd=str(meta_script.parent))
                 if res.returncode == 0:
-                    if meta_plat in ("all", "facebook"):
+                    if has_fb:
                         success_platforms.append("فيسبوك (Facebook)")
-                    if meta_plat in ("all", "instagram"):
+                    if has_ig:
                         success_platforms.append("انستغرام (Instagram)")
                 else:
                     errors.append(f"Meta: {(res.stderr or res.stdout or 'خطأ')[-200:]}")
@@ -1067,18 +1170,45 @@ class TelegramOwnerConsole:
                 errors.append(f"Meta: {exc}")
 
         # 2. Publish to TikTok
-        if platform in ("all", "tiktok"):
+        if "tiktok" in platforms:
             cmd_tt = ["node", str(tiktok_script), "--caption", text or ""]
             if image_path:
                 cmd_tt.extend(["--media", str(image_path)])
             try:
-                res_tt = subprocess.run(cmd_tt, capture_output=True, text=True, timeout=120, cwd=str(tiktok_script.parent))
+                res_tt = subprocess.run(cmd_tt, capture_output=True, text=True, timeout=proc_timeout, cwd=str(tiktok_script.parent))
                 if res_tt.returncode == 0:
                     success_platforms.append("تيك توك (TikTok)")
                 else:
                     errors.append(f"TikTok: {(res_tt.stderr or res_tt.stdout or 'خطأ')[-200:]}")
             except Exception as exc:
                 errors.append(f"TikTok: {exc}")
+
+        # 3. Publish to YouTube (Shorts) if video
+        is_video = bool(image_path and any(image_path.lower().endswith(ext) for ext in (".mp4", ".mov", ".avi", ".mkv", ".webm")))
+        if "youtube" in platforms and is_video:
+            try:
+                from ..social.youtube import YouTubeClient
+                yt = YouTubeClient()
+                if yt.is_authenticated():
+                    yt_title = (text.split("\n")[0] if text else "AmanCode Launch").strip()
+                    # Keep title under 95 chars
+                    if len(yt_title) > 85:
+                        yt_title = yt_title[:82] + "..."
+                    yt_res = yt.upload_video(
+                        file_path=str(image_path),
+                        title=yt_title,
+                        description=text or "AmanCode official release.",
+                        tags=["AmanCode", "Software", "AI", "Shorts", "Indonesia", "Tech"],
+                        is_short=True
+                    )
+                    yt_id = yt_res.get("id")
+                    if yt_id:
+                        success_platforms.append("يوتيوب (YouTube Shorts)")
+                        self._latest_yt_id = yt_id
+                else:
+                    errors.append("YouTube: الحساب غير موثق OAuth2")
+            except Exception as exc:
+                errors.append(f"YouTube: {exc}")
 
         if success_platforms:
             post_preview = f"📝 النص: «{text[:100]}…»\n" if text else ""
@@ -1092,6 +1222,9 @@ class TelegramOwnerConsole:
                 links_list.append("🔗 انستغرام: https://www.instagram.com/amancode.tech")
             if "تيك توك (TikTok)" in success_platforms:
                 links_list.append("🔗 تيك توك: https://www.tiktok.com/@amancode.tech")
+            if "يوتيوب (YouTube Shorts)" in success_platforms:
+                yt_link = f"https://www.youtube.com/shorts/{getattr(self, '_latest_yt_id', 'UCUe2qwyWetGJUxfP9JxWtAg')}"
+                links_list.append(f"🔗 يوتيوب: {yt_link}")
 
             err_note = f"\n⚠️ ملاحظات: {'; '.join(errors)}" if errors else ""
             return (
@@ -1186,11 +1319,16 @@ class TelegramOwnerConsole:
             plats = " + ".join(res.get("published_platforms", [])) or "تم التجهيز"
             errs = f"\n⚠️ ملاحظات: {'; '.join(res['errors'])}" if res.get("errors") else ""
 
+            theme_val = res.get("theme")
+            badge = theme_val.get("badge") if isinstance(theme_val, dict) else (WEEKLY_MATRIX.get(datetime.now().weekday(), {}).get("badge", "نشر آلي"))
+            title_text = res.get("title") or "—"
+            subtitle_line = f"📝 العبارة: «{res['subtitle']}»\n" if res.get("subtitle") else ""
+
             return (
                 f"🎉 **تم تنفيذ الطيار الآلي للمحتوى ونشره بنجاح!** 🚀\n\n"
-                f"🏷️ المجال: {res['theme']['badge']}\n"
-                f"📌 العنوان: «{res['title']}»\n"
-                f"📝 العبارة: «{res['subtitle']}»\n"
+                f"🏷️ المجال: {badge}\n"
+                f"📌 العنوان: «{title_text}»\n"
+                f"{subtitle_line}"
                 f"🌐 المنصات المنشور عليها: {plats}\n\n"
                 f"🔗 فيسبوك: https://web.facebook.com/profile.php?id=61593733289713\n"
                 f"🔗 انستغرام: https://www.instagram.com/amancode.tech\n"

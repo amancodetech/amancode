@@ -244,7 +244,10 @@ class ScopeChangePatch(TempDirTestCase, unittest.TestCase):
         self._drive("عندي موقع تعريفي بسيط", "d0")
         lead = self.crm.find_lead_by_whatsapp(WA)
 
-        S1 = {"scope": "موقع تعريفي من صفحة إلى ثلاث", "timeline": "شهر"}
+        S1 = {"scope": "موقع تعريفي من صفحة إلى ثلاث", "timeline": "شهر",
+              # D2-APPROVED Gate-B+: connect + authority/budget join the seed
+              # (stand-ins for prior discovery turns).
+              "budget": "3000$"}
         snap_id, old_high, fp1 = self._approve_website_snapshot(
             S1, lead["lead_id"])
 
@@ -258,7 +261,7 @@ class ScopeChangePatch(TempDirTestCase, unittest.TestCase):
         self.memory.save(mem)
 
         # drive the delta message through coordinator (update_scope_review + extract_facts)
-        self._drive("أبغى أضيف معرض صور وأخبار للعناصر", "d1")
+        self._drive("أبغى أضيف معرض صور وأخبار للعناصر وربط الدفع", "d1")
         mem_after = self.memory.get_or_create(lead["lead_id"], "whatsapp", "ar")
         self.assertTrue((mem_after.get("facts") or {}).get("dynamic_content"),
                         "dynamic_content must be captured")
@@ -270,8 +273,11 @@ class ScopeChangePatch(TempDirTestCase, unittest.TestCase):
         # price ask — old number superseded, fresh estimate shown
         self._drive("كم صار السعر الآن؟", "d2")
         r4 = self._outbound()
-        # category remains website → T2 small-scope estimate (400-800 range)
-        self.assertIn("400", r4)   # website T2 low from Brain
+        # category remains website → T2 small-scope estimate. Under the
+        # D2-APPROVED gate the richer scope (gallery + payments) prices at
+        # 500-1500 USD (deterministic dynamic hours, no AI in probe).
+        self.assertIn("500", r4)   # website T2 low
+        self.assertIn("1500", r4)  # website T2 high
         self.assertNotIn("The approved price", r4)
 
     # ---- E) band-less category (GAP-2 fires) ----------------------------

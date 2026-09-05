@@ -22,7 +22,7 @@ async function main() {
   const sessionData = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'));
 
   const browser = await puppeteer.launch({
-    executablePath: fs.existsSync('/snap/bin/brave') ? '/snap/bin/brave' : undefined,
+    executablePath: fs.existsSync('/opt/google/chrome/chrome') ? '/opt/google/chrome/chrome' : (fs.existsSync('/snap/bin/brave') ? '/snap/bin/brave' : undefined),
     headless: 'new',
     args: [
       '--no-sandbox',

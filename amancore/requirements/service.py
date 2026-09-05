@@ -38,8 +38,13 @@ class RequirementsService:
         source_message_id: str | None = None,
         language: str = "ar",
         tier: str = "website",
+        exclude_subcategories: list | None = None,
     ) -> dict[str, Any]:
-        """Analyze inbound message, persist discovered requirements and decisions, evaluate coverage, and select the next best question."""
+        """Analyze inbound message, persist discovered requirements and decisions, evaluate coverage, and select the next best question.
+
+        exclude_subcategories (D6): extracted requirements in this set are
+        skipped (future-scope items must not enter current scope/SOW).
+        """
         if not lead_id or not message:
             return {
                 "lead_id": lead_id,
@@ -69,12 +74,17 @@ class RequirementsService:
             existing_reqs = self.crm.list_requirements_for_lead(lead_id)
             existing_subcats = {r.get("subcategory"): r for r in existing_reqs if r.get("subcategory")}
             existing_source_msgs = {r.get("source_message_id") for r in existing_reqs if r.get("source_message_id")}
+            excluded = set(exclude_subcategories or [])
 
             new_req_ids = []
             now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
             for req in extraction["requirements"]:
-                # Check for existing requirement with same subcategory or from same source_message_id
+                if req.subcategory in excluded:
+                    # D6: future-scope item — never enters current scope/SOW.
+                    log.info("requirement.future_skipped lead=%s subcat=%s",
+                             lead_id, req.subcategory)
+                    continue
                 if req.subcategory and req.subcategory in existing_subcats:
                     old = existing_subcats[req.subcategory]
                     self.crm.update_requirement(

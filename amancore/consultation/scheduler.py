@@ -121,6 +121,28 @@ class ConsultationScheduler:
             log.error("failed inserting consultation: %s", exc)
             return {"success": False, "error": "DB_ERROR", "message": str(exc)}
 
+        # 4b. Calendar event (best-effort: booking stands even if the
+        # calendar backend is unconfigured or temporarily failing).
+        calendar_info: dict = {}
+        try:
+            from .calendar import CalendarService
+
+            calendar_info = CalendarService(self.db).create_event({
+                "id": cid,
+                "consultation_id": human_code,
+                "customer_email": customer_email,
+                "service": service or "استشارة برمجية وتقنية عامة",
+                "scheduled_at": dt_str,
+                "duration_minutes": self.availability.duration_minutes,
+                "meeting_url": meeting_url,
+            })
+            self._log_event(cid, "CALENDAR_CREATED", {
+                "backend": calendar_info.get("backend"),
+                "event_id": calendar_info.get("event_id"),
+            })
+        except Exception as exc:  # noqa: BLE001
+            log.warning("calendar create failed for %s: %s", human_code, exc)
+
         # 5. Format Confirmation Card
         confirmation_msg = self.format_customer_confirmation(
             human_code=human_code,
@@ -143,6 +165,24 @@ class ConsultationScheduler:
             meeting_type=meeting_type,
             meeting_url=meeting_url,
         )
+
+        # 7. Confirmation email with calendar invite (best-effort).
+        if customer_email:
+            try:
+                from ..channels.email import send_email
+
+                cal_line = (f"\nAdd to calendar: {calendar_info.get('link')}\n"
+                            if calendar_info.get("link") else "")
+                send_email(
+                    str(customer_email).strip().lower(),
+                    f"AmanCode consultation confirmed #{human_code}",
+                    f"{confirmation_msg}{cal_line}",
+                    ics_content=calendar_info.get("ics"),
+                    ics_filename=f"amancode-{human_code}.ics",
+                )
+                self._log_event(cid, "CONFIRMATION_EMAIL_SENT", {"to": str(customer_email).strip().lower()})
+            except Exception as exc:  # noqa: BLE001
+                log.warning("confirmation email failed for %s: %s", human_code, exc)
 
         return {
             "success": True,
@@ -178,6 +218,30 @@ class ConsultationScheduler:
         )
         self._log_event(cid, "CANCELLED", {"reason": reason, "cancelled_at": now})
         self.db.commit()
+
+        # Best-effort: delete calendar event + notify by email when known.
+        try:
+            from .calendar import CalendarService
+
+            cal_res = CalendarService(self.db).cancel_event(cid)
+            self._log_event(cid, "CALENDAR_CANCELLED", cal_res)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("calendar cancel failed for %s: %s", human_code, exc)
+        customer_email = str(dict(row).get("customer_email") or "")
+        if customer_email:
+            try:
+                from ..channels.email import send_email
+
+                send_email(
+                    str(customer_email).strip().lower(),
+                    f"AmanCode consultation cancelled #{human_code}",
+                    f"Your consultation #{human_code} scheduled at {row['scheduled_at']} "
+                    f"has been cancelled. {('Reason: ' + reason) if reason else ''}\n"
+                    "Reply to this email to reschedule.",
+                )
+                self._log_event(cid, "CANCELLATION_EMAIL_SENT", {})
+            except Exception as exc:  # noqa: BLE001
+                log.warning("cancellation email failed for %s: %s", human_code, exc)
 
         log.info("consultation %s (%s) cancelled", human_code, cid)
         return {

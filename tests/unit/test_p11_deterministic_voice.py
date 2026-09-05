@@ -178,6 +178,12 @@ class P11DeterministicVoice(TempDirTestCase, unittest.TestCase):
         lead = self._lead()
         band = self.coord.conversation.public_band("website")
         self.assertTrue(band and band.get("low") is not None)
+        # D1-APPROVED gate: T1 needs shape + one other group (seeds stand
+        # in for prior discovery turns).
+        mem = self.memory.get_or_create(lead["lead_id"], "whatsapp", "ar")
+        mem["facts"] = dict(mem.get("facts") or {},
+                            scope="موقع مطعم", timeline="خلال شهرين")
+        self.memory.save(mem)
         before = {f: False for f in ("booking", "payments",
                                      "dynamic_content")}
         msg_ar = self._msg("عندي مطعم وأبغى موقع بسيط بكم السعر؟")
@@ -194,6 +200,19 @@ class P11DeterministicVoice(TempDirTestCase, unittest.TestCase):
         self.assertNotIn("وصلني طلبك", reply)
         self.assertNotIn("Thank you", reply)
         del before
+
+    # ---- §2.3b T1 gated without scope context (P1) ----------------------
+    def test_t1_gated_without_scope_context_gives_no_figure(self):
+        """A bare category + price word must NOT produce figures (P1 gate):
+        fresh lead, no scope facts -> deterministic requirement question."""
+        lead = self._lead()
+        msg_ar = self._msg("عندي مطعم وأبغى موقع بسيط بكم السعر؟")
+        reply = self.coord._price_or_proposal_reply(lead, new_id(),
+                                                    msg=msg_ar)
+        import re as _re
+        self.assertFalse(_re.search(r"\d{3,}", reply),
+                         f"no figure may leak without scope context: {reply}")
+        self.assertIn("؟", reply)
 
     # ---- §3 service_details data-driven feeding ------------------------
     def test_pack_validates_and_has_six_services(self):

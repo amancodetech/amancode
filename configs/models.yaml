@@ -3,21 +3,25 @@ defaults:
   max_retries: 2
   monthly_cost_alert_usd: 20
 
-# Effective chain per task: GLM only -> deterministic fallback.
-# (DeepSeek fully removed from config on 2026-08-27 — owner decision.
-#  Gemini capped at 20/day: definitions kept below, re-enable in a slot if needed.)
+# Effective chain: unified routing to deepseek_vision (model: deepseek-v4-flash-vision-exp).
+# Voice STT uses AssemblyAI -> transcribed text continues via DeepSeek-Vision-Exp.
 task_routing:
-  strategy:    {primary: gemini, secondary: glm, fallback: null}
-  reasoning:   {primary: gemini, secondary: glm, fallback: null}
-  pricing:     {primary: gemini, secondary: glm, fallback: null}
-  coding:      {primary: gemini, secondary: glm, fallback: null}
-  routine:     {primary: gemini, secondary: glm, fallback: null}
-  classification: {primary: gemini, secondary: glm, fallback: null}
-  extraction:  {primary: gemini, secondary: glm, fallback: null}
-  summarization: {primary: gemini, secondary: glm, fallback: null}
-  multimodal:  {primary: gemini, secondary: null, fallback: null}
+  strategy:       {primary: deepseek_vision, secondary: null, fallback: null}
+  reasoning:      {primary: deepseek_vision, secondary: null, fallback: null}
+  pricing:        {primary: deepseek_vision, secondary: null, fallback: null}
+  coding:         {primary: deepseek_vision, secondary: null, fallback: null}
+  routine:        {primary: deepseek_vision, secondary: null, fallback: null}
+  classification: {primary: deepseek_vision, secondary: null, fallback: null}
+  extraction:     {primary: deepseek_vision, secondary: null, fallback: null}
+  summarization:  {primary: deepseek_vision, secondary: null, fallback: null}
+  multimodal:     {primary: deepseek_vision, secondary: null, fallback: null}
 
 providers:
+  deepseek_vision:
+    type: openai_compatible
+    base_url_env: DEEPSEEK_BASE_URL
+    api_key_env: DEEPSEEK_API_KEY
+    model: deepseek-v4-flash-vision-exp
   gemini:
     type: gemini
     api_key_env: GEMINI_API_KEY
@@ -34,7 +38,9 @@ providers:
     model: glm-5.3-flash
 
 # USD per 1M tokens (estimates, configurable)
+# deepseek_vision: image billed max 384 tokens/image at flash input rate
 pricing_per_million:
+  deepseek_vision: {input: 0.27, output: 1.1}
   gemini:            {input: 1.0, output: 4.0}
   claude:            {input: 3.0, output: 15.0}
   glm:               {input: 0.1, output: 0.4}

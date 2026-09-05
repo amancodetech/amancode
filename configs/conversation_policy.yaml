@@ -9,6 +9,10 @@ value_first: true
 max_questions_per_reply: 1
 budget_weight_outside_commercial: 0
 
+# D3-E transition flag (default OFF — advisory only until D3 data review).
+coverage_block_t2: false
+coverage_block_threshold: 70.0
+
 service_categories:
   website:
     keywords: [موقع, "موقع إلكتروني", صفحة, website, site, situs, laman]

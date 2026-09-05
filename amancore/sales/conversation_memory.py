@@ -116,6 +116,10 @@ class ConversationMemory:
 
     def merge_facts(self, memory: dict, new_facts: dict) -> dict:
         for k, v in (new_facts or {}).items():
+            if k == "cir":
+                # CIR interpretation is EPHEMERAL (in-turn only): it must
+                # never persist into facts. The caller carries it separately.
+                continue
             if not v:
                 continue
             old = memory["facts"].get(k)
@@ -129,12 +133,25 @@ class ConversationMemory:
         return memory
 
 
-def extract_facts(message: str, router=None) -> dict:
+def extract_facts(message: str, router=None, history: str = "") -> dict:
     facts = _deterministic_facts(message)
     if router is not None:
-        data = run_json(router, "extraction", _FACT_PROMPT.format(message=message))
+        # NOTE: .replace() (not .format()) — the prompt contains literal
+        # JSON braces for the CIR block that must not be interpreted.
+        prompt = _FACT_PROMPT.replace("{message}", message)
+        if history:
+            # CIR Context Packet slice: recent exchanges so pronouns and
+            # follow-ups are interpretable. Advisory only, never authority.
+            prompt += "\nRecent conversation (oldest first, truncated):\n" + history[:600]
+        data = run_json(router, "extraction", prompt)
         if isinstance(data, dict):
             for k, v in data.items():
+                if k == "cir":
+                    # carried raw (UNTRUSTED); validated downstream by the
+                    # deterministic CIR gate. merge_facts() will not persist it.
+                    if isinstance(v, dict) and v:
+                        facts["cir"] = v
+                    continue
                 if v:
                     facts[k] = v
     return facts
@@ -168,6 +185,18 @@ def _deterministic_facts(message: str) -> dict:
 _FACT_PROMPT = """Extract structured facts from this customer message as JSON. Include only non-empty keys:
 problem, desired_outcome, current_process, users, scope, timeline, budget, authority,
 constraints, integrations, languages, support_needs, decisions (list), objections (list).
+
+Optionally include a "cir" object with ADVISORY interpretation (every field
+optional; omit the whole object if unsure — it is never authoritative):
+{"cir": {"intent": "pricing|timeline|requirement|clarification|comparison|deferral|none",
+"candidate_target": "project_price|product_item_price|project_timeline|feature|unknown",
+"candidate_entity": "project|product|service|feature|unknown",
+"candidate_reference": "string or null",
+"candidate_temporal": "now|later|phase2|unknown",
+"ambiguity": true|false, "confidence": 0.0-1.0}}
+Rules for "cir": a price DISCUSSION is intent "none" (not "pricing"); a bare
+pronoun with no clear referent in the recent conversation is ambiguity=true;
+never invent a product entity.
 
 Message: {message}
 """

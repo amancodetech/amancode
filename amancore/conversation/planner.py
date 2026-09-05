@@ -96,7 +96,7 @@ class ResponsePlanner:
 
     # ---- public API ------------------------------------------------------
     def plan(self, *, lead: dict, mem: dict, agent_result: dict,
-             text: str, language: str = "en", channel: str = "") -> dict:
+             text: str, language: str = "en", channel: str = "", **kwargs) -> dict:
         brain = self._brain()
         wm = ModeManager.load((mem or {}).get("working_memory"))
         facts = (mem or {}).get("facts") or {}
@@ -159,6 +159,8 @@ class ResponsePlanner:
             "constraints": {"max_words": max_words, "style": style},
             "base": "",
             "expected_next_mode": mode,
+            "requirements_question": kwargs.get("requirements_question"),
+            "requirements_coverage": kwargs.get("requirements_coverage"),
         }
 
         # --- wrap cases produced by the deterministic agent ---------------
@@ -252,6 +254,41 @@ class ResponsePlanner:
         ask = self.policy.next_question(category, mode, facts,
                                         exclude_field=wm.get("last_question_field"))
 
+        # D5-APPROVED — reference-confirm (NEED/SHAPING, one turn, choices
+        # compatible): a detected reference is an UNCONFIRMED hypothesis.
+        # Ask exactly one confirmation; facts are written only on affirmation
+        # (coordinator confirm step). Bounded: at most 2 asks, then dropped.
+        ref_question = None
+        if mode in ("NEED", "SHAPING") and not wm.get("reference_confirmed"):
+            try:
+                from ..channels.coordinator import (
+                    detect_reference_candidates as _refc)
+                _cands = _refc(text, brain)
+            except Exception:  # noqa: BLE001 — reference never breaks plan
+                _cands = {}
+            _pend = wm.get("reference_pending")
+            if _cands and not _pend:
+                _ref_id, _implies = sorted(_cands.items())[0]
+                wm["reference_pending"] = _ref_id
+                wm["reference_implies"] = list(_implies)
+                wm["reference_asks"] = 0
+                _pend, _implies = _ref_id, _implies
+            if _pend:
+                _asks = int(wm.get("reference_asks") or 0)
+                if _asks >= 2:
+                    for _k in ("reference_pending", "reference_implies",
+                               "reference_asks"):
+                        wm.pop(_k, None)
+                else:
+                    wm["reference_asks"] = _asks + 1
+                    _impl = list(wm.get("reference_implies") or [])
+                    _impl_txt = "، ".join(_impl[:4]) if _impl else "نفس الفكرة"
+                    ref_question = {
+                        "field": "reference_confirm",
+                        "hint": (f"هل تقصد مثل {_pend} مع ({_impl_txt})؟ "
+                                 "أكّد لأبني عليها."),
+                    }
+
         if mode == "NEED":
             parts = [
                 "MODE=NEED (VALUE-FIRST is mandatory).",
@@ -268,7 +305,13 @@ class ResponsePlanner:
                     "The request is too vague to advise yet. Warmly ask what "
                     "kind of activity/build they have in mind (this counts as "
                     "the single question).")
-            if ask:
+            if ref_question and not plan.get("question"):
+                parts.append(
+                    "Then confirm the reference in EXACTLY ONE question "
+                    f"using this intent: \"{ref_question['hint']}\". Adapt "
+                    "wording naturally.")
+                plan["question"] = ref_question
+            elif ask:
                 field, _ = ask
                 hint = self.policy.question_hint(field, language)
                 parts.append(
@@ -297,6 +340,17 @@ class ResponsePlanner:
                 t in (text or "").lower()
                 for t in self.policy.data.get("suggestion_triggers", []))
             skip_requested = self.policy.suggestion_skip(text)
+            # D7-APPROVED (choices only): a vague answer in SHAPING is also
+            # treated as delegation — offer easy choices, never stall-repeat.
+            # Shape/scale vagueness still routes here (choices), never to an
+            # estimate; the estimate gates stay closed without facts.
+            try:
+                from ..channels.coordinator import _UNKNOWN_CUE as _VAGUE_CUE
+                vague_answer = bool(_VAGUE_CUE.search(text or ""))
+            except Exception:  # noqa: BLE001 — vague path never breaks plan
+                vague_answer = False
+            if vague_answer and not skip_requested:
+                customer_delegated = True
             if sections:
                 if customer_delegated or wm.get("suggestion_active"):
                     # SUGGEST-INTAKE: a few easy-choice questions first so the
@@ -373,14 +427,19 @@ class ResponsePlanner:
                              + ", ".join(features[:3]) + ".")
             if plan.get("question_is_choice"):
                 pass  # intake question already set this turn
+            elif ref_question:
+                parts.append(
+                    "Before any other question, confirm the reference in ONE "
+                    f"question using this intent: \"{ref_question['hint']}\". "
+                    "Do NOT treat its capabilities as confirmed facts yet.")
+                plan["question"] = ref_question
             elif ask and not customer_delegated:
                 field, _ = ask
                 hint = self.policy.question_hint(field, language)
                 parts.append(
                     f"Refine ONE open point about [{field}] phrased like: \"{hint}\". "
                     "One question maximum.")
-                if ask:
-                    plan["question"] = {"field": ask[0], "hint": ask[1]}
+                plan["question"] = {"field": ask[0], "hint": ask[1]}
             else:
                 parts.append(
                     "End with ONE confirmation-style question only (e.g. asking "
@@ -405,19 +464,48 @@ class ResponsePlanner:
                 band = dict(band["mini_scope"])
             elif isinstance(band, dict):
                 band = dict(band)
+            # D1 gate (shape + one other group; deferred dims count).
+            if isinstance(band, dict) and band.get("low") is not None \
+                    and not self.policy.t1_min_scope(
+                        facts, unknown_accepted=wm.get("unknown_accepted")):
+                band = None
+            # Market-localized figures (USD is the fixed base): gcc shows the
+            # Brain USD band; indonesia converts at today's frozen Brain rate;
+            # any other market never gets a raw band (defer to T0).
+            if isinstance(band, dict) and band.get("low") is not None:
+                from ..pricing import fx as _fxp
+                _pmkt, _pcur = _fxp.resolve_market(language, lead)
+                if _pcur == "IDR":
+                    _prate, _pdate = _fxp.get_usd_idr_rate(brain)
+                    band = dict(band,
+                                low=_fxp.usd_to_idr(band["low"], _prate),
+                                high=_fxp.usd_to_idr(band["high"], _prate),
+                                currency="IDR", fx_rate=_prate, fx_date=_pdate)
+                elif _pcur != "USD":
+                    band = None
             if isinstance(band, dict) and band.get("low") is not None:
                 tier = "T1"
                 plan["commercial"].update({
                     "tier": "T1", "band": band,
                     "low": band.get("low"), "high": band.get("high"),
                     "currency": band.get("currency", "USD")})
+                if band.get("currency") == "IDR":
+                    _range_txt = (
+                        f"{_fxp.format_idr(band['low'])} to "
+                        f"{_fxp.format_idr(band['high'])} IDR "
+                        f"(converted at today's frozen rate USD 1 = "
+                        f"IDR {band.get('fx_rate'):,})")
+                else:
+                    _range_txt = (f"from {band['low']:g} to {band['high']:g} "
+                                  f"{band.get('currency', 'USD')}")
                 parts.append(
                     f"You MAY state the public STARTING RANGE for {category}"
                     + (f" ({scope_note})" if scope_note else "")
-                    + f": from {band['low']:g} to {band['high']:g} "
-                    f"{band.get('currency', 'USD')}. Present it as an entry "
-                    "range that moves with scope, never a final quote.")
-            elif self.policy.gate_b_like_scope(facts):
+                    + f": {_range_txt}. Present it as an entry "
+                    "range that moves with scope, never a final quote. "
+                    "Write digits verbatim, never paraphrased.")
+            elif self.policy.gate_b_like_scope(
+                    facts, unknown_accepted=wm.get("unknown_accepted")):
                 tier = "T2"
                 plan["commercial"]["tier"] = "T2"
                 parts.append(
@@ -436,6 +524,17 @@ class ResponsePlanner:
                 parts.append(
                     f"Ask EXACTLY ONE commercial question about [{field}]: \"{hint}\"")
                 plan["question"] = {"field": field, "hint": hint}
+            # D3-A (advisory only): surface discovery coverage when known —
+            # never a number, never blocking (blocking = HUMAN DECISION).
+            try:
+                _cov = plan.get("requirements_coverage")
+                if isinstance(_cov, (int, float)) and not isinstance(_cov, bool):
+                    parts.append(
+                        f"Discovery coverage is about {int(_cov)}%. "
+                        "If it is low, prefer one more scoping question "
+                        "before any figures.")
+            except Exception:  # noqa: BLE001 — advisory never breaks plan
+                pass
             parts.append("No final price, no discount promises.")
             plan["brief"] = " ".join(parts)
             plan["expected_next_mode"] = "COMMERCIAL"
@@ -513,6 +612,30 @@ class ResponsePlanner:
             "forbidden_catalog_names": foreign,
             "forbidden_claims": forbidden_phrases,
         }
+        # CIR C5 (read-only overlay): a price request blocked on ambiguity
+        # becomes EXACTLY ONE clarification question. Wording only — never a
+        # figure, never a claim, never a state change beyond the question.
+        try:
+            _cir = (kwargs.get("cir") or {})
+            if _cir.get("decision") == "CLARIFY":
+                _competing = list(((_cir.get("entity") or {})
+                                   .get("competing_candidates") or []))
+                if _competing:
+                    _opts = " / ".join([str(o) for o in _competing[:3]])
+                    _clarify = (f" The customer asked about price but the target "
+                                f"is ambiguous between: {_opts}. Ask EXACTLY ONE "
+                                "clarification question to identify which one they "
+                                "mean. No prices, no figures.")
+                else:
+                    _clarify = (" The customer asked about price but the target "
+                                "is unclear. Ask EXACTLY ONE warm clarification "
+                                "question to identify what they want priced. "
+                                "No prices, no figures.")
+                plan["brief"] = str(plan.get("brief") or "") + _clarify
+                plan["question"] = {"field": "_cir_clarify",
+                                    "hint": _clarify.strip()}
+        except Exception:  # noqa: BLE001 — CIR wording never breaks plan
+            pass
         plan["working_memory"] = self._wm(wm, mode, industry, category)
         plan["brief"] = self._with_interaction(
             plan, plan["brief"], text=text, language=language, mode=mode,
@@ -751,6 +874,13 @@ class ResponsePlanner:
                 "Mention that our engineering team provides direct meetings (Google Meet / Jitsi) within working hours "
                 "(10:00 - 20:00). Ask for their preferred time or date to confirm their booking slot."
             )
+
+        # 12) Requirements Intelligence Layer (RIL) next clarification
+        ril_q = plan.get("requirements_question")
+        if ril_q:
+            lines.append(f"[Requirements intelligence clarification: \"{ril_q}\"]")
+            if not plan.get("question") and mode in ("NEED", "SHAPING"):
+                plan["question"] = {"field": "requirements_clarification", "hint": ril_q}
 
         if not lines:
             return brief

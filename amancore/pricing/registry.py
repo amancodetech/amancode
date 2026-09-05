@@ -22,6 +22,21 @@ CATEGORY_SERVICE = {
     "automation": "ai_automation_suite",
 }
 
+# D3-A — conversation category → RIL coverage tier. Pure map; unknown/None
+# falls back to "website" (previous hardcoded behavior) + caller audits.
+CATEGORY_TIER = {
+    "website": "website",
+    "ecommerce": "website",
+    "mobile": "mobile",
+    "business_system": "mini_erp",
+    "automation": "web_app",
+}
+
+
+def tier_for_category(category: str | None) -> str:
+    """RIL tier for a conversation category (default "website")."""
+    return CATEGORY_TIER.get(category or "", "website")
+
 # Service → offer id (the offer that carries the price for that service).
 SERVICE_OFFER = {
     "business_website_system": "website_system",
@@ -221,3 +236,80 @@ def scope_fingerprint(category: str | None, facts: dict | None,
         parts.append(f"addon={aid}")
     raw = "|".join(parts)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
+def calculate_dynamic_hours(brain: dict, service: str | None, facts: dict | None,
+                            small: bool = False) -> float:
+    """Calculate project hours completely dynamically based on client facts:
+    pages, language count, dashboard depth, integrations, catalog size, and complexity.
+    Never a rigid flat number."""
+    facts = facts or {}
+    base = base_hours(brain, service)
+    if small and service in ("business_website_system", "website"):
+        base = 6.0
+
+    # 1. Page scaling (pages designed and coded beyond the baseline of 5)
+    pages = 0
+    try:
+        raw_pages = facts.get("pages") or facts.get("page_count")
+        if raw_pages:
+            pages = int(str(raw_pages).strip())
+    except (ValueError, TypeError):
+        pages = 0
+    if pages > 5:
+        extra_pages = min(pages - 5, 50)
+        page_rate = 2.0 if service in ("business_website_system", "ecommerce_store", "website") else 3.0
+        base += extra_pages * page_rate
+
+    # 2. Dynamic Complexity multiplier (low: 1.0, medium: 1.25, high: 1.6)
+    c_level = complexity_level(facts)
+    c_mult = complexity_multiplier(brain, service, c_level)
+    hours = base * c_mult
+
+    # 3. Multilingual dynamic scaling (RTL/LTR mirror + i18n translation keys: 15% per extra language)
+    lang_count = 1
+    raw_langs = facts.get("languages") or facts.get("language_count")
+    if isinstance(raw_langs, list):
+        lang_count = max(1, len(raw_langs))
+    elif raw_langs:
+        try:
+            lang_count = max(1, int(raw_langs))
+        except (ValueError, TypeError):
+            lang_count = 1
+    if lang_count > 1:
+        hours += hours * (0.15 * (lang_count - 1))
+
+    # 4. Payment Gateways: each additional gateway requires webhook, IPN, and testing (+6h per extra gateway)
+    gateways_count = 0
+    raw_gw = facts.get("payment_gateways") or facts.get("gateways")
+    if isinstance(raw_gw, list):
+        gateways_count = len(raw_gw)
+    elif raw_gw:
+        try:
+            gateways_count = int(raw_gw)
+        except (ValueError, TypeError):
+            gateways_count = 1
+    if gateways_count > 1:
+        hours += (gateways_count - 1) * 6.0
+
+    # 5. Dashboard / Admin depth dynamic scaling (CMS vs Orders & Invoicing vs Full RBAC ERP)
+    dashboard_type = str(facts.get("dashboard_type") or facts.get("dashboard") or "").lower()
+    if "erp" in dashboard_type or "full" in dashboard_type or facts.get("custom_dashboards"):
+        # Full ERP dashboard: RBAC roles, inventory, financial analytics
+        hours += 30.0 * (1.2 if c_level == "high" else 1.0)
+    elif "orders" in dashboard_type or "invoicing" in dashboard_type or facts.get("custom_dashboard"):
+        # Operations dashboard: orders, receipts, invoice generation
+        hours += 15.0
+    elif facts.get("erp_modules") or facts.get("modules"):
+        try:
+            mod_count = len(facts.get("modules") or []) if isinstance(facts.get("modules"), list) else int(facts.get("modules") or 1)
+            hours += max(0, mod_count) * 12.0
+        except (ValueError, TypeError):
+            hours += 15.0
+
+    # 6. Explicit add-ons (booking, notifications, shipping integrations)
+    for aid in facts.get("add_ons") or []:
+        hours += addon_hours(brain, aid)
+
+    return round(max(6.0, hours), 1)
+

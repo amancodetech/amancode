@@ -1,0 +1,216 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="100%" height="100%">
+    
+    <defs>
+      <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#0b0f17"/>
+        <stop offset="100%" stop-color="#141c2b"/>
+      </linearGradient>
+      <linearGradient id="cardGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#1c2536"/>
+        <stop offset="100%" stop-color="#151d2c"/>
+      </linearGradient>
+      <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#3b82f6"/>
+        <stop offset="100%" stop-color="#8b5cf6"/>
+      </linearGradient>
+      <linearGradient id="greenGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#10b981"/>
+        <stop offset="100%" stop-color="#059669"/>
+      </linearGradient>
+      <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#f59e0b"/>
+        <stop offset="100%" stop-color="#d97706"/>
+      </linearGradient>
+      <linearGradient id="purpleGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#8b5cf6"/>
+        <stop offset="100%" stop-color="#ec4899"/>
+      </linearGradient>
+      
+      <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%" filterUnits="userSpaceOnUse">
+        <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.5"/>
+      </filter>
+      <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+        <feGaussianBlur stdDeviation="4" result="blur"/>
+        <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+      </filter>
+
+      <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#60a5fa"/>
+      </marker>
+      <marker id="arrow-green" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#34d399"/>
+      </marker>
+      <marker id="arrow-gold" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#fbbf24"/>
+      </marker>
+    </defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&amp;display=swap');
+      text { font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif; }
+      .title { font-size: 24px; font-weight: 800; fill: #ffffff; text-anchor: middle; }
+      .subtitle { font-size: 14px; fill: #94a3b8; text-anchor: middle; }
+      .sec-title { font-size: 15px; font-weight: 700; fill: #93c5fd; }
+      .box-title { font-size: 14px; font-weight: 700; fill: #ffffff; }
+      .box-sub { font-size: 11px; fill: #94a3b8; }
+      .badge-text { font-size: 11px; font-weight: 700; fill: #ffffff; }
+      .link-text { font-size: 11px; fill: #38bdf8; font-weight: 600; }
+    </style>
+
+    <rect width="1200" height="800" fill="url(#bgGrad)"/>
+    <rect x="20" y="20" width="1160" height="760" rx="16" fill="none" stroke="#334155" stroke-width="1.5"/>
+
+    <!-- Header -->
+    <text x="600" y="55" class="title">المخطط 3: آلة الحالات لمراحل المحادثة والبيع (Conversation State Machine FSM)</text>
+    <text x="600" y="80" class="subtitle">المسار المنطقي الصارم الذي يمنع القفز أو إعطاء أسعار قبل اكتمال المتطلبات الفنية</text>
+
+    <!-- Main States Flow -->
+    <!-- State 1: OPENING -->
+    <g transform="translate(60, 130)">
+      <rect width="220" height="120" rx="10" fill="#1e293b" stroke="#3b82f6" stroke-width="1.5" filter="url(#shadow)"/>
+      <circle cx="25" cy="30" r="10" fill="#3b82f6"/>
+      <text x="25" y="34" font-size="11" fill="#fff" text-anchor="middle">1</text>
+      <text x="45" y="35" class="box-title" fill="#93c5fd">OPENING (الافتتاح والترحيب)</text>
+      <text x="20" y="65" class="box-sub">• رسالة ترحيبية راقية ودافئة</text>
+      <text x="20" y="85" class="box-sub">• اكتشاف لغة ولهجة العميل</text>
+      <text x="20" y="105" class="box-sub">• قفل اللغة التلقائي (LANGUAGE LOCK)</text>
+    </g>
+
+    <!-- Arrow 1 -> 2 -->
+    <path d="M 280 190 L 340 190" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#arrow)"/>
+    <text x="310" y="180" font-size="10" fill="#60a5fa" text-anchor="middle">تحديد النشاط</text>
+
+    <!-- State 2: NEED -->
+    <g transform="translate(340, 130)">
+      <rect width="230" height="120" rx="10" fill="#1e293b" stroke="#3b82f6" stroke-width="1.5" filter="url(#shadow)"/>
+      <circle cx="25" cy="30" r="10" fill="#3b82f6"/>
+      <text x="25" y="34" font-size="11" fill="#fff" text-anchor="middle">2</text>
+      <text x="45" y="35" class="box-title" fill="#93c5fd">NEED (اكتشاف الاحتياج)</text>
+      <text x="20" y="65" class="box-sub">• سؤال استشاري واحد ذكي</text>
+      <text x="20" y="85" class="box-sub">• تصنيف الخدمة (متجر/موقع/ERP)</text>
+      <text x="20" y="105" class="box-sub">• استخراج حقائق المشروع الأولية</text>
+    </g>
+
+    <!-- Arrow 2 -> 3 -->
+    <path d="M 570 190 L 630 190" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#arrow)"/>
+    <text x="600" y="180" font-size="10" fill="#60a5fa" text-anchor="middle">تحديد الميزات</text>
+
+    <!-- State 3: SHAPING -->
+    <g transform="translate(630, 130)">
+      <rect width="230" height="120" rx="10" fill="#1e293b" stroke="#3b82f6" stroke-width="1.5" filter="url(#shadow)"/>
+      <circle cx="25" cy="30" r="10" fill="#3b82f6"/>
+      <text x="25" y="34" font-size="11" fill="#fff" text-anchor="middle">3</text>
+      <text x="45" y="35" class="box-title" fill="#93c5fd">SHAPING (تشكيل الحل)</text>
+      <text x="20" y="65" class="box-sub">• تأطير الهيكل التقني الأنسب</text>
+      <text x="20" y="85" class="box-sub">• إبراز القيمة الاستثمارية للمشروع</text>
+      <text x="20" y="105" class="box-sub">• ربط متطلبات العميل بالحلول</text>
+    </g>
+
+    <!-- Arrow 3 -> 4 -->
+    <path d="M 860 190 L 920 190" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#arrow)"/>
+    <text x="890" y="180" font-size="10" fill="#60a5fa" text-anchor="middle">طلب التكلفة</text>
+
+    <!-- State 4: COMMERCIAL CONTAINER (BIG) -->
+    <g transform="translate(60, 290)">
+      <rect width="1080" height="260" rx="12" fill="#111c2e" stroke="#2563eb" stroke-width="2" filter="url(#shadow)"/>
+      <rect x="20" y="-12" width="300" height="24" rx="6" fill="#1d4ed8"/>
+      <text x="170" y="4" class="badge-text" text-anchor="middle">💰 COMMERCIAL (بوابات التسعير الصارمة T0 - T3)</text>
+
+      <!-- Sub-state T0 -->
+      <g transform="translate(30, 35)">
+        <rect width="230" height="195" rx="8" fill="#1e293b" stroke="#475569"/>
+        <text x="15" y="30" class="box-title" fill="#94a3b8">بوابة T0: No Scope</text>
+        <text x="15" y="55" class="box-sub">العميل سأل: "بكم الموقع؟"</text>
+        <rect x="15" y="70" width="200" height="45" rx="4" fill="#0f172a"/>
+        <text x="25" y="88" font-size="10" fill="#f87171">🚫 ممنوع إعطاء أي رقم</text>
+        <text x="25" y="104" font-size="10" fill="#94a3b8">يطلب تفاصيل نشاطه أولاً</text>
+        <text x="15" y="145" class="box-sub">الهدف: حماية الشركة من</text>
+        <text x="15" y="165" class="box-sub">التسعير الأعمى غير المدروس</text>
+      </g>
+
+      <!-- Arrow T0 -> T1 -->
+      <path d="M 260 130 L 290 130" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+      <!-- Sub-state T1 -->
+      <g transform="translate(290, 35)">
+        <rect width="230" height="195" rx="8" fill="#1e293b" stroke="#3b82f6"/>
+        <text x="15" y="30" class="box-title" fill="#60a5fa">بوابة T1: Public Band</text>
+        <text x="15" y="55" class="box-sub">حدد الخدمة ولم يحدد الميزات</text>
+        <rect x="15" y="70" width="200" height="45" rx="4" fill="#0f172a"/>
+        <text x="25" y="88" font-size="10" fill="#38bdf8">نطاق عام استرشادي فقط</text>
+        <text x="25" y="104" font-size="10" fill="#94a3b8">"المواقع المماثلة تبدأ من..."</text>
+        <text x="15" y="145" class="box-sub">يوجه العميل فوراً لتحديد</text>
+        <text x="15" y="165" class="box-sub">الميزات لتثبيت السعر الفعلي</text>
+      </g>
+
+      <!-- Arrow T1 -> T2 -->
+      <path d="M 520 130 L 550 130" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrow)"/>
+
+      <!-- Sub-state T2 -->
+      <g transform="translate(550, 35)">
+        <rect width="240" height="195" rx="8" fill="#1e1b4b" stroke="#8b5cf6" stroke-width="1.5"/>
+        <text x="15" y="30" class="box-title" fill="#c4b5fd">بوابة T2: Gate-B Scope</text>
+        <text x="15" y="55" class="box-sub">اكتملت الميزات والمقاييس</text>
+        <rect x="15" y="70" width="210" height="55" rx="4" fill="#17112f"/>
+        <text x="25" y="88" font-size="10" fill="#a78bfa">🧠 الـ AI يحسب ساعات العمل</text>
+        <text x="25" y="104" font-size="10" fill="#fbbf24">🔔 إرسال تنبيه للمالك بتيليجرام</text>
+        <text x="25" y="118" font-size="9" fill="#94a3b8">طمأنة العميل بمراجعة الفريق</text>
+        <text x="15" y="155" class="box-sub">العميل لا ينتظر بصمت بل يشعر</text>
+        <text x="15" y="172" class="box-sub">بالاهتمام التام بمشروعه</text>
+      </g>
+
+      <!-- Arrow T2 -> T3 -->
+      <path d="M 790 130 L 820 130" stroke="#10b981" stroke-width="2.5" marker-end="url(#arrow-green)"/>
+
+      <!-- Sub-state T3 -->
+      <g transform="translate(820, 35)">
+        <rect width="230" height="195" rx="8" fill="#064e3b" stroke="#10b981" stroke-width="1.8"/>
+        <text x="15" y="30" class="box-title" fill="#6ee7b7">بوابة T3: Approved Price</text>
+        <text x="15" y="55" class="box-sub">موافقة المالك في تيليجرام</text>
+        <rect x="15" y="70" width="200" height="55" rx="4" fill="#042f2e"/>
+        <text x="25" y="88" font-size="10" fill="#34d399">✅ اعتماد السعر الرسمي</text>
+        <text x="25" y="104" font-size="10" fill="#a7f3d0">تجميد السناب شوت بقاعدة البيانات</text>
+        <text x="25" y="118" font-size="9" fill="#6ee7b7">تقديم حزمة المزايا الـ 7 الكاملة</text>
+        <text x="15" y="155" class="box-sub">لا يخرج أي رقم رسمي إلا</text>
+        <text x="15" y="172" class="box-sub">بعد مرور هذه البوابة حتماً</text>
+      </g>
+    </g>
+
+    <!-- State 5: NEGOTIATION -->
+    <g transform="translate(60, 590)">
+      <rect width="1080" height="160" rx="12" fill="#1a1c23" stroke="#f59e0b" stroke-width="1.5" filter="url(#shadow)"/>
+      <rect x="20" y="-12" width="260" height="24" rx="6" fill="url(#goldGrad)"/>
+      <text x="150" y="4" class="badge-text" text-anchor="middle">🤝 NEGOTIATION (استراتيجيات التفاوض الذكي)</text>
+
+      <g transform="translate(30, 25)">
+        <rect width="235" height="110" rx="8" fill="#13151b" stroke="#334155"/>
+        <text x="15" y="25" class="box-title" fill="#fde68a">1. إبراز القيمة التنافسية</text>
+        <text x="15" y="50" class="box-sub">• سيرفرات سحابية سريعة ومجانية</text>
+        <text x="15" y="70" class="box-sub">• دومين وشهادة SSL وضمان تقني</text>
+        <text x="15" y="90" class="box-sub">• تدريب كامل للعميل على لوحة التحكم</text>
+      </g>
+
+      <g transform="translate(290, 25)">
+        <rect width="240" height="110" rx="8" fill="#13151b" stroke="#334155"/>
+        <text x="15" y="25" class="box-title" fill="#fde68a">2. تجزئة النطاق (De-scoping)</text>
+        <text x="15" y="50" class="box-sub">• إذا كانت ميزانية العميل أقل:</text>
+        <text x="15" y="70" class="box-sub">• اقتراح تقليص اللغات مؤقتاً</text>
+        <text x="15" y="90" class="box-sub">• أو تقليص عدد الصفحات والتقارير</text>
+      </g>
+
+      <g transform="translate(555, 25)">
+        <rect width="240" height="110" rx="8" fill="#13151b" stroke="#334155"/>
+        <text x="15" y="25" class="box-title" fill="#fde68a">3. الإطلاق المرحلي (MVP Phase)</text>
+        <text x="15" y="50" class="box-sub">• إطلاق النسخة الأولى الأساسية الآن</text>
+        <text x="15" y="70" class="box-sub">• تأجيل الميزات المعقدة للمرحلة 2</text>
+        <text x="15" y="90" class="box-sub">• بدء البيع السريع بأقل تكلفة</text>
+      </g>
+
+      <g transform="translate(820, 25)">
+        <rect width="230" height="110" rx="8" fill="#13151b" stroke="#10b981"/>
+        <text x="15" y="25" class="box-title" fill="#86efac">4. مرونة السداد والأمان</text>
+        <text x="15" y="50" class="box-sub">• 50% دفعة أولى للبدء</text>
+        <text x="15" y="70" class="box-sub">• 50% فقط بعد المعاينة والتسليم</text>
+        <text x="15" y="90" class="box-sub" fill="#34d399">🎯 إغلاق الصفقة (Deal Won)</text>
+      </g>
+    </g>
+</svg>

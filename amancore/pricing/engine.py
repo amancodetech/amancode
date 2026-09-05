@@ -42,7 +42,7 @@ class PricingEngine:
         known_currencies = {m.get("currency") for m in markets.values() if m.get("currency")}
         currency = scope.get("currency") or markets.get(market, {}).get("currency", "USD")
 
-        hours = scope.get("estimated_hours") or 0
+        hours = scope.get("estimated_hours") or scope.get("total_estimated_hours") or 0
         # Approved add-ons add deterministic hours on top of the base scope.
         for aid in scope.get("add_ons") or []:
             hours += registry.addon_hours(self.brain, aid)

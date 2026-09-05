@@ -130,6 +130,21 @@ class HonestLeadFollowupEngine:
             except Exception as exc:
                 log.warning("followup bridge send failed: %s", exc)
 
+        if sent and phone:
+            try:
+                self.db.execute(
+                    """
+                    INSERT INTO channel_messages (
+                        channel, direction, external_user_id, lead_id,
+                        external_message_id, body, status, created_at
+                    ) VALUES ('whatsapp', 'out', ?, ?, ?, ?, 'sent', ?)
+                    """,
+                    (phone, lead_id, f"followup-{new_id()[:8]}", msg_text, utcnow())
+                )
+                self.db.commit()
+            except Exception as exc:
+                log.warning("failed to record followup in channel_messages: %s", exc)
+
         log.info("executed honest follow-up for lead %s (sent=%s)", lead_id, sent)
         return {
             "success": True,

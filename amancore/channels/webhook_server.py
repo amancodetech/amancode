@@ -224,7 +224,7 @@ def build_runtime(root: Path):
     from ..channels.router import ChannelRouter
 
     adapters_by_channel: dict = {}
-    for _name in ("whatsapp", "telegram", "facebook", "instagram"):
+    for _name in ("whatsapp", "telegram", "facebook", "instagram", "email"):
         _cfg = resolve_channel_config(_name, cfg.channels, prod_env)
         if _cfg is None:
             continue
@@ -234,7 +234,7 @@ def build_runtime(root: Path):
     router = ChannelRouter(dict(adapters_by_channel))
     tg_adapter = adapters_by_channel.get("telegram")
     meta_adapters: dict = {k: v for k, v in adapters_by_channel.items()
-                           if k in ("facebook", "instagram")}
+                           if k in ("facebook", "instagram", "email")}
 
     outbox = MessageOutbox(db)
     policy = ChannelPolicyEngine(brain, getattr(cfg, "channels", {}) or {})

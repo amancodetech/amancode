@@ -54,7 +54,7 @@ def build_adapters() -> dict:
     channels_cfg = channels_overlay()
     prod_env = production_overlay()
     adapters: dict = {}
-    for channel in ("whatsapp", "telegram", "facebook", "instagram"):
+    for channel in ("whatsapp", "telegram", "facebook", "instagram", "email"):
         cfg = resolve_channel_config(channel, channels_cfg, prod_env)
         if cfg is None:
             continue
@@ -75,7 +75,7 @@ def build_probe_adapter(channel: str, channel_cfg: dict):
         resolve_channel_config,
     )
 
-    if channel not in ("whatsapp", "telegram", "facebook", "instagram"):
+    if channel not in ("whatsapp", "telegram", "facebook", "instagram", "email"):
         raise KeyError(f"no probe adapter registered for channel '{channel}'")
     cfg = resolve_channel_config(channel, {channel: channel_cfg}, {})
     if cfg is None:

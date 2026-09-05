@@ -157,3 +157,31 @@ class ConsultationReminderService:
                 urllib.request.urlopen(req, timeout=10)
             except Exception as exc:
                 log.warning("failed sending owner reminder: %s", exc)
+
+        # Email copy to the customer when an address is known (best-effort;
+        # idempotency is owned by the REMINDER_*_SENT events above).
+        customer_email = str(data.get("customer_email") or "").strip().lower()
+        if customer_email:
+            try:
+                from ..channels.email import send_email
+                from .calendar import build_ics
+
+                ics = build_ics(
+                    uid=str(data.get("id") or human_code),
+                    summary=f"AmanCode consultation #{human_code}",
+                    description=f"{service}\n{meeting_url}",
+                    location=str(meeting_url or ""),
+                    start_utc=str(data.get("scheduled_at") or ""),
+                    duration_minutes=int(data.get("duration_minutes") or 30),
+                    organizer_email=os.environ.get("SMTP_USER", ""),
+                    attendee_email=customer_email,
+                )
+                send_email(
+                    customer_email,
+                    f"AmanCode reminder: consultation in {mins} minutes #{human_code}",
+                    cust_text,
+                    ics_content=ics,
+                    ics_filename=f"amancode-{human_code}.ics",
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.warning("failed sending customer reminder email: %s", exc)

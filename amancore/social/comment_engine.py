@@ -100,6 +100,15 @@ class SocialCommentEngine:
         return result
 
     def _call_ai(self, prompt_text: str) -> str:
+        deepseek_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+        if deepseek_key:
+            try:
+                from ..voice.pipeline import continue_with_deepseek
+                system_prompt = COMMENT_SYSTEM_PROMPT + "\n\nيجب أن يكون ردك بصيغة JSON فقط متوافقاً مع الحقول المطلوبة وبدون أي كود ماركداون إضافي."
+                return continue_with_deepseek(prompt_text, system=system_prompt)
+            except Exception as exc:
+                log.warning("comment engine deepseek call failed: %s", exc)
+
         api_key = os.environ.get("GEMINI_API_KEY")
         if not api_key:
             return ""

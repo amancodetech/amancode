@@ -262,6 +262,16 @@ market_profiles:
   malaysia: {language: en, currency: MYR}
   singapore: {language: en, currency: SGD}
 
+# FX policy — USD is the FIXED pricing base. Non-USD markets convert at the
+# Brain-pinned daily rate. Every priced correspondence freezes (rate, date)
+# inside its approval payload + snapshot, so later rate updates never rewrite
+# an issued price. Owner updates USD_IDR + USD_IDR_date together.
+fx_rates:
+  base_currency: USD
+  USD_IDR: 17650
+  USD_IDR_date: "2026-09-03"
+  USD_IDR_source: "owner-pinned spot USD/IDR ~17,648 (2026-09-03)"
+
 icp:
   primary: Indonesian SME service/trading companies (10-100 employees)
   secondary: Cross-border trading/export companies (Indonesia-GCC-Malaysia)
@@ -634,3 +644,19 @@ decision_policies:
   discount: owner_only
   refund: owner_only
   legal: escalate_to_owner
+
+# D5-APPROVED reference map (owner-curated DATA, additive section).
+# `implies` use ONLY extractor/scope vocabulary (MODULE_RULES subcategories
+# + SCOPE_DELTA fields). Candidates are ALWAYS unconfirmed hypotheses —
+# nothing here becomes a fact/requirement without explicit customer
+# confirmation (mandatory confirm step in the planner).
+reference_map:
+  airbnb:
+    aliases: [airbnb, إير بي إن بي, اير بي ان بي]
+    implies: [booking, payments, member_areas, dynamic_content, languages]
+  noon:
+    aliases: [noon, نون]
+    implies: [ecommerce, payments, shipping, inventory, member_areas]
+  uber:
+    aliases: [uber, أوبر, اوبر]
+    implies: [booking, payments, member_areas, integrations]

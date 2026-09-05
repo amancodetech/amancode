@@ -18,7 +18,8 @@
     "ig:session": "node scripts/ig-session.js",
     "ig:login": "node scripts/ig-login.js",
     "ig:browser": "node scripts/ig-browser-login.js",
-    "tiktok:browser": "node scripts/tiktok-browser-login.js"
+    "tiktok:browser": "node scripts/tiktok-browser-login.js",
+    "tiktok:chrome": "node scripts/tiktok-chrome-login.js"
   },
   "engines": {
     "node": ">=20"

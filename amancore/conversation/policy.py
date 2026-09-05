@@ -17,6 +17,11 @@ DEFAULTS: dict = {
     "value_first": True,
     "max_questions_per_reply": 1,
     "budget_weight_outside_commercial": 0,
+    # D3-E (transition flag, default OFF): when true AND last known coverage
+    # is below threshold or has critical gaps, T2 is blocked (owner may
+    # override via approval console). Enable only after D3 review.
+    "coverage_block_t2": False,
+    "coverage_block_threshold": 70.0,
     "service_categories": {
         "website": {
             "keywords": ["موقع", "موقع إلكتروني", "صفحة", "website", "web site", "site", "situs", "laman"],
@@ -346,10 +351,50 @@ class ConversationPolicy:
         return int(self.data.get("max_questions_per_reply", 1))
 
     # ---- P1 helpers ------------------------------------------------------
-    def gate_b_like_scope(self, facts: dict) -> bool:
-        """Scope signal strong enough to promise a tailored estimate."""
-        return self.field_known("key_features", facts) and (
-            self.field_known("timeline", facts) or self.field_known("scale", facts))
+    def gate_b_like_scope(self, facts: dict,
+                          unknown_accepted: list | None = None) -> bool:
+        """Planner-side T2 wording signal — mirrors QuoteFlow.gate_b_ready
+        (D2) minus the category requirement (planner may lack it)."""
+        from .pricing_flow import QuoteFlow
+        try:
+            return QuoteFlow.gate_b_ready(
+                self, "website", facts,
+                unknown_accepted=unknown_accepted)
+        except Exception:  # noqa: BLE001 — wording signal never breaks plan
+            return self.field_known("key_features", facts) and (
+                self.field_known("timeline", facts) or self.field_known("scale", facts))
+
+    # D1-APPROVED (safest): T1 needs shape + one other distinct group.
+    # problem/desired_outcome alone do NOT count — "أريد" sets them on
+    # almost every request, which would reduce the gate to category-only.
+    T1_MIN_SCOPE_FACTS = (
+        "scope", "timeline", "users", "pages", "page_count", "languages",
+        "integrations", "payment_gateways", "gateways", "booking", "payments",
+        "member_areas", "dynamic_content", "budget",
+    )
+    T1_GROUPS = (
+        frozenset({"scope", "pages", "page_count", "booking", "payments",
+                   "member_areas", "dynamic_content"}),  # shape
+        frozenset({"users", "timeline"}),  # scale
+        frozenset({"integrations", "payment_gateways", "gateways",
+                   "languages"}),  # connect
+        frozenset({"budget"}),  # money
+    )
+
+    def t1_min_scope(self, facts: dict | None,
+                     unknown_accepted: list | None = None) -> bool:
+        """D1: True only with >=2 facts from distinct groups incl. shape.
+
+        unknown_accepted (D4) dims count as present for grouping.
+        """
+        facts = facts or {}
+        present = {k for k in self.T1_MIN_SCOPE_FACTS if facts.get(k)}
+        present |= {k for k in (unknown_accepted or [])
+                    if k in self.T1_MIN_SCOPE_FACTS}
+        groups_hit = sum(1 for g in self.T1_GROUPS if present & set(g))
+        if groups_hit < 2:
+            return False
+        return bool(present & set(self.T1_GROUPS[0]))
 
     def detect_style(self, text: str) -> str:
         words = len((text or "").split())
@@ -378,3 +423,257 @@ class ConversationPolicy:
             str((facts or {}).get("scope") or ""),
         ]).lower()
         return any(t in hay for t in self.data.get("small_scope_triggers", []))
+
+
+# ---------------------------------------------------------------------------
+# CIR — Contextual Intent Resolution (deterministic side only).
+#
+# Stage A (LLM, advisory) produces an UNTRUSTED "cir" block inside the
+# extraction payload. Everything below is pure Python: validation, entity
+# resolution against verified conversational evidence, temporal resolution,
+# and the policy gate. No I/O, no writes, no LLM calls.
+#
+# Hard invariants:
+#   LLM candidate != resolved entity | confidence != authorization
+#   NO EVIDENCE -> NO ENTITY | multiple candidates -> AMBIGUOUS -> CLARIFY
+# ---------------------------------------------------------------------------
+
+CIR_DECISIONS = ("DENY", "CLARIFY", "CONTINUE_DISCOVERY", "ENTER_PRICING")
+CIR_INTENTS = ("pricing", "timeline", "requirement", "clarification",
+               "comparison", "deferral", "none")
+CIR_TARGETS = ("project_price", "product_item_price", "project_timeline",
+               "feature", "unknown")
+CIR_ENTITIES = ("project", "product", "service", "feature", "unknown")
+CIR_TEMPORALS = ("now", "later", "phase2", "unknown")
+
+# Domain intents that veto pricing regardless of interpretation.
+_CIR_VETO_DOMAINS = frozenset({"legal", "billing", "complaint", "support"})
+
+# Deterministic CIR-trigger cues: messages that may need interpretation even
+# when the extraction gate would otherwise skip the LLM (C2 override).
+_CIR_QUESTION = re.compile(r"[?؟]")
+_CIR_PRONOUN_ONLY = re.compile(
+    r"^\s*(كم|شقد|بشقد|بكم|بكام|قديش|how much|how many|berapa)\b.{0,24}"
+    r"(سعرها|سعره|ثمنها|ثمنه|تكلفتها|تكلفته|سعرهم|price|harganya|biayanya)\s*[?؟.\s]*$",
+    re.IGNORECASE)
+_CIR_PRICE_WORD = re.compile(
+    r"(سعر|ثمن|تكلف|يكلف|تكلفة|بكم|بكام|بشحال|قديش|شقد|بشقد|price|cost|berapa|biaya|harga)",
+    re.IGNORECASE)
+_CIR_UNCERTAIN = re.compile(
+    r"(ربما|يمكن|مو متأكد|مش متأكد|ما أدري|لا أعرف|غير متأكد|"
+    r"not sure|maybe|i think|perhaps|discuss|نناقش|نتكلم|نتناقش)",
+    re.IGNORECASE)
+
+# Deterministic temporal cues (mirrors the coordinator's deferral/future
+# signals minimally so this module stays self-contained and pure).
+_CIR_LATER = re.compile(
+    r"(لاحق|بعدين|فيما بعد|أجّل|اجل|نؤجل|later|nanti|belum|down the road|"
+    r"talk.*later|discuss.*later)", re.IGNORECASE)
+_CIR_PHASE2 = re.compile(
+    r"(المرحلة الثانية|بعد الإطلاق|phase\s*2|future phase)", re.IGNORECASE)
+_CIR_TIMELINE_ONLY = re.compile(
+    r"(كم (سيأخذ|سيستغرق|يستغرق|ياخذ|المدة)|how long|berapa lama|"
+    r"مدة (التنفيذ|المشروع|العمل)|timeline|duration)", re.IGNORECASE)
+
+
+def cir_trigger(text: str | None) -> bool:
+    """True when a message may need CIR interpretation (C2 gate override).
+
+    Pure function. Conservative toward calling: a forced extraction call is
+    always acceptable, a lost interpretation never is.
+    """
+    try:
+        t = (text or "").strip()
+        if not t:
+            return False
+        low = t.lower()
+        words = len(t.split())
+        if _CIR_PRONOUN_ONLY.search(t):
+            return True
+        if _CIR_PRICE_WORD.search(t):
+            return True
+        if _CIR_QUESTION.search(t) and words <= 4:
+            return True
+        if _CIR_UNCERTAIN.search(low):
+            return True
+        return False
+    except Exception:  # noqa: BLE001 — trigger must never break intake
+        return True
+
+
+def sanitize_cir_block(raw: object) -> dict | None:
+    """Validate an untrusted CIR block. Returns sanitized dict or None.
+
+    Any schema/enum/range violation discards the whole block (fail-closed).
+    Pure function.
+    """
+    try:
+        if not isinstance(raw, dict):
+            return None
+        intent = raw.get("intent", "none")
+        target = raw.get("candidate_target", "unknown")
+        entity = raw.get("candidate_entity", "unknown")
+        temporal = raw.get("candidate_temporal", "unknown")
+        ambiguity = raw.get("ambiguity", False)
+        confidence = raw.get("confidence", 0.0)
+        if intent not in CIR_INTENTS:
+            return None
+        if target not in CIR_TARGETS:
+            return None
+        if entity not in CIR_ENTITIES:
+            return None
+        if temporal not in CIR_TEMPORALS:
+            return None
+        if not isinstance(ambiguity, bool):
+            return None
+        if isinstance(confidence, bool) or not isinstance(confidence, (int, float)):
+            return None
+        if not 0.0 <= float(confidence) <= 1.0:
+            return None
+        ref = raw.get("candidate_reference")
+        if ref is not None and not isinstance(ref, str):
+            return None
+        return {
+            "intent": intent,
+            "candidate_target": target,
+            "candidate_entity": entity,
+            "candidate_reference": ref,
+            "candidate_temporal": temporal,
+            "ambiguity": ambiguity,
+            # recorded for observability only — NEVER an authorization input
+            "confidence": float(confidence),
+        }
+    except Exception:  # noqa: BLE001 — validation must never break intake
+        return None
+
+
+def resolve_cir_entity(cir: dict | None, *, explicit: list,
+                       active_category: str | None,
+                       reference_confirmed: str | None = None,
+                       named_product: str | None = None) -> dict:
+    """Deterministic entity resolution (Stage B). Pure function.
+
+    ``cir`` is the SANITIZED advisory block (or None when unavailable).
+    ``explicit`` lists service categories named in the CURRENT message.
+    Never invents an entity: no evidence -> unknown; competing referents ->
+    ambiguous. ``named_product`` stays None until a verified product-entity
+    representation exists (UNKNOWN/BLOCKED) — product candidates therefore
+    resolve to ambiguous by construction.
+    """
+    try:
+        explicit = [e for e in (explicit or []) if e]
+        competing: list[str] = []
+        if cir is None:
+            return {"status": "unknown", "entity": None,
+                    "evidence_source": "none", "evidence_strength": "none",
+                    "competing_candidates": competing}
+        candidate = cir.get("candidate_entity", "unknown")
+        if candidate == "product" and not named_product:
+            # forbidden inference: absence of project context is NOT
+            # evidence of a product; without an independently verified
+            # product entity the safe state is ambiguous.
+            if active_category or explicit:
+                competing = ["project"]
+            return {"status": "ambiguous", "entity": None,
+                    "evidence_source": "none", "evidence_strength": "none",
+                    "competing_candidates": competing or ["unverified_product"]}
+        if cir.get("ambiguity"):
+            return {"status": "ambiguous", "entity": None,
+                    "evidence_source": "none", "evidence_strength": "weak",
+                    "competing_candidates": competing}
+        if len(explicit) >= 2:
+            return {"status": "ambiguous", "entity": None,
+                    "evidence_source": "explicit_current",
+                    "evidence_strength": "explicit",
+                    "competing_candidates": list(explicit[:4])}
+        if len(explicit) == 1:
+            return {"status": "resolved", "entity": "project",
+                    "evidence_source": "explicit_current",
+                    "evidence_strength": "explicit",
+                    "competing_candidates": []}
+        # no explicit entity in the current message: fall back to verified
+        # conversational state, never to the candidate alone.
+        if active_category and candidate == "project":
+            return {"status": "resolved", "entity": "project",
+                    "evidence_source": "active_category",
+                    "evidence_strength": "supported",
+                    "competing_candidates": []}
+        if reference_confirmed and candidate == "project":
+            return {"status": "resolved", "entity": "project",
+                    "evidence_source": "confirmed_reference",
+                    "evidence_strength": "supported",
+                    "competing_candidates": []}
+        return {"status": "unknown", "entity": None,
+                "evidence_source": "none", "evidence_strength": "none",
+                "competing_candidates": competing}
+    except Exception:  # noqa: BLE001 — resolution must never break intake
+        return {"status": "unknown", "entity": None,
+                "evidence_source": "none", "evidence_strength": "none",
+                "competing_candidates": []}
+
+
+def resolve_cir_temporal(cir: dict | None, text: str | None) -> str:
+    """Deterministic temporal resolution. Pure function.
+
+    Deterministic cues win over the advisory candidate. Absence of deferral
+    evidence means "unknown" (callers treat unknown+pricing as now) — never
+    assumed "later".
+    """
+    try:
+        t = text or ""
+        if _CIR_PHASE2.search(t):
+            return "phase2"
+        if _CIR_LATER.search(t):
+            return "later"
+        if cir is not None and cir.get("candidate_temporal") in ("later", "phase2"):
+            # advisory only reaches here when no deterministic cue fired;
+            # a later/phase2 claim still defers (safe direction).
+            return str(cir["candidate_temporal"])
+        if cir is not None and cir.get("intent") == "timeline":
+            return "unknown"
+        if _CIR_TIMELINE_ONLY.search(t):
+            return "unknown"
+        return "now" if cir is not None and cir.get("intent") == "pricing" else "unknown"
+    except Exception:  # noqa: BLE001
+        return "unknown"
+
+
+def cir_policy_decision(*, price_intent: str, cir: dict | None,
+                        entity: dict, temporal: str,
+                        domain_intent: str = "",
+                        scope_under_review: bool = False) -> str:
+    """Deterministic policy gate (Stage C). Pure function, no LLM.
+
+    Returns one of CIR_DECISIONS. ``cir`` must already be sanitized (or
+    None). Confidence is never read here by construction.
+    """
+    try:
+        if (domain_intent or "") in _CIR_VETO_DOMAINS:
+            return "DENY"
+        if scope_under_review:
+            return "DENY"
+        if price_intent == "deferral":
+            return "CONTINUE_DISCOVERY"
+        if temporal in ("later", "phase2"):
+            return "CONTINUE_DISCOVERY"
+        if cir is not None and cir.get("intent") == "timeline":
+            return "CONTINUE_DISCOVERY"
+        if cir is not None and cir.get("intent") == "deferral":
+            return "CONTINUE_DISCOVERY"
+        status = (entity or {}).get("status", "unknown")
+        resolved = (entity or {}).get("entity")
+        wants_pricing = price_intent == "direct_ask" or (
+            cir is not None and cir.get("intent") == "pricing")
+        if not wants_pricing:
+            return "CONTINUE_DISCOVERY"
+        # Legacy-compatible fallback: with NO interpretation available at
+        # all (LLM skipped/unavailable), the pre-CIR behavior stands verbatim.
+        if cir is None and status == "unknown":
+            return "ENTER_PRICING" if price_intent == "direct_ask" else "CONTINUE_DISCOVERY"
+        if status == "resolved" and resolved == "project":
+            return "ENTER_PRICING"
+        if status in ("ambiguous", "unknown"):
+            return "CLARIFY"
+        return "CLARIFY"
+    except Exception:  # noqa: BLE001 — gate must never break intake
+        return "CONTINUE_DISCOVERY"

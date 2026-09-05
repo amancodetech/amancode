@@ -40,6 +40,15 @@ class Provider:
 
 
 class OpenAICompatibleProvider(Provider):
+    """OpenAI-compatible /chat/completions.
+
+    Text messages use {"role": .., "content": "str"}.
+    Vision messages use {"role": "user", "content": [..]} with
+    {"type": "text", ..} + {"type": "image_url", "image_url": {"url": ..}}
+    blocks — passed through verbatim, so deepseek-v4-flash-vision-exp
+    (JPEG/PNG/GIF/WebP, user-messages-only) works without a vendor class.
+    """
+
     def complete(self, messages: list[dict], **kwargs: Any) -> ProviderResult:
         url = f"{self._base_url()}/chat/completions"
         headers = {"Authorization": f"Bearer {self._api_key()}", "Content-Type": "application/json"}
