@@ -84,7 +84,7 @@ class DeepSeekContinueTest(unittest.TestCase):
         os.environ["DEEPSEEK_API_KEY"] = "ds-test"
         os.environ["DEEPSEEK_BASE_URL"] = "https://api.deepseek.com"
 
-    def test_continue_uses_vision_exp_only(self):
+    def test_continue_uses_deepseek_chat_by_default(self):
         from amancore.voice.pipeline import continue_with_deepseek
 
         with patch("requests.post") as post:
@@ -94,23 +94,24 @@ class DeepSeekContinueTest(unittest.TestCase):
             out = continue_with_deepseek("أريد موقعا")
             self.assertIn("أمان كود", out)
             payload = post.call_args[1]["json"]
-            self.assertEqual(payload["model"], "deepseek-v4-flash-vision-exp")
+            self.assertEqual(payload["model"], "deepseek-chat")
+            self.assertEqual(payload["max_tokens"], 1024)
             roles = [m["role"] for m in payload["messages"]]
             self.assertEqual(roles, ["system", "user"])
             self.assertEqual(post.call_count, 1)
 
-    def test_ignores_plain_flash_override(self):
+    def test_honors_explicit_model_override(self):
         from amancore.voice.pipeline import continue_with_deepseek
 
         with patch("requests.post") as post:
             post.return_value = _resp(200, {
                 "choices": [{"message": {"content": "رد"}}]
             })
-            out = continue_with_deepseek("test", chat_model="deepseek-v4-flash")
+            out = continue_with_deepseek("test", chat_model="deepseek-v4-flash-vision-exp", max_tokens=500)
             self.assertEqual(out, "رد")
             payload = post.call_args[1]["json"]
-            # owner requirement: never plain flash, always vision-exp
             self.assertEqual(payload["model"], "deepseek-v4-flash-vision-exp")
+            self.assertEqual(payload["max_tokens"], 500)
 
     def test_full_pipeline(self):
         from amancore.voice.pipeline import transcribe_and_continue

@@ -341,6 +341,13 @@ class _ExtractionGateRouter:
                 and not _UNCERTAIN_CUES.search(low) and not vague_budget \
                 and not indirect_auth:
             self._skip_reason = "confident_deterministic"
+        # Skip extraction on pure greetings / acknowledgments with no scope facts
+        _GREETING_ACK = re.compile(
+            r"^[\s\W]*(مرحبا|مرحباً|أهلا|أهلاً|السلام\s+عليكم|صباح\s+الخير|مساء\s+الخير|هاي|هلو|الو|ألو|شكرا|شكراً|تمام|حسنا|أوك|اوك|ok|okay|hi|hello|hey|thanks|thank\s+you)[\s\W]*$",
+            re.IGNORECASE,
+        )
+        if not self.forced and not det and _GREETING_ACK.match((text or "").strip()):
+            self._skip_reason = "greeting_or_ack"
         if self.forced:
             # CIR trigger (C2): this message may need interpretation even
             # under a confident picture — never skip a forced call.
@@ -2080,7 +2087,8 @@ class MessageCoordinator:
         root = Path(__file__).resolve().parents[2]
         with open(root / "configs" / "models.yaml") as fh:
             cfg = yaml.safe_load(fh)
-        router = ModelRouter(cfg, build_providers(cfg), UsageTracker())
+        db = getattr(getattr(self, "crm", None), "db", None)
+        router = ModelRouter(cfg, build_providers(cfg), UsageTracker(db))
         self._router = (router, ROUTINE)
         return self._router
 

@@ -149,7 +149,7 @@ class ImageUnderstandingService:
         import requests
 
         url = f"{self.base_url}/chat/completions"
-        payload = {"model": self.model, "messages": messages}
+        payload = {"model": self.model, "messages": messages, "max_tokens": 1024}
         resp = requests.post(url, json=payload, headers=self._headers(), timeout=timeout)
         if resp.status_code != 200:
             raise RuntimeError(

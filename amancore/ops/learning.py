@@ -56,7 +56,12 @@ def sanitize_value(text: str) -> str:
 def record_learning(contact_id: str, customer_msg: str, ai_reply: str) -> dict | None:
     """Extract one lesson from an exchange; append to journal. Never raises."""
     try:
-        if not customer_msg.strip() or not ai_reply.strip():
+        clean_in = customer_msg.strip()
+        clean_out = ai_reply.strip()
+        if not clean_in or not clean_out or len(clean_in) < 15:
+            return None
+        # Skip learning extraction on greetings / acknowledgments
+        if re.search(r"^[\s\W]*(مرحبا|أهلا|السلام\s+عليكم|صباح\s+الخير|مساء\s+الخير|شكرا|شكراً|تمام|ok|hi|hello)[\s\W]*$", clean_in, re.I):
             return None
         # AI-105/C5: STRUCTURED learning only — free text is capped, sanitized,
         # and never allowed to become prompt instructions downstream.
@@ -67,8 +72,8 @@ def record_learning(contact_id: str, customer_msg: str, ai_reply: str) -> dict |
              ' "value": "<the single key insight, max 8 words, plain noun phrase>"}\n'
              'No sentences. No instructions. No prices.'},
             {"role": "user", "content":
-             f"CUSTOMER: {customer_msg[:400]}\nAI REPLY: {ai_reply[:300]}"},
-        ])
+             f"CUSTOMER: {clean_in[:400]}\nAI REPLY: {clean_out[:300]}"},
+        ], max_tokens=60)
         raw = re_search(r"\{.*\}", r.text or "")
         if not raw:
             return None

@@ -20,8 +20,8 @@ from .assemblyai import AssemblyAITranscriber
 
 log = get_logger("voice.pipeline")
 
-# Single DeepSeek model used everywhere (vision-exp only, never plain flash).
-DEEPSEEK_VISION_MODEL_DEFAULT = "deepseek-v4-flash-vision-exp"
+# Default DeepSeek model for text generation / voice reply continuation.
+DEEPSEEK_CHAT_MODEL_DEFAULT = "deepseek-chat"
 DEEPSEEK_BASE_URL_DEFAULT = "https://api.deepseek.com"
 
 VOICE_REPLY_SYSTEM = (
@@ -37,13 +37,12 @@ def continue_with_deepseek(
     api_key: str | None = None,
     base_url: str | None = None,
     chat_model: str | None = None,
+    max_tokens: int = 1024,
     timeout: int = 60,
 ) -> str:
-    """Continue a transcribed voice text via DeepSeek-Vision-Exp. Raises on failure.
+    """Continue a transcribed voice text or generate text via DeepSeek-Chat.
 
-    Only model ever sent: deepseek-v4-flash-vision-exp. The `chat_model`
-    arg is kept for back-compat but IGNORED when it is not vision-exp
-    (owner requirement: never use plain deepseek-v4-flash).
+    Default model: deepseek-chat. Capped by max_tokens to prevent runaway token usage.
     """
     import requests
 
@@ -51,24 +50,26 @@ def continue_with_deepseek(
     if not key:
         raise RuntimeError("DEEPSEEK_API_KEY not configured")
     base = (base_url or os.environ.get("DEEPSEEK_BASE_URL", DEEPSEEK_BASE_URL_DEFAULT)).rstrip("/")
-    requested = chat_model or os.environ.get("DEEPSEEK_VISION_MODEL", DEEPSEEK_VISION_MODEL_DEFAULT)
-    if requested != DEEPSEEK_VISION_MODEL_DEFAULT:
-        log.warning("ignoring non-vision model %r, forcing %s", requested, DEEPSEEK_VISION_MODEL_DEFAULT)
-    model = DEEPSEEK_VISION_MODEL_DEFAULT
+    model = chat_model or os.environ.get("DEEPSEEK_CHAT_MODEL", DEEPSEEK_CHAT_MODEL_DEFAULT)
     messages = [
         {"role": "system", "content": system or VOICE_REPLY_SYSTEM},
         {"role": "user", "content": user_text},
     ]
+    payload = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+    }
     resp = requests.post(
         f"{base}/chat/completions",
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-        json={"model": model, "messages": messages},
+        json=payload,
         timeout=timeout,
     )
     if resp.status_code != 200:
-        raise RuntimeError(f"deepseek vision-exp HTTP {resp.status_code}: {resp.text[:200]}")
+        raise RuntimeError(f"deepseek chat HTTP {resp.status_code}: {resp.text[:200]}")
     text = str(resp.json()["choices"][0]["message"]["content"] or "").strip()
-    log.info("deepseek vision-exp continue ok chars=%d", len(text))
+    log.info("deepseek chat continue ok chars=%d model=%s", len(text), model)
     return text
 
 
@@ -99,5 +100,5 @@ def transcribe_and_continue(
     reply = continue_with_deepseek(res.text, system=system)
     return VoicePipelineResult(
         transcript=res.text, reply=reply, transcript_id=res.transcript_id,
-        llm_model=DEEPSEEK_VISION_MODEL_DEFAULT,
+        llm_model=DEEPSEEK_CHAT_MODEL_DEFAULT,
     )
