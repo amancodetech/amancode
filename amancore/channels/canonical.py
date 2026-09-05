@@ -26,6 +26,7 @@ class InboundMessage:
     reply_to_external_message_id: str | None = None
     external_conversation_id: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    media: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_event(cls, evt: CanonicalEvent) -> "InboundMessage":
@@ -41,6 +42,7 @@ class InboundMessage:
             timestamp=p.get("timestamp"),
             reply_to_external_message_id=p.get("reply_to_external_message_id") or None,
             metadata=dict(evt.metadata or {}),
+            media=dict(p.get("media") or {}),
         )
 
 

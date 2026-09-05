@@ -99,6 +99,7 @@ def _received(channel, data, sender, external_user_id, external_message_id,
         # unsupported message kinds are recorded as opaque, never crash intake
         msg_type = "unsupported"
     reply_to = (message.get("reply_to") or data.get("reply_to_message_id") or None)
+    media_payload = message.get("media") if msg_type in MEDIA_TYPES else None
     return CanonicalEvent(
         event_id=str(data.get("event_id") or new_id()),
         event_type="message.received",
@@ -116,6 +117,7 @@ def _received(channel, data, sender, external_user_id, external_message_id,
             "text": text,
             "timestamp": data.get("timestamp"),
             "reply_to_external_message_id": str(reply_to) if reply_to else None,
+            "media": media_payload,
         },
         metadata=metadata,
     )

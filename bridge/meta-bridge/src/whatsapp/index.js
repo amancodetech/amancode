@@ -185,7 +185,7 @@ class WhatsAppTransport extends EventEmitter {
       for (const m of messages) {
         try {
           if (m.key?.fromMe) continue;
-          const env = this._normalizeInbound(m);
+          const env = await this._normalizeInbound(m);
           if (env) this.emit('inbound', env);
         } catch (err) {
           log.error('inbound normalize failed', {
@@ -196,7 +196,7 @@ class WhatsAppTransport extends EventEmitter {
     });
   }
 
-  _normalizeInbound(m) {
+  async _normalizeInbound(m) {
     const rawJid = m.key?.remoteJid;
     const externalId = normalizePhone(rawJid);
     if (!externalId) return null;
@@ -235,14 +235,47 @@ class WhatsAppTransport extends EventEmitter {
     if (part.reply_to) {
       envelope.message.reply_to = part.reply_to;
     }
-    // media: store a lazy download handle for the API layer
+    // media: download bytes and attach base64 for AmanCode intake
     if (part.media_ref) {
-      envelope.message.media = { lazy: true, _ref: m };
+      try {
+        const buffer = await downloadMediaMessage(
+          m,
+          'buffer',
+          {},
+          {
+            logger: log,
+            reuploadRequest: (update) => this.sock?.updateMediaMessage(update),
+          }
+        );
+        if (buffer && buffer.length > 0) {
+          const msgObj = m.message || {};
+          const mime = (
+            msgObj.audioMessage?.mimetype
+            || msgObj.imageMessage?.mimetype
+            || msgObj.videoMessage?.mimetype
+            || msgObj.documentMessage?.mimetype
+            || 'application/octet-stream'
+          );
+          envelope.message.media = {
+            base64: buffer.toString('base64'),
+            mime,
+            size: buffer.length,
+          };
+        }
+      } catch (err) {
+        log.warn('whatsapp media download failed', {
+          error: err.message,
+          id: externalMessageId,
+        });
+      }
     }
     return envelope;
   }
 
   async download(envelope) {
+    if (envelope?.message?.media?.base64) {
+      return Buffer.from(envelope.message.media.base64, 'base64');
+    }
     const ref = envelope?.message?.media?._ref;
     if (!ref) throw new Error('no media reference on envelope');
     const buffer = await downloadMediaMessage(ref, 'buffer', {});

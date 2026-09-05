@@ -643,6 +643,57 @@ class MessageCoordinator:
         from ..log import set_correlation_id
 
         set_correlation_id(corr)
+
+        # Voice Note & Media handling: auto-transcribe inbound audio into Arabic text
+        is_audio = (
+            msg.message_type == "audio"
+            or (msg.media and "audio" in str(msg.media.get("mime", "")).lower())
+            or (not text.strip() and msg.media.get("base64") and "audio" in str(msg.media.get("mime", "")).lower())
+        )
+        if is_audio and msg.media.get("base64"):
+            try:
+                import base64
+                from ..voice.processor import VoiceNoteProcessor
+
+                raw_audio = base64.b64decode(msg.media["base64"])
+                mime_type = str(msg.media.get("mime") or "audio/ogg")
+                transcribed = VoiceNoteProcessor().transcribe(raw_audio, mime_type=mime_type)
+                if transcribed and transcribed.strip():
+                    text = transcribed.strip()
+                    log.info("inbound.voice_transcribed channel=%s user=%s chars=%d text=%r",
+                             msg.channel, msg.external_user_id, len(text), text[:60])
+                else:
+                    log.warning("inbound.voice_empty channel=%s user=%s",
+                                msg.channel, msg.external_user_id)
+                    if not text.strip():
+                        text = "أرسل العميل تسجيلاً صوتياً لم يتضمن كلاماً واضحاً، اطلب منه بلطف إعادة تسجيله أو توضيح طلبه كتابة."
+            except Exception as exc:  # noqa: BLE001
+                log.error("inbound.voice_transcription_failed err=%s", exc)
+
+        # Inbound image understanding: describe image and combine with caption
+        is_image = (
+            msg.message_type == "image"
+            or (msg.media and "image" in str(msg.media.get("mime", "")).lower())
+        )
+        if is_image and msg.media.get("base64"):
+            try:
+                import base64
+                from ..vision.processor import ImageUnderstandingService
+
+                raw_img = base64.b64decode(msg.media["base64"])
+                img_desc = ImageUnderstandingService().describe_bytes(
+                    raw_img, prompt=text if text.strip() else None
+                )
+                if img_desc and img_desc.strip():
+                    if text.strip():
+                        text = f"{text}\n\n[وصف الصورة المرفقة]: {img_desc.strip()}"
+                    else:
+                        text = f"[صورة من العميل]: {img_desc.strip()}"
+                    log.info("inbound.image_described channel=%s user=%s chars=%d",
+                             msg.channel, msg.external_user_id, len(img_desc))
+            except Exception as exc:  # noqa: BLE001
+                log.warning("inbound.image_understanding_failed err=%s", exc)
+
         log.info("inbound.received channel=%s user=%s msg=%s chars=%d",
                  msg.channel, msg.external_user_id,
                  msg.external_message_id[:24], len(text))
@@ -693,13 +744,14 @@ class MessageCoordinator:
 
         if self.message_recorder is not None:
             try:
+                rec_body = f"🎤 {text}" if is_audio and text and not text.startswith("🎤") else text
                 self.message_recorder(
                     direction="in",
                     channel=msg.channel,
                     external_user_id=msg.external_user_id,
                     lead_id=lead["lead_id"],
                     external_message_id=msg.external_message_id or None,
-                    body=text,
+                    body=rec_body,
                     quoted_external_message_id=msg.reply_to_external_message_id,
                 )
             except Exception:  # noqa: BLE001 — recording must never break the pipeline

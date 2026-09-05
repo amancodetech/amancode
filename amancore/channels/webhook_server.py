@@ -31,7 +31,7 @@ from ..log import get_logger
 
 log = get_logger("channels.webhook_server")
 
-MAX_BODY_BYTES = 1_000_000
+MAX_BODY_BYTES = 25_000_000
 
 
 _STATUS_RANK = {"processing": 1, "sent": 2, "delivered": 3, "read": 4}
